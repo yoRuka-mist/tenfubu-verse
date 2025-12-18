@@ -1703,10 +1703,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 </div>
 
                 {/* Middle: Battle Field + Controls */}
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative' }}>
 
                     {/* Field (Center) - Pinned Vertical Positions */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 20, padding: '40px 20px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 20, padding: '20px 20px 60px 20px' }}>
                         {/* Opponent Slots */}
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 15, minHeight: 130 }}>
                             {[...opponent.board, ...Array(Math.max(0, 5 - opponent.board.length)).fill(null)].map((c, i) => (
@@ -1778,7 +1778,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
 
                     {/* Controls (Right Side of Middle) */}
-                    <div style={{ width: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, paddingRight: 20 }}>
+                    <div style={{ position: 'absolute', right: 0, width: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, paddingRight: 20 }}>
 
                         {/* Opponent PP Display */}
                         <div style={{ textAlign: 'center', opacity: 0.8 }}>
@@ -1929,7 +1929,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* Player HP (Lowered into empty space) */}
                         {/* Player HP (Left of EP - "Coco" Position) */}
                         <div style={{
-                            position: 'absolute', top: 0, left: -30, // Left of EP
+                            position: 'absolute', top: 5, left: -30, // Left of EP, Moved down 5px
                             width: 60, height: 60,
                             background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)',
                             borderRadius: '50%',
@@ -2077,14 +2077,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* Opponent Deck (Right Top) - 3D Stacked Look */}
                 <div style={{
                     position: 'absolute',
-                    top: 20, right: 10,
-                    width: 70, height: 100,
+                    top: 120, right: 50, // Symmetric to Player (Bottom 120, Right 50)
+                    width: 80, height: 110, // Match Player Size
                     zIndex: 0
                 }}>
                     {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
                         <div key={i} style={{
                             position: 'absolute', inset: 0,
-                            transform: `translate(${i * -2}px, ${i * 2}px)`, // Stack down-left
+                            transform: `translate(${i * 2}px, ${i * 2}px)`, // Stack down-right (Symmetric to Player up-right)
                             background: 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
                             borderRadius: 6, border: '1px solid #4a5568',
                             boxShadow: '1px 1px 3px rgba(0,0,0,0.5)'
