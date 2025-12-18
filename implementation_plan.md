@@ -1,19 +1,65 @@
-# Implementation Plan - Fix GameScreen Syntax Error
+# Implementation Plan - 05_DigitalCardGame
 
-## Problem
-The `GameScreen.tsx` file has a syntax error. A `</div>` tag at line 1956 closes the root component element too early, leaving subsequent JSX elements (Ghost Cards, Decks, Animations) outside the main return structure. This results in a parsing error `Unexpected token`.
+## 今回の修正 (2024-12-18)
 
-## Proposed Changes
+### 1. Git定期コミットルール
+- `.agent/workflows/project-rules.md` にプロジェクトルールを追加
+- 大きな機能実装後、バグ修正後、作業終了時にコミットを行う
 
-### `src/screens/GameScreen.tsx`
-- Remove the `</div>` tag at line 1956.
-- This will allow the subsequent code (lines 1958-2140) to be correctly included as children of the root `div` (which starts at line 1279 and closes at line 2140).
+### 2. アニメーション描画位置の修正
+- **問題**: 攻撃エフェクトがカードの位置より右にずれていた
+- **原因**: `getBoundingClientRect()`は画面全体の座標を返すが、エフェクトは親要素（サイドバーを含む）に対する`position: absolute`で描画されていた
+- **修正**: `AttackEffect`と`DamageText`のpositionを`fixed`に変更
 
-## Verification
-- The error `Unexpected token, expected ","` should disappear.
-- The component structure will be valid specifically:
-    - Root Div (1279)
-        - ...
-        - Right Main Area (1503-1955)
-        - Ghost Cards & Overlays (1958+)
-    - Root Div / (2140)
+### 3. ダメージタイミングの調整
+- **問題**: アニメーション再生と同時にダメージを適用していた
+- **修正**: ダメージ/AOEエフェクトの場合は1200ms待機してからダメージを適用（スプライトアニメーション完了を待つ）
+
+### 4. 進化時の体力増加表示
+- **問題**: 進化時に体力が増加すると緑色の回復テキストが表示されていた
+- **修正**: `hasEvolved`フラグの変化を検出し、進化による体力増加では緑テキストを表示しない
+
+### 5. オーラエフェクトの表示条件
+- **修正**: 手札では表示せず、場に出ている時(`isOnBoard`)のみ表示するように変更
+
+### 6. ビジュアルエフェクトの全面改修 (Card.tsx)
+
+#### 守護 (WARD)
+- カード外側に描画（`inset: -15`）
+- 白色で内側を薄く発光
+- アニメーション: 拡大→ぼかし→透明→ループ（`wardPulseLoop`）
+- SVGフィルターでグロー効果
+
+#### バリア (BARRIER)
+- カード外側に描画（`inset: -15`）
+- 青色の楕円形で内側を発光
+- アニメーション: 拡大→ぼかし→透明→ループ（`barrierPulseLoop`）
+
+#### オーラ (AURA)
+- カード外側に大きな十字架を描画
+- 黄色/オレンジで発光
+- 場に出ている時のみ表示
+- アニメーション: 拡大→ぼかし→透明→ループ（`auraPulseLoop`）
+
+#### 隠密 (STEALTH)
+- 煙のような表現（複数の煙レイヤー）
+- ぼかし、拡散、グローを使用
+- 薄い黒で明滅する複数のアニメーション
+  - `smokeMove1`, `smokeMove2`: 煙の動き
+  - `smokePulse`: 煙の拡散
+  - `stealthPulse`: 内側シャドウの明滅
+
+### 7. カードコンテナの修正
+- `overflow: 'visible'` に変更してエフェクトが外側に描画可能に
+- `position: 'relative'` を追加
+
+---
+
+## 過去の修正
+
+### JSX構造エラーの修正
+- `GameScreen.tsx`の1956行目にあった余分な`</div>`タグを削除
+- コンポーネント構造を正常化
+
+### 文字化けの修正
+- 日本語テキストのエンコーディング問題を修正

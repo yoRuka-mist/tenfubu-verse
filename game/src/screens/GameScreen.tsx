@@ -293,7 +293,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const playEffect = (effectType: any, targetPlayerId?: string, targetIndex?: number) => {
         if (!effectType) return;
 
-        let x = window.innerWidth / 2;
+        const sidebarWidth = 340;
+        const boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+        let x = boardCenterX;
         let y = window.innerHeight / 2;
 
         const isOpponentTarget = targetPlayerId === opponentPlayerId;
@@ -828,8 +830,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         // Animation
                         setPlayingCardAnim({
                             card: bestCard,
-                            startX: window.innerWidth / 2, startY: 100,
-                            targetX: window.innerWidth / 2, targetY: window.innerHeight / 2,
+                            startX: 340 + (window.innerWidth - 340) / 2, startY: 100,
+                            targetX: 340 + (window.innerWidth - 340) / 2, targetY: window.innerHeight / 2,
                             onComplete: () => { triggerShake(); setPlayingCardAnim(null); }
                         });
 
@@ -1268,13 +1270,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // Animation for spell/card
-            const startX = window.innerWidth / 2;
+            const sidebarWidth = 340;
+            const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
             const startY = window.innerHeight - 100;
             // We can reuse play animation logic here or simplfy
             setPlayingCardAnim({
                 card: player.hand[index],
                 startX, startY,
-                targetX: window.innerWidth / 2, // Or target location?
+                targetX: sidebarWidth + (window.innerWidth - sidebarWidth) / 2, // Center of Board
                 targetY: window.innerHeight / 2,
                 onComplete: () => {
                     triggerShake();
@@ -1309,8 +1312,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // If card needs target, we shouldn't simple-play it. 
         // Reuse handlePlayCard logic which checks for targeting needs.
-        // Start animation from bottom center
-        const startX = window.innerWidth / 2;
+        // Start animation from bottom center of BOARD
+        const sidebarWidth = 340;
+        const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
         const startY = window.innerHeight - 100;
 
         handlePlayCard(cardIndex, startX, startY);
@@ -1704,8 +1708,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* Field (Center) - Pinned Vertical Positions */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 20, padding: '40px 20px' }}>
                         {/* Opponent Slots */}
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 15 }}>
-                            {opponent.board.map((c, i) => (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 15, minHeight: 130 }}>
+                            {[...opponent.board, ...Array(Math.max(0, 5 - opponent.board.length)).fill(null)].map((c, i) => (
                                 <div key={i}
                                     ref={el => opponentBoardRefs.current[i] = el}
                                     onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId })}
@@ -1741,8 +1745,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             ))}
                         </div>
                         {/* Player Slots */}
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 15 }}>
-                            {player.board.map((c, i) => (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 15, minHeight: 130 }}>
+                            {[...player.board, ...Array(Math.max(0, 5 - player.board.length)).fill(null)].map((c, i) => (
                                 <div key={i}
                                     ref={el => playerBoardRefs.current[i] = el}
                                     onMouseDown={(e) => handleBoardMouseDown(e, i)}

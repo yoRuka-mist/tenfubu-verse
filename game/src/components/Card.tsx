@@ -283,13 +283,14 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             borderRadius: '50%',
                             border: '3px solid rgba(66, 153, 225, 0.7)',
                             background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.2) 0%, transparent 70%)',
-                            animation: 'barrierPulseLoop 2s infinite ease-in-out'
+                            animation: 'barrierPulseLoop 3.5s infinite ease-in-out',
+                            backdropFilter: 'blur(1px)' // Subtle blur inside? Or just CSS filter on global
                         }} />
                         <style>{`
                             @keyframes barrierPulseLoop {
-                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px); box-shadow: 0 0 10px rgba(66, 153, 225, 0.5), inset 0 0 15px rgba(66, 153, 225, 0.3); }
-                                50% { transform: scale(1.1); opacity: 0.4; filter: blur(4px); box-shadow: 0 0 25px rgba(99, 179, 237, 0.8), inset 0 0 25px rgba(99, 179, 237, 0.5); }
-                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px); box-shadow: 0 0 10px rgba(66, 153, 225, 0.5), inset 0 0 15px rgba(66, 153, 225, 0.3); }
+                                0% { transform: scale(1); opacity: 0.9; filter: blur(2px); box-shadow: 0 0 15px rgba(66, 153, 225, 0.6), inset 0 0 20px rgba(66, 153, 225, 0.4); }
+                                50% { transform: scale(1.1); opacity: 0.5; filter: blur(5px); box-shadow: 0 0 30px rgba(99, 179, 237, 0.9), inset 0 0 40px rgba(99, 179, 237, 0.7); }
+                                100% { transform: scale(1); opacity: 0.9; filter: blur(2px); box-shadow: 0 0 15px rgba(66, 153, 225, 0.6), inset 0 0 20px rgba(66, 153, 225, 0.4); }
                             }
                         `}</style>
                     </div>
@@ -308,10 +309,10 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         justifyContent: 'center'
                     }}>
                         <div style={{
-                            width: '80%',
-                            height: '80%',
+                            width: '100%',
+                            height: '100%',
                             position: 'relative',
-                            animation: 'auraPulseLoop 2s infinite ease-in-out'
+                            animation: 'auraPulseLoop 3s infinite ease-in-out'
                         }}>
                             <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
                                 <defs>
