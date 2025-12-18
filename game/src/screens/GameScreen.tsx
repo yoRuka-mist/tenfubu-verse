@@ -174,6 +174,60 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
     );
 };
 
+// --- Battle Log Component ---
+const BattleLog = ({ logs }: { logs: string[] }) => {
+    const endRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (endRef.current) {
+            endRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs.length]); // Scroll on length change
+
+    return (
+        <div style={{
+            position: 'absolute',
+            left: 0,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 250,
+            maxHeight: 250,
+            overflowY: 'auto',
+            background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
+            color: '#fff',
+            fontSize: '0.8rem',
+            padding: '10px 10px 10px 15px',
+            borderLeft: '3px solid #63b3ed',
+            zIndex: 15, // Under menus, over board default
+            pointerEvents: 'auto', // Allow scroll
+            // Custom Scrollbar styling handled by browser usually, or simple CSS class if available
+            scrollbarWidth: 'thin',
+        }}
+            onMouseDown={e => e.stopPropagation()} // Prevent drag triggering
+        >
+            <div style={{
+                fontWeight: 'bold', marginBottom: 5, color: '#a0aec0',
+                borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 2,
+                fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 1
+            }}>
+                BATTLE LOG
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {logs.map((log, i) => (
+                    <div key={i} style={{
+                        opacity: 0.9,
+                        lineHeight: '1.4',
+                        textShadow: '0 1px 2px black',
+                        animation: 'fadeIn 0.3s ease-out'
+                    }}>
+                        {log}
+                    </div>
+                ))}
+            </div>
+            <div ref={endRef} style={{ height: 1 }} />
+        </div>
+    );
+};
+
 // --- Evolution Animation Component ---
 interface EvolutionAnimationProps {
     card: any;
@@ -1945,6 +1999,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             {/* --- Right Main Area (80%) --- */}
             <div ref={boardRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', background: 'rgba(0,0,0,0.1)' }}>
+                {/* Battle Log Overlay */}
+                <BattleLog logs={gameState.logs || []} />
 
                 {/* --- Game Start Overlay (Moved Here) --- */}
                 {isGameStartAnim && (

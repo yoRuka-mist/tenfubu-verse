@@ -12,8 +12,8 @@
 - [ ] GameScreen.tsx: SEP時の予測線とドラッグ円を紫色に変更 @GameScreen.tsx
 - [ ] GameScreen.tsx: saraのトークン生成演出を11ターン目以降のみに制限 @GameScreen.tsx
 - [ ] GameScreen.tsx: 'SHOT' スプライトアニメーションの実装（IMPACT等と同様） @GameScreen.tsx
-- [x] GameScreen.tsx: 相手のデッキの重なりを左下方向に修正 @GameScreen.tsx
 - [x] CPU相手のカードの処理の実行タイミング調整 (直前のアニメーションや効果が終わってから一瞬で次の行動をしてしまう問題を修正)
     - [x] 効果処理・アニメーション完了待ちロジックの実装 (`activeEffects`, `animatingCard` 等のRef監視)
     - [x] 攻撃時のエフェクト追加
+- [x] バトルログの表示実装 (盤面右カラム左端中央)
 - [ ] walkthrough.md: 修正内容を更新
