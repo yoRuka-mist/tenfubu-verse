@@ -846,35 +846,54 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // Prioritize showing damage for AoE.
                     let damage = 0;
                     if (inGraveyard) {
-                        const finalHP = (inGraveyard as any).currentHealth <= 0 ? (inGraveyard as any).currentHealth : 0;
-                        damage = prevCard.currentHealth - finalHP;
+                        const finalHP = (inGraveyard as any).currentHealth;
+                        // If finalHP <= 0, it died from damage. Show full damage (prevHP).
+                        // If finalHP > 0, it died from Effect (Destroy). detected by engine.ts logic.
+                        // However, engine.ts doesn't change HP on destroy. So finalHP should be > 0.
+                        if (finalHP <= 0) {
+                            damage = prevCard.currentHealth; // Or prevCard.currentHealth - finalHP? Since finalHP is <= 0.
+                            // Better: prevCard.currentHealth is what was lost.
+                        } else {
+                            damage = 0; // Destroy effect, no red damage text
+                        }
                     } else {
-                        // Just missing? Assume destroyed?
+                        // Not in graveyard? Maybe banished or just missing. Assume damaged?
+                        // If we can't find it, safe to say 0 or full?
+                        // Let's assume full damage if missing entirely from board and grave (unlikely unless banished)
                         damage = prevCard.currentHealth;
                     }
 
                     if (damage > 0) {
+                        newDamages.push({ id: Date.now() + Math.random(), value: damage, x: 0, y: 0, color: '#e53e3e' }); // Coords need fix
+                        // Fix coords for graveyard item? Use Last known pos from board ref?
+                        // We can try to use refs index.
+                        // Board index might shift if cards removed.
+                        // But prevCard is from prev.board[idx].
+                        // If we use idx, refs[idx] might be current card at that slot (different card).
+                        // We need "Last Known Position".
+                        // Use stored refs?
                         const isMe = pid === currentPlayerId;
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                        const el = refs[idx]; // Use OLD index
+                        const el = refs[idx]; // idx matches prevCard index if no shift... wait.
                         if (el) {
                             const rect = el.getBoundingClientRect();
-                            newDamages.push({ id: Date.now() + Math.random(), value: damage, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#e53e3e' });
+                            // Update the damage item pushed above
+                            newDamages[newDamages.length - 1].x = rect.left + rect.width / 2;
+                            newDamages[newDamages.length - 1].y = rect.top + rect.height / 2;
                         }
                     }
                 }
             });
         });
 
+        // Add Damage Texts
         if (newDamages.length > 0) {
             setDamageNumbers(prev => [...prev, ...newDamages]);
+            triggerShake();
         }
 
-        prevPlayersRef.current = JSON.parse(JSON.stringify(currentPlayers)); // Deep copy state history? 
-        // Simple assignment might reference same object if reducer mutates. 
-        // Engine seems to spread {...state} so shallow copy per level. 
-        // JSON parse is safest for diffing deeply nested 'board' arrays if references are reused.
-    }, [gameState]);
+        prevPlayersRef.current = currentPlayers;
+    }, [gameState.players, currentPlayerId, opponentPlayerId]);
 
 
     // --- Visual Effect Helpers ---
@@ -1174,7 +1193,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Reset processing flag if turn changed to player
         if (gameState.activePlayerId === currentPlayerId) {
             aiProcessing.current = false;
-            // Don't reset lastProcessedTurn yet, or we might re-process if ID flips quickly? 
+            // Don't reset lastProcessedTurn yet, or we might re-process if ID flips quickly?
             // Actually, if it's player turn, we don't care.
             return;
         }
@@ -1285,7 +1304,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
 
                             // Use Evolve Animation Logic for visual consistency?
-                            // AI can trigger handleEvolveWithAnimation logic manually? 
+                            // AI can trigger handleEvolveWithAnimation logic manually?
                             // Problem: handleEvolveWithAnimation relies on playerBoardRefs which are for Player.
                             // AI Board Refs are opponentBoardRefs.
                             // Let's manually trigger simple dispatch but maybe play a sound/effect?
@@ -1316,7 +1335,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // 3. Attack (Greedy Trade) - USING FRESH STATE
                 {
                     // Refresh state loop for multi-attack
-                    // Since we await inside loop, stateRef updates? 
+                    // Since we await inside loop, stateRef updates?
                     // No, `state` var is stale. Must re-read `gameStateRef.current` each iter.
                     // But we can't simple-loop. We need `while` loop.
 
@@ -1623,6 +1642,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const hasStorm = attackerCard?.passiveAbilities?.includes('STORM');
                             const isSummoningSickness = attackerCard?.turnPlayed === gameStateRef.current.turnCount;
                             const targetIsLeader = currentHover.type === 'LEADER';
+                            const targetIndex = currentHover.type === 'LEADER' ? -1 : currentHover.index!;
 
                             if (targetIsLeader && hasRush && !hasStorm && isSummoningSickness) {
                                 console.log("UI: Attack blocked by RUSH rule (Cannot attack leader)");
@@ -1631,21 +1651,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             } else {
 
                                 // Correctly pass target info to playEffect
-                                playEffect(
-                                    attackerCard?.attackEffectType || 'SLASH', // Default
-                                    opponentPlayerId,
-                                    currentHover.type === 'LEADER' ? -1 : currentHover.index!
-                                );
+                                const attackType = attackerCard?.attackEffectType || 'SLASH';
+                                playEffect(attackType, opponentPlayerId, targetIsLeader ? -1 : targetIndex);
+                                triggerShake();
 
-                                dispatchAndSend({
-                                    type: 'ATTACK',
-                                    playerId: currentPlayerId,
-                                    payload: {
-                                        attackerIndex: currentDrag.sourceIndex,
-                                        targetIndex: currentHover.type === 'LEADER' ? -1 : currentHover.index!,
-                                        targetIsLeader: currentHover.type === 'LEADER'
-                                    }
-                                });
+                                // Delay Dispatch to match animation duration (approx 400-600ms)
+                                setTimeout(() => {
+                                    dispatchAndSend({
+                                        type: 'ATTACK',
+                                        playerId: currentPlayerId,
+                                        payload: {
+                                            attackerIndex: currentDrag.sourceIndex,
+                                            targetIndex: targetIsLeader ? -1 : targetIndex, // Use calculated index
+                                            targetIsLeader: targetIsLeader
+                                        }
+                                    });
+                                }, 500); // Wait 500ms for animation impact
                             }
                         }
                     } else {
@@ -2075,7 +2096,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'absolute',
                         left: '10%',
-                        top: 30, // Lowered by 10px
+                        top: 50, // Lowered more
                         display: 'flex',
                         gap: -40,
                         transform: 'scale(0.7)',
@@ -2100,6 +2121,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         onMouseLeave={() => setHoveredTarget(null)}
                         style={{
                             width: 240, height: 240,
+                            top: 40, // Push down to prevent clipping from top
                             borderRadius: '50%',
                             background: `url(${opponent.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg}) center/cover`,
                             border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
@@ -2359,7 +2381,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         position: 'relative',
                         width: 280, height: 280,
                         marginTop: 0,
-                        top: -90, // Lowered by 10px (was -100)
+                        top: -80, // Lowered slightly more (was -90)
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 10
                     }}>

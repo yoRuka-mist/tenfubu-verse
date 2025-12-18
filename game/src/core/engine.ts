@@ -538,13 +538,13 @@ function processSingleEffect(
                         if (target.currentHealth <= 0) {
                             newState.players[opponentId].graveyard.push(target);
                             newState.players[opponentId].board = newState.players[opponentId].board.filter((c) => c?.instanceId !== target.instanceId);
-                            newState.logs.push(`${target.name} を破壊しました！`);
+                            newState.logs.push(`${target.name} を ${sourceCard.name} の効果で破壊しました！`);
                         }
                     }
                 }
             } else if (effect.targetType === 'OPPONENT') {
                 newState.players[opponentId].hp -= damage;
-                newState.logs.push(`相手リーダーに ${damage} ダメージ`);
+                newState.logs.push(`相手リーダーに ${sourceCard.name} の効果で ${damage} ダメージ`);
             }
             break;
         }
@@ -632,7 +632,7 @@ function processSingleEffect(
                     if (card) {
                         newState.players[opponentId].graveyard.push(card);
                         newState.players[opponentId].board = newState.players[opponentId].board.filter(c => c?.instanceId !== card.instanceId);
-                        newState.logs.push(`${card.name} は破壊されました`);
+                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                     }
                 }
             }
@@ -675,7 +675,7 @@ function processSingleEffect(
                 const card = oppBoard[idx];
                 if (card) {
                     newState.players[opponentId].graveyard.push(card);
-                    newState.logs.push(`${card.name} は破壊されました`);
+                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                 }
             });
 
@@ -1106,6 +1106,10 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') && attacker.attacksMade < 2) {
                 attacker.canAttack = true;
             }
+
+            // Attack Log
+            const targetName = targetIsLeader ? "相手リーダー" : (defPlayer.board[targetIndex]?.name || "Unknown");
+            newState.logs.push(`${attacker.name} は ${targetName} を攻撃！`);
 
             const damage = attacker.currentAttack;
             console.log(`[Engine] Attack: ${attacker.name} (${damage}) -> Target (Leader? ${targetIsLeader}). DefHP before: ${defPlayer.hp}`);
