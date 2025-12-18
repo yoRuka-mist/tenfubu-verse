@@ -921,6 +921,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         targetId?: string;
     } | null>(null);
 
+    // --- State Refs for AI Timing (Moved here to ensure access to all states) ---
+    const activeEffectsRef = React.useRef(activeEffects);
+    const animatingCardRef = React.useRef(animatingCard);
+    const playingCardAnimRef = React.useRef(playingCardAnim);
+    const evolveAnimationRef = React.useRef(evolveAnimation);
+
+    useEffect(() => {
+        activeEffectsRef.current = activeEffects;
+        animatingCardRef.current = animatingCard;
+        playingCardAnimRef.current = playingCardAnim;
+        evolveAnimationRef.current = evolveAnimation;
+    }, [activeEffects, animatingCard, playingCardAnim, evolveAnimation]);
+
     // Handle Evolve with Animation
     const handleEvolveWithAnimation = (followerIndex: number, useSep: boolean, targetId?: string) => {
         const card = playerRef.current.board[followerIndex];
@@ -949,7 +962,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // Ref for pending evolve action (to dispatch after animation completes)
-    const pendingEvolveRef = React.useRef<{followerIndex: number, useSep: boolean, targetId?: string} | null>(null);
+    const pendingEvolveRef = React.useRef<{ followerIndex: number, useSep: boolean, targetId?: string } | null>(null);
 
     // Handle Evolution Animation Phase Change - use useCallback to prevent unnecessary re-renders
     const handleEvolvePhaseChange = React.useCallback((newPhase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => {
@@ -1116,12 +1129,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 aiProcessing.current = true;
                 lastProcessedTurn.current = currentTurnKey;
 
+                // Helper to wait for all visual and logical effects to settle
+                const waitForIdle = async (initialDelay = 500) => {
+                    // Initial wait for state propagation
+                    await new Promise(r => setTimeout(r, initialDelay));
+
+                    const checkIdle = () => {
+                        const state = gameStateRef.current;
+                        const hasPending = state.pendingEffects && state.pendingEffects.length > 0;
+                        const hasActiveEffects = activeEffectsRef.current.length > 0;
+                        const isAnimatingCard = animatingCardRef.current !== null;
+                        const isPlayingCard = playingCardAnimRef.current !== null;
+                        const isEvolving = evolveAnimationRef.current !== null;
+
+                        return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving;
+                    };
+
+                    // Wait until idle
+                    while (!checkIdle()) {
+                        await new Promise(r => setTimeout(r, 200));
+                    }
+
+                    // Extra pause for readability (User desired 1-few seconds)
+                    await new Promise(r => setTimeout(r, 1200));
+                };
+
                 // 1. Thinking time
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 if (!aiProcessing.current) return;
 
                 // 2. Play MAX Cost Card
-                // Use FRESH state via Ref if possible, but for initial play, closure is fine (start of turn).
                 {
                     const state = gameStateRef.current;
                     const aiHand = state.players[opponentPlayerId].hand;
@@ -1135,56 +1172,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     if (playable.length > 0) {
                         const bestCard = playable[0];
-                        // Simple Target Logic: Pick first enemy follower if exists, else undefined
                         let targetId = undefined;
                         const enemyBoard = state.players[currentPlayerId].board;
                         if (enemyBoard.length > 0 && enemyBoard[0]) {
                             targetId = enemyBoard[0].instanceId;
                         }
 
-                        dispatch({
-                            type: 'PLAY_CARD',
-                            playerId: opponentPlayerId,
-                            payload: { cardIndex: bestCard.originalIndex, targetId }
-                        });
+                        // Animation First
+                        const sidebarWidth = 340;
+                        const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                        const startY = 100;
 
-                        // Animation
                         setPlayingCardAnim({
                             card: bestCard,
-                            startX: 340 + (window.innerWidth - 340) / 2, startY: 100,
-                            targetX: 340 + (window.innerWidth - 340) / 2, targetY: window.innerHeight / 2,
-                            onComplete: () => { triggerShake(); setPlayingCardAnim(null); }
+                            startX, startY,
+                            targetX: startX, targetY: window.innerHeight / 2, // Center
+                            onComplete: () => {
+                                triggerShake();
+                                dispatch({
+                                    type: 'PLAY_CARD',
+                                    playerId: opponentPlayerId,
+                                    payload: { cardIndex: bestCard.originalIndex, targetId }
+                                });
+                                setPlayingCardAnim(null);
+                            }
                         });
 
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        // Wait for idle (Animation + Effects)
+                        await waitForIdle(1500);
                     }
                 }
 
-                // 2.5 Evolve Phase (New!)
+                // 2.5 Evolve Phase
                 {
                     const state = gameStateRef.current;
                     const aiPlayer = state.players[opponentPlayerId];
                     const isFirstPlayer = (opponentPlayerId as string) === 'p1';
                     const turnCount = state.turnCount;
 
-                    // Can Evolve?
                     const canEvolveCheck = canEvolve(aiPlayer, turnCount, isFirstPlayer);
                     if (canEvolveCheck && aiPlayer.board.length > 0) {
-                        // Greedily Evolve the highest attack unit that hasn't evolved?
-                        // Or just random for now?
-                        // Let's evolve the LAST played unit (likely index board.length-1) or Strongest.
-                        // Filter for can Evolve? (Usually any follower).
                         const candidates = aiPlayer.board
                             .map((c, i) => ({ c, i }))
-                            .filter(({ c }) => c && c.type === 'FOLLOWER' && !c.hasEvolved); // Check for hasEvolved
+                            .filter(({ c }) => c && c.type === 'FOLLOWER' && !c.hasEvolved);
 
                         if (candidates.length > 0) {
-                            // Pick one (random or last)
-                            const target = candidates[candidates.length - 1]; // Last one usually latest played
-
-                            // 50% chance to evolve if we have points, or 100% if full?
-                            // Let's effectively use it.
-                            // If it needs a target for evolve, let's pick one
+                            const target = candidates[candidates.length - 1];
                             let targetId = undefined;
                             const enemyBoard = state.players[currentPlayerId].board;
                             const validTargets = enemyBoard.filter(c => c !== null);
@@ -1192,68 +1225,109 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 targetId = validTargets[0]!.instanceId;
                             }
 
+                            // Use Evolve Animation Logic for visual consistency?
+                            // AI can trigger handleEvolveWithAnimation logic manually? 
+                            // Problem: handleEvolveWithAnimation relies on playerBoardRefs which are for Player.
+                            // AI Board Refs are opponentBoardRefs.
+                            // Let's manually trigger simple dispatch but maybe play a sound/effect?
+                            // For now, standard dispatch is fine, but lets ensure we wait.
+
+                            // Visual: Highlight?
+                            // We can use playEffect or just let dispatch handle internal state.
+                            // There is currently NO visual Evolve animation for AI in `handleEvolveWithAnimation`.
+                            // It only works for `playerRef`.
+                            // We should probably just dispatch.
+
                             dispatchAndSend({
                                 type: 'EVOLVE',
                                 playerId: opponentPlayerId,
                                 payload: {
                                     followerIndex: target.i,
-                                    useSep: (aiPlayer.sep > 0 && turnCount >= 6), // Super Evolve requires Turn 6 for P2
+                                    useSep: (aiPlayer.sep > 0 && turnCount >= 6),
                                     targetId: targetId
                                 }
                             });
-                            await new Promise(resolve => setTimeout(resolve, 1000));
+
+                            // Wait for Evolve Effects
+                            await waitForIdle(1000);
                         }
                     }
                 }
 
                 // 3. Attack (Greedy Trade) - USING FRESH STATE
                 {
-                    const state = gameStateRef.current;
-                    const aiBoard = state.players[opponentPlayerId].board;
-                    const playerBoard = state.players[currentPlayerId].board;
-                    const activeWards = playerBoard.filter(c => c && c.passiveAbilities?.includes('WARD'));
+                    // Refresh state loop for multi-attack
+                    // Since we await inside loop, stateRef updates? 
+                    // No, `state` var is stale. Must re-read `gameStateRef.current` each iter.
+                    // But we can't simple-loop. We need `while` loop.
 
-                    for (let i = 0; i < aiBoard.length; i++) {
-                        const attacker = aiBoard[i];
-                        if (!attacker || !attacker.canAttack) continue;
+                    let continueAttacking = true;
+                    // Limit iterations to prevent infinite loops
+                    let attempts = 0;
 
-                        let targetIndex = -1;
-                        let targetIsLeader = true;
+                    while (continueAttacking && attempts < 10) {
+                        attempts++;
+                        const state = gameStateRef.current;
+                        const aiBoard = state.players[opponentPlayerId].board;
+                        const playerBoard = state.players[currentPlayerId].board;
+                        const activeWards = playerBoard.filter(c => c && c.passiveAbilities?.includes('WARD'));
 
-                        // WARD Logic
-                        if (activeWards.length > 0) {
-                            const wardIdx = playerBoard.findIndex(c => c && c.passiveAbilities?.includes('WARD'));
-                            if (wardIdx !== -1) {
-                                targetIndex = wardIdx;
-                                targetIsLeader = false;
-                            }
-                        } else {
-                            // Smart Trade Logic
-                            let bestTarget = -1;
-                            for (let t = 0; t < playerBoard.length; t++) {
-                                const target = playerBoard[t];
-                                if (!target) continue;
-                                // Free Kill: Kill target, Surive
-                                if (attacker.currentAttack >= target.currentHealth && target.currentAttack < attacker.currentHealth) {
-                                    bestTarget = t;
-                                    break;
+                        // Find FIRST valid attacker that hasn't attacked?
+                        // Or calculate all moves?
+                        // Simple greedy: Find first available attacker.
+
+                        let actionTaken = false;
+
+                        for (let i = 0; i < aiBoard.length; i++) {
+                            const attacker = aiBoard[i];
+                            if (!attacker || !attacker.canAttack) continue;
+
+                            let targetIndex = -1;
+                            let targetIsLeader = true;
+
+                            // WARD Logic
+                            if (activeWards.length > 0) {
+                                const wardIdx = playerBoard.findIndex(c => c && c.passiveAbilities?.includes('WARD'));
+                                if (wardIdx !== -1) {
+                                    targetIndex = wardIdx;
+                                    targetIsLeader = false;
                                 }
-                                // Value Trade: Kill target, target cost > attacker cost mechanism? (Ignored for MVP)
+                            } else {
+                                // Smart Trade
+                                let bestTarget = -1;
+                                for (let t = 0; t < playerBoard.length; t++) {
+                                    const target = playerBoard[t];
+                                    if (!target) continue;
+                                    if (attacker.currentAttack >= target.currentHealth && (target.currentAttack || 0) < attacker.currentHealth) {
+                                        bestTarget = t;
+                                        break;
+                                    }
+                                }
+
+                                if (bestTarget !== -1) {
+                                    targetIndex = bestTarget;
+                                    targetIsLeader = false;
+                                }
                             }
 
-                            if (bestTarget !== -1) {
-                                targetIndex = bestTarget;
-                                targetIsLeader = false;
-                            }
+                            // Visual Feedback
+                            playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex);
+
+                            dispatch({
+                                type: 'ATTACK',
+                                playerId: opponentPlayerId,
+                                payload: { attackerIndex: i, targetIndex, targetIsLeader }
+                            });
+
+                            actionTaken = true;
+                            // Wait for Attack visuals
+                            await waitForIdle(800);
+                            break; // Break for-loop to re-evaluate state after wait
                         }
 
-                        dispatch({
-                            type: 'ATTACK',
-                            playerId: opponentPlayerId,
-                            payload: { attackerIndex: i, targetIndex, targetIsLeader }
-                        });
-
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        if (!actionTaken) {
+                            continueAttacking = false;
+                        }
                     }
                 }
 
