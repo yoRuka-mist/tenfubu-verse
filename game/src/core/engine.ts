@@ -356,7 +356,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 1,
         description: 'ファンファーレ：相手のフォロワー1体に5ダメージ',
-        imageUrl: '/cards/mono.jpg',
+        imageUrl: '/cards/Mono.jpg',
         triggers: [{
             trigger: 'FANFARE',
             effects: [{ type: 'DAMAGE', value: 5, targetType: 'SELECT_FOLLOWER' }]
@@ -408,8 +408,8 @@ const MOCK_CARDS: Card[] = [
         attackEffectType: 'SLASH'
     },
     {
-        id: 'c_blue_tsubaki', name: '青ツバキ', cost: 3, type: 'FOLLOWER',
-        attack: 2, health: 3,
+        id: 'c_blue_tsubaki', name: '青ツバキ', cost: 2, type: 'FOLLOWER',
+        attack: 2, health: 2,
         description: 'ファンファーレ 1ドロー。進化時：ランダム1体破壊。',
         imageUrl: '/cards/blue_tsubaki.png',
         triggers: [

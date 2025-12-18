@@ -1,20 +1,17 @@
-# Task: Enhance Visuals & Fix Layout
+# Task: Enhancements Batch 2
 
 ## Status
-- [x] Fix GameScreen Syntax Error
-- [x] Refine Card Passive Effects (Ward, Barrier, Aura, Stealth)
-- [x] Fix Animation Drawing Offset (X/Y coordinates)
-- [x] Fix Layout Alignment (Centering, Collapse prevention)
-- [x] Symmetrize Decks
-- [x] Adjust Animations Timings and Colors
+- [x] Fix Prediction Line Offset (SVG Position Fixed)
+- [x] Ward Effect Visuals (Clipping Fix)
+- [x] Senka/Knuckler Cost Reduction (Passive/Hand logic)
+- [x] Sara 'SHOT' Attack Effect (Multi-hit Animation)
+- [x] Restore `engine.ts` Integrity (Fix createPlayer bug)
 
 ## Current Objectives
-- [x] 守護・バリア・オーラのループアニメーション周期をずらす
-- [x] バリアのぼかし・グロー・青色明滅を強化
-- [x] レイアウトの中央揃えを修正（左サイドバーとControlsの影響を排除）
-- [x] ボード位置を少し上にずらす
-- [x] プレイヤーHP位置を微調整
-- [x] デッキUIの対称性確保
+- [x] 予測線の描画位置ずれ修正
+- [x] 守護エフェクトのはみ出し表示
+- [x] せんか（節約）による手札コスト軽減の適用・表示
+- [x] Saraの攻撃エフェクトをShotに変更・3連撃化
 
 ## Pending
-- None (All requested tasks in this batch are addressing)
+- None

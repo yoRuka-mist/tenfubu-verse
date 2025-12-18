@@ -906,12 +906,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             // 50% chance to evolve if we have points, or 100% if full?
                             // Let's effectively use it.
+                            // If it needs a target for evolve, let's pick one
+                            let targetId = undefined;
+                            const enemyBoard = state.players[currentPlayerId].board;
+                            const validTargets = enemyBoard.filter(c => c !== null);
+                            if (validTargets.length > 0) {
+                                targetId = validTargets[0]!.instanceId;
+                            }
+
                             dispatchAndSend({
                                 type: 'EVOLVE',
                                 playerId: opponentPlayerId,
                                 payload: {
                                     followerIndex: target.i,
-                                    useSep: aiPlayer.sep > 0 // Use SEP if available
+                                    useSep: (aiPlayer.sep > 0 && turnCount >= 6), // Super Evolve requires Turn 6 for P2
+                                    targetId: targetId
                                 }
                             });
                             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2055,7 +2064,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* Board Ghost Removed - using arrow only */}
                 {
                     dragState?.sourceType === 'EVOLVE' && (
-                        <div style={{ position: 'absolute', left: dragState.currentX, top: dragState.currentY, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000, opacity: 0.8, width: 60, height: 60, borderRadius: '50%', background: '#ECC94B', boxShadow: '0 0 20px #ECC94B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '1.2rem', color: 'white' }}>EP</div>
+                        <div style={{
+                            position: 'fixed', left: dragState.currentX, top: dragState.currentY,
+                            transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
+                            opacity: 0.8, width: 60, height: 60, borderRadius: '50%',
+                            background: (dragState as any).useSep ? '#9f7aea' : '#ECC94B',
+                            boxShadow: (dragState as any).useSep ? '0 0 25px rgba(159, 122, 234, 0.8)' : '0 0 25px rgba(236, 201, 75, 0.8)',
+                            border: (dragState as any).useSep ? '3px solid #b794f4' : '3px solid #F6E05E',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                        </div>
                     )
                 }
 
@@ -2078,6 +2096,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                 (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                     } />
                                 </marker>
+                                <filter id="yellowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                                    <feFlood floodColor="#ecc94b" floodOpacity="0.8" result="color" />
+                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feMerge>
+                                        <feMergeNode in="glow" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                                <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                                    <feFlood floodColor="#9f7aea" floodOpacity="0.8" result="color" />
+                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feMerge>
+                                        <feMergeNode in="glow" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
                             </defs>
                             <path
                                 d={getArrowPath()}
@@ -2087,9 +2123,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         (dragState.sourceType === 'EVOLVE' ? '#ecc94b' :
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                 }
-                                strokeWidth="4"
+                                strokeWidth="6"
+                                strokeDasharray="10,5"
                                 markerEnd="url(#arrowhead)"
-                                style={{ filter: 'drop-shadow(0 0 5px rgba(0,0,0,0.5))' }}
+                                filter={`url(#${(dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'purple' : 'yellow'}Glow)`}
                             />
                         </>
                     )}
