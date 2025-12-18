@@ -95,6 +95,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
             className={`card-container ${isReady ? 'ready' : ''}`}
             style={{
                 ...style,
+                position: 'relative', // Needed for absolute positioned effects
                 cursor: onClick ? 'pointer' : 'default',
                 transform: isSelected ? 'translateY(-20px)' : style?.transform, // Lift if selected
                 boxShadow: glowColor || (isReady
@@ -104,7 +105,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 transition: 'transform 0.2s, box-shadow 0.2s',
                 display: 'flex', flexDirection: 'column',
                 background: '#1a202c', // Fallback bg
-                overflow: 'hidden' // Ensure contents encompass border radius
+                overflow: 'visible' // Allow effects to render outside card bounds
             }}
             onClick={onClick}
         >
@@ -229,105 +230,169 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     </>
                 )}
 
-                {/* WARD EFFECT - Only on Board */}
+                {/* WARD EFFECT - Only on Board, drawn OUTSIDE card */}
                 {isWard && isOnBoard && (
                     <div style={{
-                        position: 'absolute', inset: -8, zIndex: 10, pointerEvents: 'none',
-                        filter: 'drop-shadow(0 0 8px rgba(236, 201, 75, 0.8))'
+                        position: 'absolute',
+                        inset: -15,
+                        zIndex: 20,
+                        pointerEvents: 'none',
+                        overflow: 'visible'
                     }}>
-                        <svg viewBox="0 0 100 120" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
-                            <path d="M50 2 L96 20 V60 C96 90 50 116 50 116 C50 116 4 90 4 60 V20 Z"
-                                fill="none" stroke="#ECC94B" strokeWidth="4" />
-                            <path d="M50 2 L96 20 V60 C96 90 50 116 50 116 C50 116 4 90 4 60 V20 Z"
-                                fill="rgba(236, 201, 75, 0.15)" stroke="none" />
-                        </svg>
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            animation: 'wardPulseLoop 2.5s infinite ease-in-out'
+                        }}>
+                            <svg viewBox="0 0 100 120" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                                <defs>
+                                    <filter id="wardGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur stdDeviation="3" result="blur" />
+                                        <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                <path d="M50 2 L96 20 V60 C96 90 50 116 50 116 C50 116 4 90 4 60 V20 Z"
+                                    fill="rgba(255, 255, 255, 0.15)" stroke="#ECC94B" strokeWidth="4" filter="url(#wardGlow)" />
+                            </svg>
+                        </div>
+                        <style>{`
+                            @keyframes wardPulseLoop {
+                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+                                50% { transform: scale(1.08); opacity: 0.5; filter: blur(3px) drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)); }
+                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+                            }
+                        `}</style>
                     </div>
                 )}
 
-                {/* VISUAL: BARRIER (Vertical Oval Blue Glow) */}
+                {/* BARRIER EFFECT - drawn OUTSIDE card */}
                 {hasBarrier && (
                     <div style={{
                         position: 'absolute',
-                        inset: -10,
-                        zIndex: 12,
+                        inset: -15,
+                        zIndex: 21,
                         pointerEvents: 'none',
-                        borderRadius: '50%', // Vertical ovalish shape because card is vertical
-                        border: '2px solid rgba(135, 206, 250, 0.4)',
-                        background: 'radial-gradient(ellipse at center, rgba(176, 224, 230, 0.1) 0%, transparent 80%)',
-                        boxShadow: '0 0 20px rgba(0, 191, 255, 0.6), inset 0 0 15px rgba(0, 191, 255, 0.4)',
-                        animation: 'barrierPulseInner 2.5s infinite ease-in-out'
-                    }}>
-                        <style>{`
-                            @keyframes barrierPulseInner {
-                                0% { opacity: 0.5; transform: scale(1); box-shadow: 0 0 15px rgba(0, 191, 255, 0.5); }
-                                50% { opacity: 0.9; transform: scale(1.02); box-shadow: 0 0 30px rgba(176, 224, 230, 0.8); }
-                                100% { opacity: 0.5; transform: scale(1); box-shadow: 0 0 15px rgba(0, 191, 255, 0.5); }
-                            }
-                        `}</style>
-                    </div>
-                )}
-
-                {/* VISUAL: AURA (Orange Pulsing Cross Icon) */}
-                {isAura && (
-                    <div style={{
-                        position: 'absolute',
-                        top: 5,
-                        right: 5,
-                        zIndex: 14,
-                        pointerEvents: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        animation: 'auraIconPulse 2s infinite ease-in-out'
+                        overflow: 'visible'
                     }}>
                         <div style={{
-                            width: 20,
-                            height: 20,
-                            background: '#ed8936',
-                            clipPath: 'polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%)',
-                            filter: 'drop-shadow(0 0 8px #f6ad55)'
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%',
+                            border: '3px solid rgba(66, 153, 225, 0.7)',
+                            background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.2) 0%, transparent 70%)',
+                            animation: 'barrierPulseLoop 2s infinite ease-in-out'
                         }} />
                         <style>{`
-                            @keyframes auraIconPulse {
-                                0% { filter: drop-shadow(0 0 5px #ed8936); transform: scale(0.95); opacity: 0.8; }
-                                50% { filter: drop-shadow(0 0 15px #f6ad55); transform: scale(1.1); opacity: 1; }
-                                100% { filter: drop-shadow(0 0 5px #ed8936); transform: scale(0.95); opacity: 0.8; }
+                            @keyframes barrierPulseLoop {
+                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px); box-shadow: 0 0 10px rgba(66, 153, 225, 0.5), inset 0 0 15px rgba(66, 153, 225, 0.3); }
+                                50% { transform: scale(1.1); opacity: 0.4; filter: blur(4px); box-shadow: 0 0 25px rgba(99, 179, 237, 0.8), inset 0 0 25px rgba(99, 179, 237, 0.5); }
+                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px); box-shadow: 0 0 10px rgba(66, 153, 225, 0.5), inset 0 0 15px rgba(66, 153, 225, 0.3); }
                             }
                         `}</style>
                     </div>
                 )}
 
-                {/* VISUAL: STEALTH (Thin Semi-transparent Black Misty Effect) */}
+                {/* AURA EFFECT - Only on Board, large cross overlay */}
+                {isAura && isOnBoard && (
+                    <div style={{
+                        position: 'absolute',
+                        inset: -15,
+                        zIndex: 22,
+                        pointerEvents: 'none',
+                        overflow: 'visible',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <div style={{
+                            width: '80%',
+                            height: '80%',
+                            position: 'relative',
+                            animation: 'auraPulseLoop 2s infinite ease-in-out'
+                        }}>
+                            <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
+                                <defs>
+                                    <filter id="auraGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur stdDeviation="2" result="blur" />
+                                        <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                {/* Large Cross */}
+                                <path d="M40 5 L60 5 L60 40 L95 40 L95 60 L60 60 L60 95 L40 95 L40 60 L5 60 L5 40 L40 40 Z"
+                                    fill="rgba(255, 204, 0, 0.25)" stroke="#f6ad55" strokeWidth="3" filter="url(#auraGlow)" />
+                            </svg>
+                        </div>
+                        <style>{`
+                            @keyframes auraPulseLoop {
+                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
+                                50% { transform: scale(1.12); opacity: 0.4; filter: blur(4px) drop-shadow(0 0 20px rgba(255, 204, 0, 0.8)); }
+                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
+                            }
+                        `}</style>
+                    </div>
+                )}
+
+                {/* STEALTH EFFECT - Smoky black mist */}
                 {isStealth && (
                     <div style={{
                         position: 'absolute',
                         inset: 0,
                         zIndex: 13,
                         pointerEvents: 'none',
-                        background: 'linear-gradient(135deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%)',
-                        backgroundColor: 'rgba(0,0,0,0.25)',
                         overflow: 'hidden',
                         borderRadius: 8
                     }}>
-                        {/* Moving Smoke/Mist Layer */}
+                        {/* Multiple smoke layers for depth */}
                         <div style={{
                             position: 'absolute',
-                            inset: -50,
-                            background: 'radial-gradient(circle at 50% 50%, rgba(50,50,50,0.2) 0%, transparent 60%)',
-                            filter: 'blur(15px)',
-                            animation: 'stealthFlow 8s infinite linear'
+                            inset: -30,
+                            background: 'radial-gradient(ellipse at 30% 30%, rgba(20, 20, 20, 0.6) 0%, transparent 50%)',
+                            filter: 'blur(12px)',
+                            animation: 'smokeMove1 4s infinite ease-in-out'
                         }} />
+                        <div style={{
+                            position: 'absolute',
+                            inset: -30,
+                            background: 'radial-gradient(ellipse at 70% 70%, rgba(30, 30, 30, 0.5) 0%, transparent 50%)',
+                            filter: 'blur(15px)',
+                            animation: 'smokeMove2 5s infinite ease-in-out'
+                        }} />
+                        <div style={{
+                            position: 'absolute',
+                            inset: -20,
+                            background: 'radial-gradient(ellipse at 50% 50%, rgba(10, 10, 10, 0.4) 0%, transparent 60%)',
+                            filter: 'blur(10px)',
+                            animation: 'smokePulse 3s infinite ease-in-out'
+                        }} />
+                        {/* Overlay for inner shadow */}
                         <div style={{
                             position: 'absolute',
                             inset: 0,
-                            boxShadow: 'inset 0 0 25px rgba(0,0,0,0.7)',
-                            opacity: 0.6
+                            boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 60px rgba(0, 0, 0, 0.4)',
+                            animation: 'stealthPulse 2.5s infinite ease-in-out'
                         }} />
                         <style>{`
-                            @keyframes stealthFlow {
-                                0% { transform: translate(-10%, -10%) rotate(0deg); opacity: 0.4; }
-                                50% { transform: translate(10%, 10%) rotate(180deg); opacity: 0.7; }
-                                100% { transform: translate(-10%, -10%) rotate(360deg); opacity: 0.4; }
+                            @keyframes smokeMove1 {
+                                0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+                                50% { transform: translate(15px, 10px) scale(1.1); opacity: 0.8; }
+                            }
+                            @keyframes smokeMove2 {
+                                0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+                                50% { transform: translate(-10px, -15px) scale(1.15); opacity: 0.7; }
+                            }
+                            @keyframes smokePulse {
+                                0%, 100% { transform: scale(1); opacity: 0.3; filter: blur(10px); }
+                                50% { transform: scale(1.2); opacity: 0.6; filter: blur(15px); }
+                            }
+                            @keyframes stealthPulse {
+                                0%, 100% { opacity: 0.6; }
+                                50% { opacity: 0.9; }
                             }
                         `}</style>
                     </div>

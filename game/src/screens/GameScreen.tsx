@@ -40,7 +40,7 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
     }, [onComplete, type]);
 
     const style: React.CSSProperties = {
-        position: 'absolute', left: x, top: y, transform: 'translate(-50%, -50%)',
+        position: 'fixed', left: x, top: y, transform: 'translate(-50%, -50%)',
         width: 150, height: 150, pointerEvents: 'none', zIndex: 5000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
@@ -123,7 +123,7 @@ const DamageText = ({ value, x, y, color, onComplete }: { value: string | number
 
     return (
         <div style={{
-            position: 'absolute', left: x, top: y,
+            position: 'fixed', left: x, top: y,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none', zIndex: 6000,
             fontSize: '2rem', fontWeight: '900', color: color || '#e53e3e',
@@ -440,10 +440,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             }
 
-            // Default: Resolve after delay
+            // Default: Resolve after animation completes
+            // Damage/AOE effects use sprite animation (1066ms), so wait longer for them
+            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE';
+            const delay = isDamageEffect ? 1200 : 800; // Wait for animation to complete
             const timer = setTimeout(() => {
                 dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
-            }, 800);
+            }, delay);
             return () => clearTimeout(timer);
         }
     }, [gameState.pendingEffects, currentPlayerId, opponentPlayerId, animatingCard]);
@@ -512,15 +515,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             newDamages.push({ id: Date.now() + Math.random(), value: damage, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#e53e3e' });
                         }
                     } else if (currCard.currentHealth > prevCard.currentHealth) {
-                        // Heal
-                        const heal = currCard.currentHealth - prevCard.currentHealth;
-                        const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
-                        const isMe = pid === currentPlayerId;
-                        const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                        const el = refs[currIdx];
-                        if (el) {
-                            const rect = el.getBoundingClientRect();
-                            newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#48bb78' });
+                        // Heal - but skip if this is from evolution (hasEvolved changed to true)
+                        const isEvolution = currCard.hasEvolved && !prevCard.hasEvolved;
+                        if (!isEvolution) {
+                            const heal = currCard.currentHealth - prevCard.currentHealth;
+                            const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
+                            const isMe = pid === currentPlayerId;
+                            const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
+                            const el = refs[currIdx];
+                            if (el) {
+                                const rect = el.getBoundingClientRect();
+                                newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#48bb78' });
+                            }
                         }
                     }
                 } else {
