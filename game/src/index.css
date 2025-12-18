@@ -1,0 +1,23 @@
+:root {
+  --bg-color: #1a1a2e;
+  --card-bg: #16213e;
+  --accent: #e94560;
+  --text: #ffffff;
+}
+
+body {
+  margin: 0;
+  font-family: 'Helvetica Neue', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text);
+  overflow: hidden;
+}
+
+button {
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+}
