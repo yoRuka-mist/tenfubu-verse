@@ -1,6 +1,8 @@
 .card-container {
     perspective: 1000px;
     user-select: none;
+    width: 140px;
+    height: 200px;
 }
 
 .card {

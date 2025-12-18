@@ -45,25 +45,23 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
-    if (type === 'LIGHTNING' || type === 'IMPACT' || type === 'SUMI') {
+    if (type === 'LIGHTNING' || type === 'IMPACT' || type === 'SUMI' || type === 'SHOT') {
         const isImpact = type === 'IMPACT';
         const isSumi = type === 'SUMI';
+        const isShot = type === 'SHOT';
 
         // Map Type to Image
         let bgImage = '/effects/thunder.png';
         if (isImpact) bgImage = '/effects/impact.png';
         if (isSumi) bgImage = '/effects/sumi.png';
+        if (isShot) bgImage = '/effects/shot.png';
 
         const steps = spriteConfig.cols * spriteConfig.rows;
 
         return (
             <div style={{
                 ...style,
-                width: 256, height: 256, // Fixed size for sprite frame
-                // transform: style?.transform // Just Use the passed transform (which centers it)
-                // Actually, if x/y are top-left, we need translate.
-                // But playEffect seems to calculate center.
-                // Let's enforce centering here to be sure.
+                width: 256, height: 256,
                 transform: `${style?.transform || ''}`
             }}>
                 <div style={{
@@ -81,51 +79,6 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
                     const yPct = row * (100 / (spriteConfig.rows - 1));
                     const timePct = (i / (steps - 1)) * 100;
                     return `${timePct}% { background-position: ${xPct}% ${yPct}%; }`;
-                }).join('\n')}
-                    }
-                `}</style>
-            </div>
-        );
-    }
-
-    if (type === 'SHOT') {
-        const bgImage = '/effects/shot.png';
-        const steps = spriteConfig.cols * spriteConfig.rows;
-        return (
-            <div style={style}>
-                {/* 1st Hit: Small, Bottom-Left, t=0 */}
-                <div style={{
-                    position: 'absolute', width: 128, height: 128,
-                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
-                    transform: 'translate(-30px, 30px)',
-                    animation: `spriteAnimation 0.3s steps(1) forwards`,
-                    opacity: 0 // Start hidden? No, animation starts immediately
-                }} />
-                {/* 2nd Hit: Small, Top-Right, t=150ms */}
-                <div style={{
-                    position: 'absolute', width: 128, height: 128,
-                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
-                    transform: 'translate(30px, -30px)',
-                    animation: `spriteAnimation 0.3s steps(1) 0.15s forwards`,
-                    opacity: 0, animationFillMode: 'both' // Start hidden
-                }} />
-                {/* 3rd Hit: Normal, Center, t=300ms */}
-                <div style={{
-                    position: 'absolute', width: 256, height: 256,
-                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
-                    transform: 'translate(0, 0)',
-                    animation: `spriteAnimation 0.4s steps(1) 0.3s forwards`,
-                    opacity: 0, animationFillMode: 'both'
-                }} />
-                <style>{`
-                    @keyframes spriteAnimation {
-                        ${Array.from({ length: steps }).map((_, i) => {
-                    const col = i % spriteConfig.cols;
-                    const row = Math.floor(i / spriteConfig.cols);
-                    const xPct = col * (100 / (spriteConfig.cols - 1));
-                    const yPct = row * (100 / (spriteConfig.rows - 1));
-                    const timePct = (i / (steps - 1)) * 100;
-                    return `${timePct}% { background-position: ${xPct}% ${yPct}%; opacity: 1; }`;
                 }).join('\n')}
                     }
                 `}</style>
@@ -217,6 +170,255 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
                     `}</style>
                 </div>
             ))}
+        </div>
+    );
+};
+
+// --- Evolution Animation Component ---
+interface EvolutionAnimationProps {
+    card: any;
+    evolvedImageUrl?: string;
+    startX: number;
+    startY: number;
+    phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND';
+    onPhaseChange: (phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => void;
+    onShake: () => void;
+}
+
+const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake }) => {
+    const [rotateY, setRotateY] = React.useState(0);
+    const [whiteness, setWhiteness] = React.useState(0);
+    const [glowIntensity, setGlowIntensity] = React.useState(0);
+    const [scale, setScale] = React.useState(1);
+    const [position, setPosition] = React.useState({ x: startX, y: startY });
+    const [showParticles, setShowParticles] = React.useState(false);
+
+    // Use refs to avoid stale closures
+    const onPhaseChangeRef = React.useRef(onPhaseChange);
+    const onShakeRef = React.useRef(onShake);
+    React.useEffect(() => {
+        onPhaseChangeRef.current = onPhaseChange;
+        onShakeRef.current = onShake;
+    }, [onPhaseChange, onShake]);
+
+    // Phase Timing - only depends on phase now
+    React.useEffect(() => {
+        console.log('[EvolutionAnimation] Phase:', phase);
+        let timer: ReturnType<typeof setTimeout>;
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        switch (phase) {
+            case 'ZOOM_IN':
+                // Start at card position, then animate to center
+                // Board card size: 100x130, Animation card size: 180x240
+                // Scale ratio: 100/180 ≈ 0.55
+                setPosition({ x: startX, y: startY });
+                setScale(0.55); // Match board card size initially
+                // Small delay to ensure initial position is set before animating
+                timer = setTimeout(() => {
+                    setPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 - 50 });
+                    setScale(1.5); // Zoom in to large size
+                }, 50);
+                // Transition to next phase after animation completes
+                const zoomTimer = setTimeout(() => {
+                    onPhaseChangeRef.current('WHITE_FADE');
+                }, 650); // 50ms delay + 600ms transition
+                return () => {
+                    clearTimeout(timer);
+                    clearTimeout(zoomTimer);
+                };
+
+            case 'WHITE_FADE':
+                // Gradually increase whiteness and glow
+                let whiteProgress = 0;
+                intervalId = setInterval(() => {
+                    whiteProgress += 0.05;
+                    setWhiteness(Math.min(whiteProgress, 1));
+                    setGlowIntensity(Math.min(whiteProgress * 50, 50));
+                    if (whiteProgress >= 1) {
+                        if (intervalId) clearInterval(intervalId);
+                        onPhaseChangeRef.current('FLIP');
+                    }
+                }, 40);
+                return () => { if (intervalId) clearInterval(intervalId); };
+
+            case 'FLIP':
+                // 180 degree rotation with ease-in-out
+                const flipDuration = 600; // ms
+                const flipStartTime = Date.now();
+                intervalId = setInterval(() => {
+                    const elapsed = Date.now() - flipStartTime;
+                    const flipProgress = Math.min(elapsed / flipDuration, 1);
+                    // Ease-in-out cubic
+                    const eased = flipProgress < 0.5
+                        ? 4 * flipProgress * flipProgress * flipProgress
+                        : 1 - Math.pow(-2 * flipProgress + 2, 3) / 2;
+                    setRotateY(eased * 180);
+                    if (flipProgress >= 1) {
+                        if (intervalId) clearInterval(intervalId);
+                        onPhaseChangeRef.current('REVEAL');
+                    }
+                }, 16);
+                return () => { if (intervalId) clearInterval(intervalId); };
+
+            case 'REVEAL':
+                // Fade out white effect
+                let revealProgress = 0;
+                intervalId = setInterval(() => {
+                    revealProgress += 0.08;
+                    setWhiteness(Math.max(1 - revealProgress, 0));
+                    setGlowIntensity(Math.max(50 - revealProgress * 50, 0));
+                    if (revealProgress >= 1) {
+                        if (intervalId) clearInterval(intervalId);
+                        // Small delay before zoom out
+                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 300);
+                    }
+                }, 40);
+                return () => { if (intervalId) clearInterval(intervalId); };
+
+            case 'ZOOM_OUT':
+                // Return to original position - animate scale and position
+                // Board card size: 100x130, Animation card size: 180x240
+                // Scale ratio: 100/180 ≈ 0.55
+                console.log('[EvolutionAnimation] ZOOM_OUT: Returning to', startX, startY);
+                setPosition({ x: startX, y: startY });
+                setScale(0.55); // Return to board card size
+                // Wait for the transition to complete
+                timer = setTimeout(() => {
+                    console.log('[EvolutionAnimation] ZOOM_OUT complete, transitioning to LAND');
+                    onPhaseChangeRef.current('LAND');
+                }, 700); // Slightly longer than CSS transition (600ms)
+                return () => clearTimeout(timer);
+
+            case 'LAND':
+                // Trigger shake and particles
+                console.log('[EvolutionAnimation] LAND phase');
+                onShakeRef.current();
+                setShowParticles(true);
+                timer = setTimeout(() => {
+                    console.log('[EvolutionAnimation] LAND complete, transitioning to DONE');
+                    onPhaseChangeRef.current('DONE');
+                }, 600);
+                return () => clearTimeout(timer);
+        }
+
+        return () => {
+            if (timer) clearTimeout(timer);
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [phase, startX, startY]);
+
+    // Determine which image to show based on rotation
+    const showEvolvedImage = rotateY > 90 && evolvedImageUrl;
+    const imageUrl = showEvolvedImage ? evolvedImageUrl : card.imageUrl;
+
+    // Correct the rotation for back face (so evolved image appears correctly)
+    const displayRotateY = showEvolvedImage ? rotateY - 180 : rotateY;
+
+    return (
+        <div style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none'
+        }}>
+            {/* Card Container */}
+            <div style={{
+                position: 'absolute',
+                left: position.x,
+                top: position.y,
+                transform: `translate(-50%, -50%) scale(${scale}) perspective(1000px) rotateY(${displayRotateY}deg)`,
+                transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT') ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+                transformStyle: 'preserve-3d'
+            }}>
+                {/* Glow Effect */}
+                <div style={{
+                    position: 'absolute',
+                    inset: -20,
+                    background: `radial-gradient(circle, rgba(255,255,255,${glowIntensity / 100}) 0%, transparent 70%)`,
+                    borderRadius: 20,
+                    filter: `blur(${glowIntensity / 2}px)`,
+                    pointerEvents: 'none'
+                }} />
+
+                {/* Card */}
+                <div style={{
+                    width: 180,
+                    height: 240,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    boxShadow: `0 0 ${30 + glowIntensity}px rgba(255,255,255,0.8)`,
+                    position: 'relative'
+                }}>
+                    {/* Card Image */}
+                    <img
+                        src={imageUrl}
+                        alt={card.name}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            filter: `brightness(${1 + whiteness}) contrast(${1 - whiteness * 0.3})`
+                        }}
+                    />
+
+                    {/* White Overlay */}
+                    <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: `rgba(255,255,255,${whiteness * 0.9})`,
+                        pointerEvents: 'none'
+                    }} />
+                </div>
+            </div>
+
+            {/* Landing Particles */}
+            {showParticles && (
+                <div style={{
+                    position: 'absolute',
+                    left: startX,
+                    top: startY,
+                    pointerEvents: 'none'
+                }}>
+                    {Array(15).fill(0).map((_, i) => {
+                        const angle = (i / 15) * 360;
+                        const dist = 30 + Math.random() * 80;
+                        const size = 4 + Math.random() * 8;
+                        const delay = Math.random() * 0.2;
+                        return (
+                            <div
+                                key={i}
+                                style={{
+                                    position: 'absolute',
+                                    width: size,
+                                    height: size,
+                                    background: `hsl(${50 + Math.random() * 20}, 100%, ${70 + Math.random() * 30}%)`,
+                                    borderRadius: '50%',
+                                    boxShadow: '0 0 6px rgba(255,215,0,0.8)',
+                                    animation: `evolveParticle 0.8s ease-out ${delay}s forwards`
+                                }}
+                            >
+                                <style>{`
+                                    @keyframes evolveParticle {
+                                        0% {
+                                            transform: translate(-50%, -50%) rotate(${angle}deg) translateX(0) scale(1);
+                                            opacity: 1;
+                                        }
+                                        100% {
+                                            transform: translate(-50%, -50%) rotate(${angle}deg) translateX(${dist}px) scale(0);
+                                            opacity: 0;
+                                        }
+                                    }
+                                `}</style>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };
@@ -681,10 +883,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [adapter, connected]);  // Removed gameState from dependencies
 
     // AI Logic State
-    // const aiProcessing = React.useRef(false); // Already defined? check.
-    // Wait, I need to remove the duplicates. The file has 2 blocks. I will keep one.
-
-    // AI Logic State
     const aiProcessing = React.useRef(false);
     const lastProcessedTurn = React.useRef<string | null>(null);
 
@@ -710,6 +908,68 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         targetY: number;
         onComplete: () => void;
     } | null>(null);
+
+    // Evolution Animation State
+    const [evolveAnimation, setEvolveAnimation] = React.useState<{
+        card: any;
+        evolvedImageUrl?: string;
+        startX: number;
+        startY: number;
+        phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND';
+        followerIndex: number;
+        useSep: boolean;
+        targetId?: string;
+    } | null>(null);
+
+    // Handle Evolve with Animation
+    const handleEvolveWithAnimation = (followerIndex: number, useSep: boolean, targetId?: string) => {
+        const card = playerRef.current.board[followerIndex];
+        if (!card) return;
+
+        // Get the card's current position on the board
+        const cardEl = playerBoardRefs.current[followerIndex];
+        let startX = window.innerWidth / 2;
+        let startY = window.innerHeight / 2;
+        if (cardEl) {
+            const rect = cardEl.getBoundingClientRect();
+            startX = rect.left + rect.width / 2;
+            startY = rect.top + rect.height / 2;
+        }
+
+        setEvolveAnimation({
+            card,
+            evolvedImageUrl: card.evolvedImageUrl,
+            startX,
+            startY,
+            phase: 'ZOOM_IN',
+            followerIndex,
+            useSep,
+            targetId
+        });
+    };
+
+    // Ref for pending evolve action (to dispatch after animation completes)
+    const pendingEvolveRef = React.useRef<{followerIndex: number, useSep: boolean, targetId?: string} | null>(null);
+
+    // Handle Evolution Animation Phase Change - use useCallback to prevent unnecessary re-renders
+    const handleEvolvePhaseChange = React.useCallback((newPhase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => {
+        console.log('[GameScreen] handleEvolvePhaseChange:', newPhase);
+        if (newPhase === 'DONE') {
+            // Animation complete - store pending action in ref and clear animation
+            setEvolveAnimation(prev => {
+                if (prev) {
+                    pendingEvolveRef.current = {
+                        followerIndex: prev.followerIndex,
+                        useSep: prev.useSep,
+                        targetId: prev.targetId
+                    };
+                }
+                return null; // Clear animation
+            });
+        } else {
+            setEvolveAnimation(prev => prev ? { ...prev, phase: newPhase } : null);
+        }
+    }, []);
 
     // Handle Play Card with Animation
     const handlePlayCard = (index: number, startX: number, startY: number) => {
@@ -778,6 +1038,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
+
+    // Process pending evolve action when animation completes
+    React.useEffect(() => {
+        if (!evolveAnimation && pendingEvolveRef.current) {
+            const pending = pendingEvolveRef.current;
+            pendingEvolveRef.current = null;
+            console.log('[GameScreen] Dispatching pending evolve action:', pending);
+            dispatchAndSend({
+                type: 'EVOLVE',
+                playerId: currentPlayerId,
+                payload: {
+                    followerIndex: pending.followerIndex,
+                    useSep: pending.useSep,
+                    targetId: pending.targetId
+                }
+            });
+        }
+    }, [evolveAnimation, currentPlayerId, dispatchAndSend]);
 
     // Refs for stable access in event handlers
     const playerRef = React.useRef(player);
@@ -898,7 +1176,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         // Filter for can Evolve? (Usually any follower).
                         const candidates = aiPlayer.board
                             .map((c, i) => ({ c, i }))
-                            .filter(({ c }) => c && c.type === 'FOLLOWER'); // Simplified check
+                            .filter(({ c }) => c && c.type === 'FOLLOWER' && !c.hasEvolved); // Check for hasEvolved
 
                         if (candidates.length > 0) {
                             // Pick one (random or last)
@@ -1215,14 +1493,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
-                        dispatchAndSend({
-                            type: 'EVOLVE',
-                            playerId: currentPlayerId,
-                            payload: {
-                                followerIndex: followerIndex,
-                                useSep: (currentDrag as any).isSuper
-                            }
-                        });
+                        // Start evolution animation instead of direct dispatch
+                        handleEvolveWithAnimation(followerIndex, (currentDrag as any).isSuper);
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     }
@@ -1342,14 +1614,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             });
         } else if (targetingState.type === 'EVOLVE') {
-            dispatchAndSend({
-                type: 'EVOLVE',
-                playerId: currentPlayerId,
-                payload: {
-                    followerIndex: targetingState.sourceIndex,
-                    targetId
-                }
-            });
+            // Start evolution animation with target
+            handleEvolveWithAnimation(targetingState.sourceIndex, false, targetId);
         }
 
         // 3. Reset
@@ -2067,9 +2333,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{
                             position: 'fixed', left: dragState.currentX, top: dragState.currentY,
                             transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                            opacity: 0.8, width: 60, height: 60, borderRadius: '50%',
+                            opacity: 1.0, width: 60, height: 60, borderRadius: '50%',
                             background: (dragState as any).useSep ? '#9f7aea' : '#ECC94B',
-                            boxShadow: (dragState as any).useSep ? '0 0 25px rgba(159, 122, 234, 0.8)' : '0 0 25px rgba(236, 201, 75, 0.8)',
+                            boxShadow: (dragState as any).useSep ? '0 0 15px #9f7aea' : '0 0 15px #ECC94B',
                             border: (dragState as any).useSep ? '3px solid #b794f4' : '3px solid #F6E05E',
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
@@ -2126,7 +2392,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 strokeWidth="6"
                                 strokeDasharray="10,5"
                                 markerEnd="url(#arrowhead)"
-                                filter={`url(#${(dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'purple' : 'yellow'}Glow)`}
+                                filter={(dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? undefined : `url(#${dragState.sourceType === 'EVOLVE' ? 'yellow' : 'yellow'}Glow)`}
                             />
                         </>
                     )}
@@ -2164,7 +2430,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
                         <div key={i} style={{
                             position: 'absolute', inset: 0,
-                            transform: `translate(${i * 2}px, ${i * 2}px)`, // Stack down-right (Symmetric to Player up-right)
+                            transform: `translate(${-i * 2}px, ${i * 2}px)`, // Stack down-left
                             background: 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
                             borderRadius: 6, border: '1px solid #4a5568',
                             boxShadow: '1px 1px 3px rgba(0,0,0,0.5)'
@@ -2213,6 +2479,46 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )
                 }
 
+                {/* Play Card Animation Overlay */}
+                {playingCardAnim && (
+                    <div style={{
+                        position: 'fixed', inset: 0, zIndex: 9999,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'auto'
+                    }}>
+                        <div
+                            onAnimationEnd={playingCardAnim.onComplete}
+                            style={{
+                                animation: playingCardAnim.card.type === 'SPELL'
+                                    ? 'playSpellSequence 1s forwards'
+                                    : 'playCardSequence 0.8s forwards'
+                            }}
+                        >
+                            <style>{`
+                                @keyframes playCardSequence {
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
+                                    50% { transform: translate(0, 0) scale(0.8); opacity: 1; }
+                                    70% { transform: translate(0, 0) scale(0.9); opacity: 1; }
+                                    100% { transform: translate(0, 0) scale(1.0); opacity: 0; }
+                                }
+                                @keyframes playSpellSequence {
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
+                                    40% { transform: translate(0, 0) scale(1.0); opacity: 1; filter: brightness(1); }
+                                    80% { transform: translate(0, 0) scale(1.1); opacity: 1; filter: brightness(1.2); }
+                                    100% { transform: translate(0, 0) scale(1.5); opacity: 0; filter: brightness(3); }
+                                }
+                            `}</style>
+                            <Card card={playingCardAnim.card} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                            {playingCardAnim.card.type === 'SPELL' && (
+                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <SparkleBurst x={0} y={0} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* --- Card Generation Animation Overlay --- */}
                 {
                     animatingCard && (
@@ -2254,6 +2560,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         />
                     ))
                 }
+
+                {/* --- Evolution Animation Overlay --- */}
+                {evolveAnimation && (
+                    <EvolutionAnimation
+                        card={evolveAnimation.card}
+                        evolvedImageUrl={evolveAnimation.evolvedImageUrl}
+                        startX={evolveAnimation.startX}
+                        startY={evolveAnimation.startY}
+                        phase={evolveAnimation.phase}
+                        onPhaseChange={handleEvolvePhaseChange}
+                        onShake={triggerShake}
+                    />
+                )}
 
                 {/* --- Game Over Overlay --- */}
                 {

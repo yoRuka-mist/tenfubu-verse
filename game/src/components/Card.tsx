@@ -22,6 +22,11 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     const isReady = 'canAttack' in card ? (card as any).canAttack : false;
     const turnPlayed = 'turnPlayed' in card ? (card as any).turnPlayed : undefined;
 
+    // Determine which image to show (evolved or base)
+    const hasEvolved = 'hasEvolved' in card ? (card as any).hasEvolved : false;
+    const evolvedImageUrl = 'evolvedImageUrl' in card ? (card as any).evolvedImageUrl : undefined;
+    const displayImageUrl = (hasEvolved && evolvedImageUrl) ? evolvedImageUrl : card.imageUrl;
+
     // Determine Glow Color
     let glowColor = style?.boxShadow;
     let borderColor = undefined;
@@ -70,7 +75,9 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     if (variant === 'art-only') {
         return (
             <div
+                className="card"
                 style={{
+                    width: 140, height: 200, // Default size
                     ...style,
                     borderRadius: 8,
                     overflow: 'hidden',
@@ -80,8 +87,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
                 }}
             >
-                {card.imageUrl ? (
-                    <img src={card.imageUrl} alt={card.name} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {displayImageUrl ? (
+                    <img src={displayImageUrl} alt={card.name} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                     <div style={{ fontSize: '1.5rem', opacity: 0.5, color: 'white', fontWeight: 'bold' }}>{card.type}</div>
                 )}
@@ -92,8 +99,9 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     // --- Normal Variant (On Board / Hand) ---
     return (
         <div
-            className={`card-container ${isReady ? 'ready' : ''}`}
+            className={`card card-container ${isReady ? 'ready' : ''}`}
             style={{
+                width: 140, height: 200, // Default size
                 ...style,
                 position: 'relative', // Needed for absolute positioned effects
                 cursor: onClick ? 'pointer' : 'default',
@@ -125,45 +133,31 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 {card.name}
             </div>
 
-            {/* 2. Full Art Area (Fills rest) */}
-            <div style={{ flex: 1, position: 'relative', width: '100%', overflow: 'hidden' }}>
-                {card.imageUrl ? (
-                    <>
+            {/* 2. Content Area (Contains image, cost, stats, and effects) */}
+            <div style={{ flex: 1, position: 'relative', width: '100%', background: '#2d3748', borderRadius: '0 0 8px 8px', minHeight: 0 }}>
+                {/* 2a. Visual Content (Clipped) */}
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', borderRadius: '0 0 8px 8px', zIndex: 1 }}>
+                    {displayImageUrl ? (
                         <img
-                            src={card.imageUrl}
+                            src={displayImageUrl}
                             alt={card.name}
                             draggable={false}
                             style={{
                                 width: '100%', height: '100%', objectFit: 'cover',
-                                transition: 'opacity 0.3s',
-                                opacity: 1 // We could use state, but simple browser caching often works. 
-                                // User requested: "Animation after loading". 
-                                // We can use a ref and onLoad.
-                            }}
-                            onLoad={(e) => {
-                                (e.target as HTMLImageElement).style.opacity = '1';
-                            }}
-                            ref={img => {
-                                if (img && !img.complete) {
-                                    img.style.opacity = '0';
-                                }
+                                display: 'block'
                             }}
                         />
-                        {/* Placeholder behind */}
-                        <div style={{
-                            position: 'absolute', inset: 0, zIndex: -1,
-                            background: '#2d3748', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            ...
+                    ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#4a5568', color: '#a0aec0', fontSize: '0.8rem' }}>
+                            {card.type}
                         </div>
-                    </>
-                ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#4a5568', color: '#a0aec0', fontSize: '0.8rem' }}>
-                        {card.type}
-                    </div>
-                )}
+                    )}
 
-                {/* Overlaid Cost (Top Left) */}
+                    {/* Overlaid Description Gradient */}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 40, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)', pointerEvents: 'none', zIndex: 3 }} />
+                </div>
+
+                {/* 2b. Overlaid Cost (Not Clipped) */}
                 <div style={{
                     position: 'absolute', top: 2, left: 2,
                     width: 24, height: 24, borderRadius: '50%',
@@ -171,24 +165,17 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     color: 'white', fontSize: '0.9rem', fontWeight: 900,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.3)',
-                    zIndex: 5
+                    zIndex: 10
                 }}>
                     {card.cost}
                 </div>
 
-                {/* Overlaid Description (Bottom Overlay - Optional, minimal visibility) */}
-                {/* User requested "From there down ALL ILLUSTRATION", so we hide normal text box. */}
-                {/* Maybe a very subtle gradient at bottom for stats legibility */}
-                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 40, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)', pointerEvents: 'none', zIndex: 3 }} />
-
-                {/* Stats (Bottom Corners) */}
-                {/* Stats (Bottom Corners) */}
+                {/* 2c. Stats (Bottom Corners, Not Clipped) */}
                 {card.type === 'FOLLOWER' && (
                     <>
                         {/* Attack */}
                         <div style={{
                             position: 'absolute',
-                            // If on board: Bottom Left. If in hand: Left side (above health)
                             bottom: isOnBoard ? 2 : 40,
                             left: 2,
                             width: 32, height: 32, zIndex: 10,
@@ -209,7 +196,6 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         {/* Health */}
                         <div style={{
                             position: 'absolute',
-                            // If on board: Bottom Right. If in hand: Bottom Left (Stacked under Attack)
                             bottom: 2,
                             right: isOnBoard ? 2 : 'auto',
                             left: isOnBoard ? 'auto' : 2,
@@ -230,18 +216,18 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     </>
                 )}
 
-                {/* WARD EFFECT - Only on Board, drawn OUTSIDE card */}
+                {/* 2d. Effects (Outside clipping container) */}
+                {/* WARD EFFECT */}
                 {isWard && isOnBoard && (
                     <div style={{
                         position: 'absolute',
-                        inset: -15,
+                        top: -15, left: -15, right: -15, bottom: -15,
                         zIndex: 50,
-                        pointerEvents: 'none',
-                        overflow: 'visible'
+                        pointerEvents: 'none'
                     }}>
                         <div style={{
                             position: 'absolute',
-                            inset: 0,
+                            top: 0, left: 0, right: 0, bottom: 0,
                             animation: 'wardPulseLoop 2.5s infinite ease-in-out'
                         }}>
                             <svg viewBox="0 0 100 120" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
@@ -258,52 +244,44 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                     fill="rgba(255, 255, 255, 0.15)" stroke="#ECC94B" strokeWidth="4" filter="url(#wardGlow)" />
                             </svg>
                         </div>
-                        <style>{`
-                            @keyframes wardPulseLoop {
-                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
-                                50% { transform: scale(1.08); opacity: 0.5; filter: blur(3px) drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)); }
-                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
-                            }
-                        `}</style>
                     </div>
                 )}
 
-                {/* BARRIER EFFECT - drawn OUTSIDE card */}
+                {/* BARRIER EFFECT */}
                 {hasBarrier && (
                     <div style={{
                         position: 'absolute',
-                        inset: -15,
+                        top: -12, left: -12, right: -12, bottom: -12,
                         zIndex: 21,
-                        pointerEvents: 'none',
-                        overflow: 'visible'
+                        pointerEvents: 'none'
                     }}>
+                        {/* Outer glow layer */}
                         <div style={{
                             position: 'absolute',
-                            inset: 0,
+                            top: 0, left: 0, right: 0, bottom: 0,
                             borderRadius: '50%',
-                            border: '3px solid rgba(66, 153, 225, 0.7)',
-                            background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.2) 0%, transparent 70%)',
-                            animation: 'barrierPulseLoop 3.5s infinite ease-in-out',
-                            backdropFilter: 'blur(1px)' // Subtle blur inside? Or just CSS filter on global
+                            background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.15) 0%, transparent 60%)',
+                            animation: 'barrierGlowLoop 3s infinite ease-in-out'
                         }} />
-                        <style>{`
-                            @keyframes barrierPulseLoop {
-                                0% { transform: scale(1); opacity: 0.9; filter: blur(2px); box-shadow: 0 0 15px rgba(66, 153, 225, 0.6), inset 0 0 20px rgba(66, 153, 225, 0.4); }
-                                50% { transform: scale(1.1); opacity: 0.5; filter: blur(5px); box-shadow: 0 0 30px rgba(99, 179, 237, 0.9), inset 0 0 40px rgba(99, 179, 237, 0.7); }
-                                100% { transform: scale(1); opacity: 0.9; filter: blur(2px); box-shadow: 0 0 15px rgba(66, 153, 225, 0.6), inset 0 0 20px rgba(66, 153, 225, 0.4); }
-                            }
-                        `}</style>
+                        {/* Main barrier line - crisp and visible */}
+                        <div style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            borderRadius: '50%',
+                            border: '2.5px solid rgba(99, 179, 237, 0.9)',
+                            boxShadow: '0 0 8px rgba(66, 153, 225, 0.6), inset 0 0 10px rgba(99, 179, 237, 0.2)',
+                            animation: 'barrierPulseLoop 3s infinite ease-in-out'
+                        }} />
                     </div>
                 )}
 
-                {/* AURA EFFECT - Only on Board, large cross overlay */}
+                {/* AURA EFFECT */}
                 {isAura && isOnBoard && (
                     <div style={{
                         position: 'absolute',
-                        inset: -15,
+                        top: -15, left: -15, right: -15, bottom: -15,
                         zIndex: 22,
                         pointerEvents: 'none',
-                        overflow: 'visible',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -324,81 +302,92 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                         </feMerge>
                                     </filter>
                                 </defs>
-                                {/* Large Cross */}
                                 <path d="M40 5 L60 5 L60 40 L95 40 L95 60 L60 60 L60 95 L40 95 L40 60 L5 60 L5 40 L40 40 Z"
                                     fill="rgba(255, 204, 0, 0.25)" stroke="#f6ad55" strokeWidth="3" filter="url(#auraGlow)" />
                             </svg>
                         </div>
-                        <style>{`
-                            @keyframes auraPulseLoop {
-                                0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
-                                50% { transform: scale(1.12); opacity: 0.4; filter: blur(4px) drop-shadow(0 0 20px rgba(255, 204, 0, 0.8)); }
-                                100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
-                            }
-                        `}</style>
                     </div>
                 )}
 
-                {/* STEALTH EFFECT - Smoky black mist */}
+                {/* STEALTH EFFECT */}
                 {isStealth && (
                     <div style={{
                         position: 'absolute',
-                        inset: 0,
+                        top: 0, left: 0, right: 0, bottom: 0,
                         zIndex: 13,
                         pointerEvents: 'none',
                         overflow: 'hidden',
-                        borderRadius: 8
+                        borderRadius: '0 0 8px 8px'
                     }}>
-                        {/* Multiple smoke layers for depth */}
                         <div style={{
                             position: 'absolute',
-                            inset: -30,
+                            top: -30, left: -30, right: -30, bottom: -30,
                             background: 'radial-gradient(ellipse at 30% 30%, rgba(20, 20, 20, 0.6) 0%, transparent 50%)',
                             filter: 'blur(12px)',
                             animation: 'smokeMove1 4s infinite ease-in-out'
                         }} />
                         <div style={{
                             position: 'absolute',
-                            inset: -30,
+                            top: -30, left: -30, right: -30, bottom: -30,
                             background: 'radial-gradient(ellipse at 70% 70%, rgba(30, 30, 30, 0.5) 0%, transparent 50%)',
                             filter: 'blur(15px)',
                             animation: 'smokeMove2 5s infinite ease-in-out'
                         }} />
                         <div style={{
                             position: 'absolute',
-                            inset: -20,
+                            top: -20, left: -20, right: -20, bottom: -20,
                             background: 'radial-gradient(ellipse at 50% 50%, rgba(10, 10, 10, 0.4) 0%, transparent 60%)',
                             filter: 'blur(10px)',
                             animation: 'smokePulse 3s infinite ease-in-out'
                         }} />
-                        {/* Overlay for inner shadow */}
                         <div style={{
                             position: 'absolute',
-                            inset: 0,
+                            top: 0, left: 0, right: 0, bottom: 0,
                             boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 60px rgba(0, 0, 0, 0.4)',
                             animation: 'stealthPulse 2.5s infinite ease-in-out'
                         }} />
-                        <style>{`
-                            @keyframes smokeMove1 {
-                                0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
-                                50% { transform: translate(15px, 10px) scale(1.1); opacity: 0.8; }
-                            }
-                            @keyframes smokeMove2 {
-                                0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
-                                50% { transform: translate(-10px, -15px) scale(1.15); opacity: 0.7; }
-                            }
-                            @keyframes smokePulse {
-                                0%, 100% { transform: scale(1); opacity: 0.3; filter: blur(10px); }
-                                50% { transform: scale(1.2); opacity: 0.6; filter: blur(15px); }
-                            }
-                            @keyframes stealthPulse {
-                                0%, 100% { opacity: 0.6; }
-                                50% { opacity: 0.9; }
-                            }
-                        `}</style>
                     </div>
                 )}
             </div>
+
+            <style>{`
+                @keyframes wardPulseLoop {
+                    0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+                    50% { transform: scale(1.08); opacity: 0.5; filter: blur(3px) drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)); }
+                    100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+                }
+                @keyframes barrierPulseLoop {
+                    0% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px rgba(66, 153, 225, 0.6), inset 0 0 10px rgba(99, 179, 237, 0.2); }
+                    50% { transform: scale(1.03); opacity: 0.85; box-shadow: 0 0 12px rgba(99, 179, 237, 0.8), inset 0 0 15px rgba(99, 179, 237, 0.3); }
+                    100% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px rgba(66, 153, 225, 0.6), inset 0 0 10px rgba(99, 179, 237, 0.2); }
+                }
+                @keyframes barrierGlowLoop {
+                    0% { transform: scale(1); opacity: 0.6; }
+                    50% { transform: scale(1.05); opacity: 0.4; }
+                    100% { transform: scale(1); opacity: 0.6; }
+                }
+                @keyframes auraPulseLoop {
+                    0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
+                    50% { transform: scale(1.12); opacity: 0.4; filter: blur(4px) drop-shadow(0 0 20px rgba(255, 204, 0, 0.8)); }
+                    100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
+                }
+                @keyframes smokeMove1 {
+                    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+                    50% { transform: translate(15px, 10px) scale(1.1); opacity: 0.8; }
+                }
+                @keyframes smokeMove2 {
+                    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+                    50% { transform: translate(-10px, -15px) scale(1.15); opacity: 0.7; }
+                }
+                @keyframes smokePulse {
+                    0%, 100% { transform: scale(1); opacity: 0.3; filter: blur(10px); }
+                    50% { transform: scale(1.2); opacity: 0.6; filter: blur(15px); }
+                }
+                @keyframes stealthPulse {
+                    0%, 100% { opacity: 0.6; }
+                    50% { opacity: 0.9; }
+                }
+            `}</style>
         </div >
     );
 };

@@ -53,6 +53,7 @@ export interface Card {
     triggerAbilities?: { [key: string]: AbilityEffect };
 
     imageUrl?: string;
+    evolvedImageUrl?: string; // 進化後の画像URL
 }
 
 export interface BoardCard extends Card {

@@ -79,32 +79,32 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_y', name: 'Y', cost: 6, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[隠密] ファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。',
+        description: '[隠密] ファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。進化時：相手のフォロワーすべてに3ダメージ。',
         imageUrl: '/cards/y.png',
+        evolvedImageUrl: '/cards/y_2.png',
         passiveAbilities: ['STEALTH'],
         attackEffectType: 'SUMI',
-        triggers: [{
-            trigger: 'FANFARE',
-            effects: [
-                { type: 'DAMAGE', value: 4, targetType: 'SELECT_FOLLOWER' },
-                { type: 'AOE_DAMAGE', value: 2, targetType: 'ALL_FOLLOWERS' }
-            ]
-        }]
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'DAMAGE', value: 4, targetType: 'SELECT_FOLLOWER' },
+                    { type: 'AOE_DAMAGE', value: 2, targetType: 'ALL_FOLLOWERS' }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'AOE_DAMAGE', value: 3, targetType: 'ALL_FOLLOWERS' }
+                ]
+            }
+        ]
     },
-    {
-        id: 'c_sara', name: 'SARA', cost: 4, type: 'FOLLOWER',
-        attack: 3, health: 4,
-        description: 'ファンファーレ: 相手のリーダーに2ダメージ。',
-        imageUrl: '/cards/sara.png',
-        attackEffectType: 'SHOT',
-        triggers: [{
-            trigger: 'FANFARE', effects: [{ type: 'DAMAGE_LEADER', value: 2, targetType: 'OPPONENT' }]
-        }]
-    },
+
     {
         id: 'c_tsubumaru', name: 'つぶまる', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 3,
-        description: '守護',
+        description: '[守護]',
         imageUrl: '/cards/tsubumaru.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH'
@@ -112,7 +112,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_barura', name: 'バルラ', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 4,
-        description: '進化時：山札から2枚ドロー。相手のフォロワー1体に3ダメージ',
+        description: '進化時：2枚ドロー。相手のフォロワー1体に3ダメージ。',
         imageUrl: '/cards/barura.jpg',
         triggers: [
             {
@@ -213,7 +213,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_white_tsubaki', name: '無敵の闘士　白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
         description: '突進。相手のターン中、相手のフォロワーからダメージを受けない',
-        imageUrl: '/cards/white_tsubaki.jpg',
+        imageUrl: '/cards/white_tsubaki.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE'],
         attackEffectType: 'IMPACT'
@@ -230,7 +230,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '守護 ファンファーレ：自分のリーダーを1回復。1枚ドロー。',
+        description: '[守護] ファンファーレ：自分のリーダーを1回復。1枚ドロー。',
         imageUrl: '/cards/urara.jpg',
         passiveAbilities: ['WARD'],
         triggers: [
@@ -285,7 +285,7 @@ const MOCK_CARDS: Card[] = [
     // --- Senka Tokens ---
     {
         id: 'TOKEN_BACKHAND_SMASH', name: 'バックハンドスマッシュ', cost: 0, type: 'SPELL',
-        description: '相手のフォロワー1体に、6ダメージ',
+        description: '相手のフォロワー1体に6ダメージ。',
         imageUrl: '/cards/BackhandSmash.jpg',
         tags: ['Token'],
         triggers: [{
@@ -295,7 +295,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'TOKEN_QUAKE_HOWLING', name: 'クエイクハウリング', cost: 0, type: 'SPELL',
-        description: '相手のフォロワーすべてに、2ダメージ',
+        description: '相手のフォロワーすべてに2ダメージ。',
         imageUrl: '/cards/QuakeHowling.png',
         tags: ['Token'],
         triggers: [{
@@ -305,7 +305,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'TOKEN_FLICKER_JAB', name: 'フリッカージャブ', cost: 0, type: 'SPELL',
-        description: '相手のフォロワー1体に、2ダメージ',
+        description: '相手のフォロワー1体に2ダメージ。',
         imageUrl: '/cards/FlickerJab.png',
         tags: ['Token'],
         triggers: [{
@@ -331,7 +331,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_valkyrie', name: 'ヴァルキリー', cost: 6, type: 'FOLLOWER',
         attack: 6, health: 6,
-        description: '守護 バリア オーラ',
+        description: '[守護] [バリア] [オーラ]',
         imageUrl: '/cards/valkyrie.jpg',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],
         attackEffectType: 'SLASH'
@@ -339,7 +339,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_manary', name: 'まなりー', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '守護',
+        description: '[守護]',
         imageUrl: '/cards/manary.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH'
@@ -347,26 +347,33 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '守護',
-        imageUrl: '/cards/potechi.jpg',
+        description: '[守護]',
+        imageUrl: '/cards/potechi.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH'
     },
     {
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 1,
-        description: 'ファンファーレ：相手のフォロワー1体に5ダメージ',
+        description: 'ファンファーレ：相手のフォロワー1体に5ダメージ。進化時：相手のフォロワー1体に5ダメージ。',
         imageUrl: '/cards/Mono.jpg',
-        triggers: [{
-            trigger: 'FANFARE',
-            effects: [{ type: 'DAMAGE', value: 5, targetType: 'SELECT_FOLLOWER' }]
-        }]
+        attackEffectType: 'SHOT',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [{ type: 'DAMAGE', value: 5, targetType: 'SELECT_FOLLOWER' }]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [{ type: 'DAMAGE', value: 5, targetType: 'SELECT_FOLLOWER' }]
+            }
+        ]
     },
     // --- Sara & Tokens ---
     {
         id: 'c_sara', name: 'sara', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 6,
-        description: 'ファンファーレ：2体破壊。11T以降Token入手。超進化：1体破壊。',
+        description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「ソリィ...The end.」を手札に加える。超進化時：相手のフォロワー1体を破壊する。',
         imageUrl: '/cards/sara.png',
         triggers: [
             {
@@ -386,7 +393,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'TOKEN_SORRY_THE_END', name: 'すみませんが、これで終わりです。', cost: 3, type: 'SPELL',
-        description: '全体5点。顔5点。3ドロー。さらぴ召喚。',
+        description: '相手のフォロワーすべてに5ダメージ。相手のリーダーに5ダメージ。3枚ドロー。「sara」を場に出す。',
         imageUrl: '/cards/sorryTheEnd.png',
         tags: ['Token'],
         triggers: [{
@@ -395,22 +402,14 @@ const MOCK_CARDS: Card[] = [
                 { type: 'AOE_DAMAGE', value: 5, targetType: 'ALL_FOLLOWERS' },
                 { type: 'DAMAGE', value: 5, targetType: 'OPPONENT' },
                 { type: 'DRAW', value: 3 },
-                { type: 'SUMMON_CARD', targetCardId: 'TOKEN_SARAPI' }
+                { type: 'SUMMON_CARD', targetCardId: 'c_sara' }
             ]
         }]
     },
     {
-        id: 'TOKEN_SARAPI', name: 'さらぴ', cost: 7, type: 'FOLLOWER',
-        attack: 4, health: 6,
-        description: '',
-        imageUrl: '/cards/sara.png',
-        tags: ['Token'],
-        attackEffectType: 'SLASH'
-    },
-    {
         id: 'c_blue_tsubaki', name: '青ツバキ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: 'ファンファーレ 1ドロー。進化時：ランダム1体破壊。',
+        description: 'ファンファーレ：1枚ドロー。進化時：ランダムな相手のフォロワー1体を破壊。',
         imageUrl: '/cards/blue_tsubaki.png',
         triggers: [
             {
@@ -923,6 +922,11 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             let newPendingEffects = [...(newState.pendingEffects || [])];
             effectsToQueue.forEach(e => {
+                // Check Conditions
+                if (e.conditions) {
+                    if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
+                }
+
                 newPendingEffects.push({
                     sourceCard: sourceCard,
                     effect: e,
@@ -1032,6 +1036,10 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             // Append to NEW array
             let newPendingEffects = [...(newState.pendingEffects || [])];
             effectsToQueue.forEach(e => {
+                // Check Conditions
+                if (e.conditions) {
+                    if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
+                }
                 newPendingEffects.push({
                     sourceCard: follower,
                     effect: e,
@@ -1130,6 +1138,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     if (attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN')) {
                         counterDamage = 0;
                         console.log(`[Engine] Attacker immune to counter damage!`);
+                    }
+
+                    if (attacker.hasBarrier && counterDamage > 0) {
+                        counterDamage = 0;
+                        attacker.hasBarrier = false;
+                        newState.logs.push(`${attacker.name} のバリアが反撃ダメージを無効化した！`);
                     }
 
                     attacker.currentHealth -= counterDamage;
