@@ -237,9 +237,10 @@ interface EvolutionAnimationProps {
     phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND';
     onPhaseChange: (phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => void;
     onShake: () => void;
+    useSep?: boolean; // Add useSep prop
 }
 
-const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake }) => {
+const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep }) => {
     const [rotateY, setRotateY] = React.useState(0);
     const [whiteness, setWhiteness] = React.useState(0);
     const [glowIntensity, setGlowIntensity] = React.useState(0);
@@ -450,9 +451,12 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                                     position: 'absolute',
                                     width: size,
                                     height: size,
-                                    background: `hsl(${50 + Math.random() * 20}, 100%, ${70 + Math.random() * 30}%)`,
+                                    // Violet for SEP, Golden for normal EP
+                                    background: useSep
+                                        ? `hsl(${260 + Math.random() * 40}, 80%, ${70 + Math.random() * 20}%)`
+                                        : `hsl(${50 + Math.random() * 20}, 100%, ${70 + Math.random() * 30}%)`,
                                     borderRadius: '50%',
-                                    boxShadow: '0 0 6px rgba(255,215,0,0.8)',
+                                    boxShadow: useSep ? '0 0 6px rgba(159, 122, 234, 0.8)' : '0 0 6px rgba(255,215,0,0.8)',
                                     animation: `evolveParticle 0.8s ease-out ${delay}s forwards`
                                 }}
                             >
@@ -568,6 +572,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         currentY: number;
         offsetX: number;
         offsetY: number;
+        isSuper?: boolean; // Add isSuper flag
     } | null>(null);
 
     const [hoveredTarget, setHoveredTarget] = React.useState<{
@@ -1972,8 +1977,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 999 }}>
                 {(dragState?.sourceType === 'BOARD' || dragState?.sourceType === 'EVOLVE') && (
                     <g>
-                        <path d={getArrowPath()} stroke={dragState.sourceType === 'EVOLVE' ? '#ecc94b' : "#e53e3e"} strokeWidth="6" fill="none" strokeDasharray="10,5" opacity="0.8" />
-                        <circle cx={dragState.currentX} cy={dragState.currentY} r="8" fill={dragState.sourceType === 'EVOLVE' ? '#ecc94b' : "#e53e3e"} />
+                        <path d={getArrowPath()} stroke={dragState.sourceType === 'EVOLVE' ? (dragState.isSuper ? '#9f7aea' : '#ecc94b') : "#e53e3e"} strokeWidth="6" fill="none" strokeDasharray="10,5" opacity="0.8" />
+                        <circle cx={dragState.currentX} cy={dragState.currentY} r="8" fill={dragState.sourceType === 'EVOLVE' ? (dragState.isSuper ? '#9f7aea' : '#ecc94b') : "#e53e3e"} />
                     </g>
                 )}
             </svg>
@@ -2070,7 +2075,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'absolute',
                         left: '10%',
-                        top: 20,
+                        top: 30, // Lowered by 10px
                         display: 'flex',
                         gap: -40,
                         transform: 'scale(0.7)',
@@ -2354,7 +2359,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         position: 'relative',
                         width: 280, height: 280,
                         marginTop: 0,
-                        top: -100, // Moved up 100px
+                        top: -90, // Lowered by 10px (was -100)
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 10
                     }}>
@@ -2742,6 +2747,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         phase={evolveAnimation.phase}
                         onPhaseChange={handleEvolvePhaseChange}
                         onShake={triggerShake}
+                        useSep={evolveAnimation.useSep} // Pass useSep
                     />
                 )}
 
