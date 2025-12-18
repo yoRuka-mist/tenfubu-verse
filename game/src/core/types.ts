@@ -36,6 +36,7 @@ export interface Card {
     id: string;
     name: string;
     cost: number;
+    baseCost?: number; // Original cost for recalculation
     type: CardType;
     attack?: number; // For followers
     health?: number; // For followers

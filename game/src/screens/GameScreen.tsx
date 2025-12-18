@@ -45,15 +45,13 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
-    if (type === 'LIGHTNING' || type === 'IMPACT' || type === 'SHOT' || type === 'SUMI') {
+    if (type === 'LIGHTNING' || type === 'IMPACT' || type === 'SUMI') {
         const isImpact = type === 'IMPACT';
-        const isShot = type === 'SHOT';
         const isSumi = type === 'SUMI';
 
         // Map Type to Image
         let bgImage = '/effects/thunder.png';
         if (isImpact) bgImage = '/effects/impact.png';
-        if (isShot) bgImage = '/effects/shot.png';
         if (isSumi) bgImage = '/effects/sumi.png';
 
         const steps = spriteConfig.cols * spriteConfig.rows;
@@ -83,6 +81,51 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
                     const yPct = row * (100 / (spriteConfig.rows - 1));
                     const timePct = (i / (steps - 1)) * 100;
                     return `${timePct}% { background-position: ${xPct}% ${yPct}%; }`;
+                }).join('\n')}
+                    }
+                `}</style>
+            </div>
+        );
+    }
+
+    if (type === 'SHOT') {
+        const bgImage = '/effects/shot.png';
+        const steps = spriteConfig.cols * spriteConfig.rows;
+        return (
+            <div style={style}>
+                {/* 1st Hit: Small, Bottom-Left, t=0 */}
+                <div style={{
+                    position: 'absolute', width: 128, height: 128,
+                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
+                    transform: 'translate(-30px, 30px)',
+                    animation: `spriteAnimation 0.3s steps(1) forwards`,
+                    opacity: 0 // Start hidden? No, animation starts immediately
+                }} />
+                {/* 2nd Hit: Small, Top-Right, t=150ms */}
+                <div style={{
+                    position: 'absolute', width: 128, height: 128,
+                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
+                    transform: 'translate(30px, -30px)',
+                    animation: `spriteAnimation 0.3s steps(1) 0.15s forwards`,
+                    opacity: 0, animationFillMode: 'both' // Start hidden
+                }} />
+                {/* 3rd Hit: Normal, Center, t=300ms */}
+                <div style={{
+                    position: 'absolute', width: 256, height: 256,
+                    backgroundImage: `url(${bgImage})`, backgroundSize: '800% 800%',
+                    transform: 'translate(0, 0)',
+                    animation: `spriteAnimation 0.4s steps(1) 0.3s forwards`,
+                    opacity: 0, animationFillMode: 'both'
+                }} />
+                <style>{`
+                    @keyframes spriteAnimation {
+                        ${Array.from({ length: steps }).map((_, i) => {
+                    const col = i % spriteConfig.cols;
+                    const row = Math.floor(i / spriteConfig.cols);
+                    const xPct = col * (100 / (spriteConfig.cols - 1));
+                    const yPct = row * (100 / (spriteConfig.rows - 1));
+                    const timePct = (i / (steps - 1)) * 100;
+                    return `${timePct}% { background-position: ${xPct}% ${yPct}%; opacity: 1; }`;
                 }).join('\n')}
                     }
                 `}</style>
@@ -2024,7 +2067,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 {/* SVG Overlay for Dragging Arrow */}
-                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 999 }}>
+                <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 999 }}>
                     {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
                         <>
                             <defs>

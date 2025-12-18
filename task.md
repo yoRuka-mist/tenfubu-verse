@@ -1,11 +1,20 @@
-# Task: Fix GameScreen Syntax Error
+# Task: Enhance Visuals & Fix Layout
 
 ## Status
-- [x] Identify syntax error location
-- [x] Remove premature closing `</div>` tag
-- [x] Verify code structure
+- [x] Fix GameScreen Syntax Error
+- [x] Refine Card Passive Effects (Ward, Barrier, Aura, Stealth)
+- [x] Fix Animation Drawing Offset (X/Y coordinates)
+- [x] Fix Layout Alignment (Centering, Collapse prevention)
+- [x] Symmetrize Decks
+- [x] Adjust Animations Timings and Colors
 
-## Context
-User reported a syntax error preventing the app from starting.
-Error: `Unexpected token, expected "," (1958:12)`
-Cause: The root `div` element of `GameScreen` was closed prematurely at line 1956, causing subsequent TSX elements (Ghost Cards, etc.) to be orphaned and treated as invalid syntax in the `return` statement.
+## Current Objectives
+- [x] 守護・バリア・オーラのループアニメーション周期をずらす
+- [x] バリアのぼかし・グロー・青色明滅を強化
+- [x] レイアウトの中央揃えを修正（左サイドバーとControlsの影響を排除）
+- [x] ボード位置を少し上にずらす
+- [x] プレイヤーHP位置を微調整
+- [x] デッキUIの対称性確保
+
+## Pending
+- None (All requested tasks in this batch are addressing)

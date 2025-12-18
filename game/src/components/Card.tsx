@@ -235,7 +235,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     <div style={{
                         position: 'absolute',
                         inset: -15,
-                        zIndex: 20,
+                        zIndex: 50,
                         pointerEvents: 'none',
                         overflow: 'visible'
                     }}>

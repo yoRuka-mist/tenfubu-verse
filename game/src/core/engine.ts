@@ -42,7 +42,6 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'COST_REDUCTION', value: 2, conditions: { tag: 'Knuckler' } },
                     { type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'ALL_FOLLOWERS', conditions: { tag: 'Knuckler' } }
                 ]
             },
@@ -90,6 +89,16 @@ const MOCK_CARDS: Card[] = [
                 { type: 'DAMAGE', value: 4, targetType: 'SELECT_FOLLOWER' },
                 { type: 'AOE_DAMAGE', value: 2, targetType: 'ALL_FOLLOWERS' }
             ]
+        }]
+    },
+    {
+        id: 'c_sara', name: 'SARA', cost: 4, type: 'FOLLOWER',
+        attack: 3, health: 4,
+        description: 'ファンファーレ: 相手のリーダーに2ダメージ。',
+        imageUrl: '/cards/sara.png',
+        attackEffectType: 'SHOT',
+        triggers: [{
+            trigger: 'FANFARE', effects: [{ type: 'DAMAGE_LEADER', value: 2, targetType: 'OPPONENT' }]
         }]
     },
     {
@@ -469,7 +478,7 @@ export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: strin
     const p1 = createPlayer('p1', p1Name, p1Class);
     const p2 = createPlayer('p2', p2Name, p2Class);
 
-    // Basic shuffle and draw 4
+    // Draw 4 cards
     p1.hand = p1.deck.splice(0, 4);
     p2.hand = p2.deck.splice(0, 4);
 
@@ -747,7 +756,49 @@ function processSingleEffect(
     return newState;
 }
 
+const recalculateCosts = (state: GameState): GameState => {
+    // Helper to recalculate costs for a player
+    const updatePlayerCosts = (player: Player) => {
+        // Check for Senka (on board) -> Savings Effect
+        // Condition: "Senka" on board. 
+        // Note: Checking by ID string loosely to catch evolved versions if needed, but ID usually persists.
+        // Or check name? Name persists.
+        const hasSenka = player.board.some(c => c && c.name.includes('せんか'));
+
+        const newHand = player.hand.map(c => {
+            const base = c.baseCost !== undefined ? c.baseCost : c.cost;
+            let current = base;
+
+            // Apply Senka (Knuckler Cost -2)
+            if (hasSenka && c.tags?.includes('Knuckler')) {
+                current = Math.max(0, base - 2);
+            }
+
+            if (c.cost !== current) {
+                return { ...c, cost: current, baseCost: base };
+            }
+            return c;
+        });
+
+        return { ...player, hand: newHand };
+    };
+
+    return {
+        ...state,
+        players: {
+            p1: updatePlayerCosts(state.players.p1),
+            p2: updatePlayerCosts(state.players.p2)
+        }
+    };
+};
+
+// Wrapper for Reducer to apply constraints (costs)
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
+    const newState = internalGameReducer(state, action);
+    return recalculateCosts(newState);
+};
+
+const internalGameReducer = (state: GameState, action: GameAction): GameState => {
     console.log(`[Reducer] Action: ${action.type}, isRemote: ${(action as any).isRemote}`);
     // CRITICAL: Deep copy state to prevent mutations
     let newState = {
