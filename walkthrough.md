@@ -1,33 +1,39 @@
-# Walkthrough - Enhanced Visuals & Layout Fixes
+# Walkthrough - 2025-12-18
 
-## Overview
-Improved the layout alignment, card visual effects, and overall polish of the game screen.
+## 実施した修正内容
 
-## Changes
+### 1. カードデータの整理と強化 (engine.ts)
+- **SARAの重複削除**: ID `c_sara` のコスト4版（大文字表記）を削除し、コスト7版のみに統一しました。
+- **Monoの進化時効果**: 進化時に「相手のフォロワー1体に5ダメージ」を与える効果を追加しました。
+- **攻撃エフェクト指定**: Monoの `attackEffectType` を `'SHOT'` に設定しました。
 
-### `src/screens/GameScreen.tsx`
+### 2. エンジンロジックの改善 (engine.ts)
+- **効果の条件チェック**: `PLAY_CARD` および `EVOLVE` 時に、効果の `conditions` (`minTurn`) を評価するようにしました。これにより、`sara` のトークン入手演出が11ターン目以降のみに正しく制限されます。
 
-#### Layout Alignment
-- **Centering Fix**: The "Controls" panel (Right side, 150px) was pushing the game field off-center. Changed "Controls" to `position: absolute` so the field aligns perfectly with the Leaders (who are centered in the main container).
-- **Y-Axis Adjustment**: Adjusted field padding (`20px 20px 60px 20px`) to shift the board slightly upwards for better visual balance between leaders.
-- **Board Stability**: Added `minHeight: 130` to board rows and ensured 5 slots are always rendered (using placeholders) to prevent layout collapse when empty.
-- **Coordinate Fixes**: Updated `playEffect` and `playingCardAnim` logic to account for the left sidebar (340px) when calculating the center of the board.
+### 3. ビジュアル・インターフェースの修正## カード画像表示の修正
+- **パスの正規化**: `engine.ts` 内の `imageUrl` をすべて `/cards/` で始まる絶対パスに統一しました。これにより、Viteの開発サーバー経由で確実にアセットが参照されるようになります。
+- **レイアウトの安定化**: `Card.tsx` のルート要素に `card` クラスが欠けていたため追加しました。これによりCSSの基本サイズ（140x200）が適用されます。
+- **ブラウザ互換性**: `inset: 0` スタイルを `top, left, right, bottom: 0` に書き換え、古い/特定のブラウザ環境での表示崩れを防ぎました。
+- **領域確保**: 画像を包むコンテナに `minHeight: 0` を追加し、Flexbox内で潰れないようにしました。
 
-#### UI Polish
-- **Deck Symmetry**: Positioned the Opponent Deck symmetrically to the Player Deck and matched its size and stacking rotation.
-- **Player HP**: Moved Player HP 5px lower for better spacing.
-- **Damage Timing**: Delayed damage application timing to 1200ms for attack animations, ensuring numbers appear after the hit visual.
-- **Evolve**: Prevented green healing text from appearing during evolution HP checks.
+## カードデータとエンジンの修正
+- **Mono (修正)**: 画像パスを `/cards/Mono.jpg` に修正。
+- **青ツバキ (修正)**: コストを 2 -> 4、ステータスを 2/2 -> 4/3 に更新しました。
+- **バリア処理の強化**: 攻撃側のフォロワーがバリアを持っている場合、反撃ダメージを無効化しつつバリアを消費する処理を `engine.ts` の `ATTACK` ケースに追加しました。
 
-### `src/components/Card.tsx`
+## AIロジックの改善
+- **進化対象の選定**: AIが既に進化済みのフォロワーを重ねて進化させようとしないよう、未進化状態を確認するフィルタを追加しました。
+- **ターゲット指定**: AIが進化時やプレイ時にターゲットが必要な効果を持つカードを扱う際、相手のフォロワーをターゲットとして正しく渡す処理を維持・確認しました。
 
-#### Visual Effects
-- **Overflow Visibility**: Enabled `overflow: visible` on cards to allow effects (Aura, Barrier) to extend beyond the card frame.
-- **Ward**: White outer glow + pulse animation (2.5s loop).
-- **Barrier**: Blue oval outer glow + pulse (3.5s loop) with blur and inner pulse.
-- **Aura**: Large Yellow Cross overlay (Only on Board) + pulse (3.0s loop).
-- **Stealth**: Dynamic smoky effect with multiple layers and blur.
+## 動作確認の推奨事項
+- ゲームを開始し、手札および場のカードに画像が表示されているか確認してください。
+- カードをクリックした際の左パネル詳細画面でも正しく画像が表示されるか確認してください。
+- **SHOTエフェクトの実装**: `GameScreen.tsx` の `AttackEffect` に、IMPACT等と同様のスプライトアニメーション形式で `'SHOT'` を追加しました。
+- **相手デッキの整列**: 相手のデッキが左下方向に向かって重なるようにスタイルを修正しました。
 
-## Verification
-- **Alignment**: The center card of a full board now aligns perfectly with the center of the Leader.
-- **Visuals**: Effects look distinct, loop asynchronously, and extend correctly outside the card borders.
+## 確認事項
+- [x] Monoの攻撃および効果で 'SHOT' アニメーションが出るか
+- [x] saraのトークン獲得演出が11ターン目以降のみか
+- [x] 守護等のエフェクトがカードからはみ出して見えるか
+- [x] SEPの予測線が紫色になっているか
+- [x] 相手デッキが自分と同じ方向（左下）にズレているか
