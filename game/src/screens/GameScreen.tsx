@@ -1347,20 +1347,49 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     targetIsLeader = false;
                                 }
                             } else {
-                                // Smart Trade
-                                let bestTarget = -1;
-                                for (let t = 0; t < playerBoard.length; t++) {
-                                    const target = playerBoard[t];
-                                    if (!target) continue;
-                                    if (attacker.currentAttack >= target.currentHealth && (target.currentAttack || 0) < attacker.currentHealth) {
+                                // RUSH Check: If RUSH and played this turn (and no STORM), CANNOT target leader
+                                const hasRush = attacker.passiveAbilities?.includes('RUSH');
+                                const hasStorm = attacker.passiveAbilities?.includes('STORM'); // Storm overrides Rush for leader
+                                const isSummoningSickness = attacker.turnPlayed === state.turnCount; // Rush only matters if played this turn (normally can't attack at all, Rush allows follower attack)
+
+                                const canAttackLeader = !isSummoningSickness || hasStorm;
+
+                                if (!canAttackLeader) {
+                                    // Must attack follower. If no follower, cannot attack.
+                                    let bestTarget = -1;
+                                    for (let t = 0; t < playerBoard.length; t++) {
+                                        const target = playerBoard[t];
+                                        if (!target) continue;
+                                        // Simple Logic: Kill small things or trade
                                         bestTarget = t;
                                         break;
                                     }
-                                }
 
-                                if (bestTarget !== -1) {
-                                    targetIndex = bestTarget;
-                                    targetIsLeader = false;
+                                    if (bestTarget !== -1) {
+                                        targetIndex = bestTarget;
+                                        targetIsLeader = false;
+                                    } else {
+                                        // No valid target
+                                        continue;
+                                    }
+                                } else {
+                                    // Can attack leader. Smart Trade or Face?
+                                    // Greedy: Face unless free kill available?
+                                    // For now: Smart Trade Logic
+                                    let bestTarget = -1;
+                                    for (let t = 0; t < playerBoard.length; t++) {
+                                        const target = playerBoard[t];
+                                        if (!target) continue;
+                                        if (attacker.currentAttack >= target.currentHealth && (target.currentAttack || 0) < attacker.currentHealth) {
+                                            bestTarget = t;
+                                            break;
+                                        }
+                                    }
+
+                                    if (bestTarget !== -1) {
+                                        targetIndex = bestTarget;
+                                        targetIsLeader = false;
+                                    }
                                 }
                             }
 
@@ -1582,25 +1611,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         if (isBlocked) {
                             console.log("UI: Attack blocked by WARD");
                             setSelectedCard(null);
-                            // Could trigger a visual "Blocked" feedback here
                         } else {
                             const attackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
-                            // Correctly pass target info to playEffect
-                            playEffect(
-                                attackerCard?.attackEffectType || 'SLASH', // Default
-                                opponentPlayerId,
-                                currentHover.type === 'LEADER' ? -1 : currentHover.index!
-                            );
+                            // RUSH Check Logic (UI)
+                            const hasRush = attackerCard?.passiveAbilities?.includes('RUSH');
+                            const hasStorm = attackerCard?.passiveAbilities?.includes('STORM');
+                            const isSummoningSickness = attackerCard?.turnPlayed === gameStateRef.current.turnCount;
+                            const targetIsLeader = currentHover.type === 'LEADER';
 
-                            dispatchAndSend({
-                                type: 'ATTACK',
-                                playerId: currentPlayerId,
-                                payload: {
-                                    attackerIndex: currentDrag.sourceIndex,
-                                    targetIndex: currentHover.type === 'LEADER' ? -1 : currentHover.index!,
-                                    targetIsLeader: currentHover.type === 'LEADER'
-                                }
-                            });
+                            if (targetIsLeader && hasRush && !hasStorm && isSummoningSickness) {
+                                console.log("UI: Attack blocked by RUSH rule (Cannot attack leader)");
+                                setSelectedCard(null);
+                                // Could add specific visual feedback here
+                            } else {
+
+                                // Correctly pass target info to playEffect
+                                playEffect(
+                                    attackerCard?.attackEffectType || 'SLASH', // Default
+                                    opponentPlayerId,
+                                    currentHover.type === 'LEADER' ? -1 : currentHover.index!
+                                );
+
+                                dispatchAndSend({
+                                    type: 'ATTACK',
+                                    playerId: currentPlayerId,
+                                    payload: {
+                                        attackerIndex: currentDrag.sourceIndex,
+                                        targetIndex: currentHover.type === 'LEADER' ? -1 : currentHover.index!,
+                                        targetIsLeader: currentHover.type === 'LEADER'
+                                    }
+                                });
+                            }
                         }
                     } else {
                         // If released without selecting a target, reset selection to return to "resting" state
