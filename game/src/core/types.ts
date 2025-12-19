@@ -4,7 +4,7 @@ export type CardType = 'FOLLOWER' | 'SPELL';
 
 // Card Abilities
 export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK' | 'COST_REDUCTION' | 'STEALTH' | 'IMMUNE_TO_FOLLOWER_DAMAGE' | 'IMMUNE_TO_DAMAGE_MY_TURN' | 'BARRIER' | 'AURA'; // 守護, 疾走, 突進, 必殺, ダブル, 節約, 隠密, 交戦ダメ無効, 自ターン無敵, バリア, オーラ
-export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'EVOLVE' | 'SUPER_EVOLVE'; // ファンファーレ, ラストワード, 進化時, 超進化時
+export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'EVOLVE' | 'SUPER_EVOLVE' | 'END_OF_TURN'; // ファンファーレ, ラストワード, 進化時, 超進化時, ターン終了時
 
 export type EffectType =
     | 'DESTROY' | 'RANDOM_DESTROY'
@@ -41,7 +41,7 @@ export interface Card {
     attack?: number; // For followers
     health?: number; // For followers
     description: string;
-    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI';
+    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE';
     tags?: string[]; // e.g. 'Knuckler'
 
     // New ability system
@@ -96,6 +96,8 @@ export interface GameState {
     players: { [id: string]: Player };
     winnerId?: string;
     logs: string[];
+    rngSeed: number;
+    lastHash?: string;
     pendingEffects: {
         sourceCard: Card | BoardCard;
         effect: AbilityEffect;
@@ -106,10 +108,11 @@ export interface GameState {
 
 export type GameAction =
     | { type: 'START_GAME' }
-    | { type: 'PLAY_CARD'; playerId: string; payload: { cardIndex: number; targetId?: string } }
+    | { type: 'PLAY_CARD'; playerId: string; payload: { cardIndex: number; targetId?: string; instanceId?: string } }
     | { type: 'ATTACK'; playerId: string; payload: { attackerIndex: number; targetIndex: number; targetIsLeader: boolean } }
     | { type: 'EVOLVE'; playerId: string; payload: { followerIndex: number; targetId?: string; useSep?: boolean } }
     | { type: 'RESOLVE_EFFECT'; playerId: string; payload: { targetId?: string } }
     | { type: 'END_TURN'; playerId: string }
     | { type: 'CONCEDE'; playerId: string }
-    | { type: 'SYNC_STATE'; payload: GameState };
+    | { type: 'SYNC_STATE'; payload: GameState }
+    | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } };

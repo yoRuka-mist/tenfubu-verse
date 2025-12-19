@@ -11,5 +11,7 @@ export interface NetworkAdapter {
     connect(targetId?: string): Promise<string>; // Returns own ID or connection status
     send(message: NetworkMessage): void;
     onMessage(callback: (msg: NetworkMessage) => void): void;
+    onConnection(callback: () => void): void; // Called when connection is established
+    isConnected(): boolean;
     disconnect(): void;
 }

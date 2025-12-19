@@ -5,11 +5,28 @@
   --text: #ffffff;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   margin: 0;
   font-family: 'Helvetica Neue', sans-serif;
   background-color: var(--bg-color);
   color: var(--text);
+  overflow: hidden;
+}
+
+.app-container {
+  height: 100vh;
+  width: 100%;
   overflow: hidden;
 }
 

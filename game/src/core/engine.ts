@@ -223,7 +223,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/white_tsubaki.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE'],
-        attackEffectType: 'IMPACT'
+        attackEffectType: 'ICE'
     },
     {
         id: 'c_shieko', name: 'しゑこ', cost: 2, type: 'FOLLOWER',
@@ -249,7 +249,7 @@ const MOCK_CARDS: Card[] = [
                     { type: 'DRAW', value: 1 }
                 ]
             }
-        ],
+        ]
     },
     {
         id: 'c_kasuga', name: 'かすが', cost: 10, type: 'FOLLOWER',
@@ -289,7 +289,6 @@ const MOCK_CARDS: Card[] = [
         evolvedImageUrl: '/cards/sia_2.png',
         attackEffectType: 'SLASH'
     },
-
     // --- Senka Tokens ---
     {
         id: 'TOKEN_BACKHAND_SMASH', name: 'バックハンドスマッシュ', cost: 0, type: 'SPELL',
@@ -597,23 +596,24 @@ function processSingleEffect(
 
                     if (target.hasBarrier) {
                         target.hasBarrier = false;
-                        newState.logs.push(`${target.name} のバリアがダメージを無効化した！`);
+                        newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
                     } else {
                         target.currentHealth -= damage;
-                        newState.logs.push(`${target.name} に ${damage} ダメージ`);
+                        newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
 
                         if (target.currentHealth <= 0) {
                             // Ensure it's 0 or less for damage detection
                             target.currentHealth = Math.min(0, target.currentHealth);
                             newState.players[opponentId].graveyard.push(target);
                             newState.players[opponentId].board = newState.players[opponentId].board.filter((c) => c?.instanceId !== target.instanceId);
-                            newState.logs.push(`${target.name} を ${sourceCard.name} の効果で破壊しました！`);
+                            newState.logs.push(`${target.name} は破壊されました`);
                         }
                     }
                 }
             } else if (effect.targetType === 'OPPONENT') {
-                newState.players[opponentId].hp -= damage;
-                newState.logs.push(`相手リーダーに ${sourceCard.name} の効果で ${damage} ダメージ`);
+                const opponent = newState.players[opponentId];
+                opponent.hp -= damage;
+                newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えました`);
             }
             break;
         }
@@ -642,9 +642,11 @@ function processSingleEffect(
                     if (d) {
                         d.currentHealth = Math.min(0, d.currentHealth); // Ensure <= 0
                         newState.players[opponentId].graveyard.push(d);
-                        newState.logs.push(`${d.name} は範囲攻撃で破壊されました`);
+                        newState.logs.push(`${d.name} は破壊されました`);
                     }
                 });
+
+                newState.logs.push(`${sourceCard.name} は相手の全フォロワーに ${damage} ダメージを与えました`);
 
                 // Remove dead from board
                 newState.players[opponentId].board = oppBoard.filter(c => c && c.currentHealth > 0);
@@ -1012,7 +1014,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 newState.turnCount += 1;
             }
 
-            // newState.logs = [...(newState.logs || []), `ターン ${newState.turnCount} - ${nextPlayer.name} のターン`];
+            newState.logs.push(`ターン ${newState.turnCount} - ${nextPlayer.name} のターン`);
             return newState;
         }
 
@@ -1061,7 +1063,14 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 return newState;
             }
             const card = player.hand[cardIndex];
-            console.log(`[Engine] PLAY_CARD: Playing card:`, card.name);
+
+            let targetName = '';
+            if (targetId) {
+                const opponentPlayer = action.playerId === 'p1' ? p2 : p1;
+                const targetC = opponentPlayer.board.find(c => c?.instanceId === targetId);
+                if (targetC) targetName = ` (対象: ${targetC.name})`;
+            }
+            newState.logs.push(`${player.name} は ${card.name} をプレイしました${targetName}`);
 
             if (player.pp < card.cost) return newState;
             if (card.type === 'FOLLOWER' && player.board.length >= 5) return newState;
@@ -1141,6 +1150,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const isRemote = (action as any).isRemote;
 
             console.log(`[Engine] EVOLVE Logic: name=${follower.name}, useSep=${useSep}, isRemote=${isRemote}, turn=${state.turnCount}`);
+
+            newState.logs.push(`${player.name} は ${follower.name} を${useSep ? '超進化' : '進化'}させました！`);
 
             if (useSep) {
                 // Super Evolve Logic
@@ -1282,12 +1293,28 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
             }
 
+            // STEALTH Check: Cannot target Stealthed unit
+            // (Note: Engine should block this interaction. UI should also prevent it.)
+            if (targetIsLeader === false) {
+                const targetUnit = defPlayer.board[targetIndex];
+                if (targetUnit && targetUnit.passiveAbilities?.includes('STEALTH')) {
+                    console.log(`[Engine] ATTACK blocked: Target has STEALTH`);
+                    return newState;
+                }
+            }
+
             // RUSH units cannot attack the leader (only followers)
             const hasRush = attacker.passiveAbilities?.includes('RUSH');
             const hasStorm = attacker.passiveAbilities?.includes('STORM');
             if (hasRush && !hasStorm && targetIsLeader && attacker.turnPlayed === newState.turnCount) {
                 console.log(`[Engine] ATTACK blocked: RUSH unit cannot attack leader on the turn it was played`);
                 return newState;
+            }
+
+            // Remove STEALTH from Attacker on attack declaration
+            if (attacker.passiveAbilities?.includes('STEALTH')) {
+                attacker.passiveAbilities = attacker.passiveAbilities.filter(p => p !== 'STEALTH');
+                newState.logs.push(`　${attacker.name} の隠密が解除されました`);
             }
 
             attacker.canAttack = false;
@@ -1298,7 +1325,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             // Attack Log
             const targetName = targetIsLeader ? "相手リーダー" : (defPlayer.board[targetIndex]?.name || "Unknown");
-            newState.logs.push(`${attacker.name} は ${targetName} を攻撃！`);
+            newState.logs.push(`　${attacker.name} は ${targetName} を攻撃！`);
 
             const damage = attacker.currentAttack;
             console.log(`[Engine] Attack: ${attacker.name} (${damage}) -> Target (Leader? ${targetIsLeader}). DefHP before: ${defPlayer.hp}`);
@@ -1306,22 +1333,22 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             // 3. Resolve Damage
             if (targetIsLeader) {
                 defPlayer.hp -= damage;
-                console.log(`[Engine] Leader damaged. New HP: ${defPlayer.hp}`);
+                newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えました！`);
                 if (defPlayer.hp <= 0) newState.winnerId = action.playerId;
             } else {
                 const defender = defPlayer.board[targetIndex];
                 if (defender) {
                     // Check Immunity (White Tsubaki Effect)
-                    // If defender has IMMUNE_TO_FOLLOWER_DAMAGE, they take 0 battle damage during opponent's turn.
-                    // Since ATTACK happens during active player's turn, defender IS in opponent's turn.
                     let actualDamage = damage;
                     if (defender.passiveAbilities?.includes('IMMUNE_TO_FOLLOWER_DAMAGE')) {
                         actualDamage = 0;
-                        console.log(`[Engine] Damage prevented by Immunity!`);
+                        newState.logs.push(`　${defender.name} はダメージを無効化しました！`);
                     } else if (defender.hasBarrier && actualDamage > 0) {
                         actualDamage = 0;
                         defender.hasBarrier = false;
-                        newState.logs.push(`${defender.name} のバリアがダメージを無効化した！`);
+                        newState.logs.push(`　${defender.name} のバリアがダメージを無効化しました！`);
+                    } else {
+                        newState.logs.push(`　${attacker.name} は ${defender.name} に ${actualDamage} ダメージを与えました`);
                     }
 
                     defender.currentHealth -= actualDamage;
@@ -1330,13 +1357,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     // Check Attacker Immunity (Super Evolve)
                     if (attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN')) {
                         counterDamage = 0;
-                        console.log(`[Engine] Attacker immune to counter damage!`);
+                        newState.logs.push(`　${attacker.name} は反撃ダメージを無効化しました！`);
                     }
 
                     if (attacker.hasBarrier && counterDamage > 0) {
                         counterDamage = 0;
                         attacker.hasBarrier = false;
-                        newState.logs.push(`${attacker.name} のバリアが反撃ダメージを無効化した！`);
+                        newState.logs.push(`　${attacker.name} のバリアが反撃ダメージを無効化しました！`);
+                    } else if (counterDamage > 0) {
+                        newState.logs.push(`　${defender.name} は ${attacker.name} に ${counterDamage} ダメージを与え返しました`);
                     }
 
                     attacker.currentHealth -= counterDamage;
@@ -1346,7 +1375,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         defPlayer.graveyard.push(defender);
                         // Filter by ID to remove exactly this card
                         defPlayer.board = defPlayer.board.filter(c => c && c.instanceId !== defender.instanceId);
-                        console.log(`[Engine] Defender ${defender.name} destroyed.`);
+                        newState.logs.push(`　${defender.name} は破壊されました`);
                     }
                 }
             }
@@ -1356,7 +1385,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 attacker.currentHealth = Math.min(0, attacker.currentHealth); // Ensure <= 0
                 attPlayer.graveyard.push(attacker);
                 attPlayer.board = attPlayer.board.filter(c => c && c.instanceId !== attacker.instanceId);
-                console.log(`[Engine] Attacker ${attacker.name} destroyed.`);
+                newState.logs.push(`　${attacker.name} は破壊されました`);
             }
 
             // 5. Commit Updates - Create COMPLETELY fresh state

@@ -6,6 +6,7 @@ export class P2PAdapter implements NetworkAdapter {
     private conn: DataConnection | null = null;
     public isHost: boolean = false;
     private messageCallback: ((msg: NetworkMessage) => void) | null = null;
+    private connectionCallback: (() => void) | null = null;
 
     constructor() { }
 
@@ -52,6 +53,10 @@ export class P2PAdapter implements NetworkAdapter {
 
         conn.on('open', () => {
             console.log('Connection established!');
+            // Notify connection callback
+            if (this.connectionCallback) {
+                this.connectionCallback();
+            }
         });
 
         conn.on('data', (data) => {
@@ -61,6 +66,14 @@ export class P2PAdapter implements NetworkAdapter {
         });
 
         conn.on('error', (err) => console.error('Connection Error:', err));
+    }
+
+    onConnection(callback: () => void): void {
+        this.connectionCallback = callback;
+    }
+
+    isConnected(): boolean {
+        return this.conn !== null && this.conn.open;
     }
 
     send(message: NetworkMessage): void {

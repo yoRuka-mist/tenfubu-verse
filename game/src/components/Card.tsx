@@ -302,7 +302,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                         </feMerge>
                                     </filter>
                                 </defs>
-                                <path d="M40 5 L60 5 L60 40 L95 40 L95 60 L60 60 L60 95 L40 95 L40 60 L5 60 L5 40 L40 40 Z"
+                                <path d="M40 5 L60 5 L60 30 L95 30 L95 45 L60 45 L60 95 L40 95 L40 45 L5 45 L5 30 L40 30 Z"
                                     fill="rgba(255, 204, 0, 0.25)" stroke="#f6ad55" strokeWidth="3" filter="url(#auraGlow)" />
                             </svg>
                         </div>
@@ -310,7 +310,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
 
                 {/* STEALTH EFFECT */}
-                {isStealth && (
+                {isStealth && isOnBoard && (
                     <div style={{
                         position: 'absolute',
                         top: 0, left: 0, right: 0, bottom: 0,
@@ -319,32 +319,36 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         overflow: 'hidden',
                         borderRadius: '0 0 8px 8px'
                     }}>
+                        {/* Central Inky Circle (Black) */}
                         <div style={{
                             position: 'absolute',
-                            top: -30, left: -30, right: -30, bottom: -30,
-                            background: 'radial-gradient(ellipse at 30% 30%, rgba(20, 20, 20, 0.6) 0%, transparent 50%)',
-                            filter: 'blur(12px)',
-                            animation: 'smokeMove1 4s infinite ease-in-out'
+                            top: '50%', left: '50%',
+                            width: '120%', height: '120%',
+                            transform: 'translate(-50%, -50%)',
+                            background: 'radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 30%, transparent 70%)',
+                            filter: 'blur(20px)',
+                            animation: 'stealthInkMove 6s infinite ease-in-out',
+                            mixBlendMode: 'multiply'
                         }} />
+
+                        {/* Central Misty Circle (White/Cloudy) */}
                         <div style={{
                             position: 'absolute',
-                            top: -30, left: -30, right: -30, bottom: -30,
-                            background: 'radial-gradient(ellipse at 70% 70%, rgba(30, 30, 30, 0.5) 0%, transparent 50%)',
+                            top: '50%', left: '50%',
+                            width: '100%', height: '100%',
+                            transform: 'translate(-50%, -50%)',
+                            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.4) 0%, rgba(200, 200, 200, 0.2) 20%, transparent 60%)',
                             filter: 'blur(15px)',
-                            animation: 'smokeMove2 5s infinite ease-in-out'
+                            animation: 'stealthMistMove 8s infinite ease-in-out',
+                            mixBlendMode: 'screen'
                         }} />
-                        <div style={{
-                            position: 'absolute',
-                            top: -20, left: -20, right: -20, bottom: -20,
-                            background: 'radial-gradient(ellipse at 50% 50%, rgba(10, 10, 10, 0.4) 0%, transparent 60%)',
-                            filter: 'blur(10px)',
-                            animation: 'smokePulse 3s infinite ease-in-out'
-                        }} />
+
+                        {/* Outer Edge Glow */}
                         <div style={{
                             position: 'absolute',
                             top: 0, left: 0, right: 0, bottom: 0,
-                            boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 60px rgba(0, 0, 0, 0.4)',
-                            animation: 'stealthPulse 2.5s infinite ease-in-out'
+                            boxShadow: 'inset 0 0 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
+                            animation: 'stealthPulse 3s infinite ease-in-out'
                         }} />
                     </div>
                 )}
@@ -371,21 +375,18 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     50% { transform: scale(1.12); opacity: 0.4; filter: blur(4px) drop-shadow(0 0 20px rgba(255, 204, 0, 0.8)); }
                     100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
                 }
-                @keyframes smokeMove1 {
-                    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
-                    50% { transform: translate(15px, 10px) scale(1.1); opacity: 0.8; }
+                @keyframes stealthInkMove {
+                    0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 0.6; }
+                    33% { transform: translate(-45%, -55%) scale(1.1) rotate(5deg); opacity: 0.8; }
+                    66% { transform: translate(-55%, -45%) scale(0.9) rotate(-5deg); opacity: 0.7; }
                 }
-                @keyframes smokeMove2 {
-                    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
-                    50% { transform: translate(-10px, -15px) scale(1.15); opacity: 0.7; }
-                }
-                @keyframes smokePulse {
-                    0%, 100% { transform: scale(1); opacity: 0.3; filter: blur(10px); }
-                    50% { transform: scale(1.2); opacity: 0.6; filter: blur(15px); }
+                @keyframes stealthMistMove {
+                    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
+                    50% { transform: translate(-52%, -48%) scale(1.2); opacity: 0.6; }
                 }
                 @keyframes stealthPulse {
-                    0%, 100% { opacity: 0.6; }
-                    50% { opacity: 0.9; }
+                    0%, 100% { opacity: 0.7; }
+                    50% { opacity: 1; }
                 }
             `}</style>
         </div >

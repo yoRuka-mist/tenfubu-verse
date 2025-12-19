@@ -7,11 +7,13 @@ export function useGameNetwork(mode: 'HOST' | 'JOIN' | 'CPU', targetId?: string)
     const [myId, setMyId] = useState<string>('');
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [connecting, setConnecting] = useState(false);
 
     useEffect(() => {
         if (mode === 'CPU') return;
 
         const net = new P2PAdapter();
+        setConnecting(true);
 
         const init = async () => {
             try {
@@ -19,19 +21,19 @@ export function useGameNetwork(mode: 'HOST' | 'JOIN' | 'CPU', targetId?: string)
                 setMyId(id);
                 setAdapter(net);
 
-                // If we are Host, we are 'connected' when a client joins (handled in adapter event)
-                // If we are Client, we are connected immediately after connect resolves (mostly)
-                if (mode === 'JOIN') setConnected(true);
+                // Set up connection callback for both HOST and JOIN modes
+                net.onConnection(() => {
+                    console.log('[useGameNetwork] Connection established!');
+                    setConnected(true);
+                    setConnecting(false);
+                });
 
-                // For Host, we need to listen for connection
-                // P2PAdapter needs to expose connection state better, but for MVP:
-                if (mode === 'HOST') {
-                    // We can't easily know when someone connects without a callback in P2PAdapter
-                    // Let's assume the adapter handles it internally or we subscribe to messages
-                }
+                // For JOIN mode, connection happens during connect()
+                // For HOST mode, we wait for onConnection callback
 
             } catch (e: any) {
                 setError(e.toString());
+                setConnecting(false);
             }
         };
 
@@ -42,5 +44,5 @@ export function useGameNetwork(mode: 'HOST' | 'JOIN' | 'CPU', targetId?: string)
         };
     }, [mode, targetId]);
 
-    return { adapter, myId, connected, error, setConnected };
+    return { adapter, myId, connected, connecting, error, setConnected };
 }
