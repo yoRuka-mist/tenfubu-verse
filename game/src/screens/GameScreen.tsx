@@ -997,6 +997,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         followerIndex: number;
         useSep: boolean;
         targetId?: string;
+        isRemote?: boolean;
+        sourcePlayerId?: string;
     } | null>(null);
 
     // --- State Refs for AI Timing (Moved here to ensure access to all states) ---
@@ -1040,7 +1042,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // Ref for pending evolve action (to dispatch after animation completes)
-    const pendingEvolveRef = React.useRef<{ followerIndex: number, useSep: boolean, targetId?: string } | null>(null);
+    const pendingEvolveRef = React.useRef<{
+        followerIndex: number;
+        useSep: boolean;
+        targetId?: string;
+        isRemote?: boolean;
+        playerId: string; // Add playerId
+        sourcePlayerId?: string;
+    } | null>(null);
 
     // Handle Evolution Animation Phase Change - use useCallback to prevent unnecessary re-renders
     const handleEvolvePhaseChange = React.useCallback((newPhase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => {
@@ -1048,11 +1057,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         if (newPhase === 'DONE') {
             // Animation complete - store pending action in ref and clear animation
             setEvolveAnimation(prev => {
-                if (prev) {
+                if (prev && !prev.isRemote) {
                     pendingEvolveRef.current = {
                         followerIndex: prev.followerIndex,
                         useSep: prev.useSep,
-                        targetId: prev.targetId
+                        targetId: prev.targetId,
+                        playerId: prev.sourcePlayerId || currentPlayerId // Use sourcePlayerId if available, else current
                     };
                 }
                 return null; // Clear animation
@@ -1060,7 +1070,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         } else {
             setEvolveAnimation(prev => prev ? { ...prev, phase: newPhase } : null);
         }
-    }, []);
+    }, [currentPlayerId]);
 
     // Handle Play Card with Animation
     const handlePlayCard = (index: number, startX: number, startY: number) => {
@@ -1135,10 +1145,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         if (!evolveAnimation && pendingEvolveRef.current) {
             const pending = pendingEvolveRef.current;
             pendingEvolveRef.current = null;
-            console.log('[GameScreen] Dispatching pending evolve action:', pending);
+            console.log('[GameScreen] Dispatching pending evolve action for:', pending.playerId);
             dispatchAndSend({
                 type: 'EVOLVE',
-                playerId: currentPlayerId,
+                playerId: pending.playerId, // Use stored playerId
                 payload: {
                     followerIndex: pending.followerIndex,
                     useSep: pending.useSep,
@@ -1303,31 +1313,39 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 targetId = validTargets[0]!.instanceId;
                             }
 
-                            // Use Evolve Animation Logic for visual consistency?
-                            // AI can trigger handleEvolveWithAnimation logic manually?
-                            // Problem: handleEvolveWithAnimation relies on playerBoardRefs which are for Player.
-                            // AI Board Refs are opponentBoardRefs.
-                            // Let's manually trigger simple dispatch but maybe play a sound/effect?
-                            // For now, standard dispatch is fine, but lets ensure we wait.
+                            // Trigger Animation for AI
+                            const useSuper = (aiPlayer.sep > 0 && turnCount >= 6);
+                            const cardRect = opponentBoardRefs.current[target.i]?.getBoundingClientRect();
 
-                            // Visual: Highlight?
-                            // We can use playEffect or just let dispatch handle internal state.
-                            // There is currently NO visual Evolve animation for AI in `handleEvolveWithAnimation`.
-                            // It only works for `playerRef`.
-                            // We should probably just dispatch.
-
-                            dispatchAndSend({
-                                type: 'EVOLVE',
-                                playerId: opponentPlayerId,
-                                payload: {
+                            if (cardRect) {
+                                setEvolveAnimation({
+                                    card: target.c,
+                                    startX: cardRect.left + cardRect.width / 2,
+                                    startY: cardRect.top + cardRect.height / 2,
+                                    useSep: useSuper,
+                                    phase: 'ZOOM_IN',
                                     followerIndex: target.i,
-                                    useSep: (aiPlayer.sep > 0 && turnCount >= 6),
+                                    sourcePlayerId: opponentPlayerId,
                                     targetId: targetId
-                                }
-                            });
+                                });
+                                // Note: We do NOT set pendingEvolveRef here. 
+                                // handleEvolvePhaseChange will set it when animation completes (DONE phase).
 
-                            // Wait for Evolve Effects
-                            await waitForIdle(1000);
+                                // Wait for animation sequence (~2s)
+                                await waitForIdle(2500);
+                            } else {
+                                // Fallback if no visual ref (should be rare)
+                                dispatchAndSend({
+                                    type: 'EVOLVE',
+                                    playerId: opponentPlayerId,
+                                    payload: {
+                                        followerIndex: target.i,
+                                        useSep: useSuper,
+                                        targetId: targetId
+                                    }
+                                });
+                                await waitForIdle(1000);
+                            }
                         }
                     }
                 }

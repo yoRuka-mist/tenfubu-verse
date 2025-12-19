@@ -9,9 +9,9 @@ const MOCK_CARDS: Card[] = [
     // Cards
 
     {
-        id: 's_3cats', name: '三ニャン寄れば文殊の知恵', cost: 2, type: 'SPELL',
+        id: 's_3cats', name: '茶トラ', cost: 2, type: 'SPELL',
         description: '茶トラ猫の日向ぼっこ、サバトラ猫の散歩、キジトラ猫のごはんを1枚ずつ手札に加える',
-        imageUrl: '/cards/three_cats.png',
+        imageUrl: '/cards/chatora_three_cats.png',
         triggers: [{
             trigger: 'FANFARE', effects: [
                 { type: 'GENERATE_CARD', targetCardId: 'TOKEN_CHATORA' },
@@ -34,7 +34,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_senka_knuckler', name: 'せんか', cost: 8, type: 'FOLLOWER',
         attack: 3, health: 5,
         description: '[疾走] ファンファーレ: 手札のナックラーのコストを2軽減する。味方のナックラーは疾走を得る。このフォロワーは2回攻撃可能。超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を手札に加える。',
-        imageUrl: '/cards/senka_real.png',
+        imageUrl: '/cards/senka.png',
+        evolvedImageUrl: '/cards/senka_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['STORM', 'DOUBLE_ATTACK'],
         attackEffectType: 'IMPACT',
@@ -60,6 +61,8 @@ const MOCK_CARDS: Card[] = [
         attack: 4, health: 4,
         description: 'ファンファーレ：自分のリーダーを2回復、2枚ドロー。進化時：相手のフォロワーを1体破壊。',
         imageUrl: '/cards/ruiyu.png',
+        evolvedImageUrl: '/cards/ruiyu_2.png',
+        attackEffectType: 'WATER',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -106,6 +109,7 @@ const MOCK_CARDS: Card[] = [
         attack: 1, health: 3,
         description: '[守護]',
         imageUrl: '/cards/tsubumaru.png',
+        evolvedImageUrl: '/cards/tsubumaru_2.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH'
     },
@@ -156,6 +160,7 @@ const MOCK_CARDS: Card[] = [
         attack: 3, health: 3,
         description: 'ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
         imageUrl: '/cards/nayuta.jpg',
+        attackEffectType: 'RAY',
         triggers: [
             { trigger: 'FANFARE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] },
             { trigger: 'EVOLVE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] }
@@ -170,6 +175,7 @@ const MOCK_CARDS: Card[] = [
         description: '[守護] ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
         imageUrl: '/cards/nayuta.jpg',
         passiveAbilities: ['WARD'],
+        attackEffectType: 'RAY',
         triggers: [
             { trigger: 'FANFARE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] },
             { trigger: 'EVOLVE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] }
@@ -180,7 +186,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 5,
         description: 'ファンファーレ：相手のリーダーに3点。相手のフォロワーを1体選び、破壊する。相手のフォロワーを1体をランダムに手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは守護を得る。',
-        imageUrl: '/cards/azya_finisher.png',
+        imageUrl: '/cards/azya.png',
+        evolvedImageUrl: '/cards/azya_2.png',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -233,6 +240,7 @@ const MOCK_CARDS: Card[] = [
         description: '[守護] ファンファーレ：自分のリーダーを1回復。1枚ドロー。',
         imageUrl: '/cards/urara.jpg',
         passiveAbilities: ['WARD'],
+        attackEffectType: 'WATER',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -242,7 +250,6 @@ const MOCK_CARDS: Card[] = [
                 ]
             }
         ],
-        attackEffectType: 'SLASH'
     },
     {
         id: 'c_kasuga', name: 'かすが', cost: 10, type: 'FOLLOWER',
@@ -278,7 +285,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_sia', name: 'しあ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 3,
         description: '',
-        imageUrl: '/cards/sia.jpg',
+        imageUrl: '/cards/sia.png',
+        evolvedImageUrl: '/cards/sia_2.png',
         attackEffectType: 'SLASH'
     },
 
@@ -331,18 +339,28 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_valkyrie', name: 'ヴァルキリー', cost: 6, type: 'FOLLOWER',
         attack: 6, health: 6,
-        description: '[守護] [バリア] [オーラ]',
-        imageUrl: '/cards/valkyrie.jpg',
+        description: '[守護] [バリア] [オーラ] 自分のターン終了時、バリアを持つ。',
+        imageUrl: '/cards/valkyrie.png',
+        evolvedImageUrl: '/cards/valkyrie_2.png',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],
-        attackEffectType: 'SLASH'
+        attackEffectType: 'RAY',
+        triggers: [
+            {
+                trigger: 'END_OF_TURN',
+                effects: [
+                    { type: 'GRANT_PASSIVE', targetPassive: 'BARRIER', targetType: 'SELF' }
+                ]
+            }
+        ]
     },
     {
         id: 'c_manary', name: 'まなりー', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
         description: '[守護]',
         imageUrl: '/cards/manary.png',
+        tags: ['Token'],
         passiveAbilities: ['WARD'],
-        attackEffectType: 'SLASH'
+        attackEffectType: 'WATER'
     },
     {
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
@@ -350,7 +368,7 @@ const MOCK_CARDS: Card[] = [
         description: '[守護]',
         imageUrl: '/cards/potechi.png',
         passiveAbilities: ['WARD'],
-        attackEffectType: 'SLASH'
+        attackEffectType: 'SHOT'
     },
     {
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
@@ -425,18 +443,46 @@ const MOCK_CARDS: Card[] = [
     }
 ];
 
-// Fisher-Yates Shuffle
-function shuffle<T>(array: T[]): T[] {
+// --- Deterministic RNG (Simple LCG) ---
+export function createRNG(seed: number) {
+    let currentSeed = seed;
+    return () => {
+        currentSeed = (currentSeed * 1664525 + 1013904223) % 4294967296;
+        return currentSeed / 4294967296;
+    };
+}
+
+// Fisher-Yates Shuffle with custom RNG
+function shuffle<T>(array: T[], rng: () => number): T[] {
     let currentIndex = array.length, randomIndex;
     while (currentIndex != 0) {
-        randomIndex = Math.floor(Math.random() * currentIndex);
+        randomIndex = Math.floor(rng() * currentIndex);
         currentIndex--;
         [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
     }
     return array;
 }
 
-export function createPlayer(id: string, name: string, cls: ClassType): Player {
+// --- State Checksum for Integrity ---
+export function calculateStateHash(state: GameState): string {
+    const p1 = state.players.p1;
+    const p2 = state.players.p2;
+    const components = [
+        state.turnCount,
+        state.activePlayerId,
+        p1.hp, p1.maxHp, p1.pp, p1.maxPp, p1.sep, p1.evolutionsUsed,
+        p2.hp, p2.maxHp, p2.pp, p2.maxPp, p2.sep, p2.evolutionsUsed,
+        p1.board.map(c => c ? `${c.id}_${c.instanceId}_${c.currentHealth}_${c.hasBarrier ? 'B' : ''}` : 'null').join(','),
+        p2.board.map(c => c ? `${c.id}_${c.instanceId}_${c.currentHealth}_${c.hasBarrier ? 'B' : ''}` : 'null').join(','),
+        p1.hand.length,
+        p2.hand.length,
+        state.pendingEffects?.length || 0,
+        state.rngSeed
+    ];
+    return components.join('|');
+}
+
+export function createPlayer(id: string, name: string, cls: ClassType, rng: () => number): Player {
     // Filter out tokens and special variants from the deck
     const deckCards = MOCK_CARDS.filter(c =>
         !c.id.startsWith('TOKEN') &&
@@ -454,7 +500,7 @@ export function createPlayer(id: string, name: string, cls: ClassType): Player {
 
     // Also ensuring Yunagi/Nayuta BASE cards are included. They are.
 
-    const rawDeck = Array(40).fill(null).map((_, i) => ({ ...deckCards[i % deckCards.length], id: `${id}_c${i}` }));
+    const rawDeck = Array(40).fill(null).map((_, i) => ({ ...deckCards[i % deckCards.length], id: `${id}_c${i}`, instanceId: `inst_${id}_c${i}` }));
     return {
         id,
         name,
@@ -464,7 +510,7 @@ export function createPlayer(id: string, name: string, cls: ClassType): Player {
         pp: 0,
         maxPp: 0,
         sep: 2, // Start with 2 SEP
-        deck: shuffle(rawDeck),
+        deck: shuffle(rawDeck, rng),
         hand: [],
         graveyard: [],
         board: [],
@@ -473,9 +519,12 @@ export function createPlayer(id: string, name: string, cls: ClassType): Player {
     };
 }
 
-export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: string, p2Class: ClassType): GameState {
-    const p1 = createPlayer('p1', p1Name, p1Class);
-    const p2 = createPlayer('p2', p2Name, p2Class);
+export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: string, p2Class: ClassType, seed?: number): GameState {
+    const rngSeed = seed || Math.floor(Math.random() * 1000000);
+    const rng = createRNG(rngSeed);
+
+    const p1 = createPlayer('p1', p1Name, p1Class, rng);
+    const p2 = createPlayer('p2', p2Name, p2Class, rng);
 
     // Draw 4 cards
     p1.hand = p1.deck.splice(0, 4);
@@ -486,7 +535,8 @@ export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: strin
     p1.pp = 1;
 
     return {
-        phase: 'INIT', // Start with INIT so
+        phase: 'INIT',
+        rngSeed: Math.floor(rng() * 1000000),
         activePlayerId: 'p1',
         players: { p1, p2 },
         turnCount: 1,
@@ -512,10 +562,27 @@ function processSingleEffect(
     let newState = {
         ...state,
         players: {
-            p1: { ...state.players.p1, hand: [...state.players.p1.hand], deck: [...state.players.p1.deck], board: [...state.players.p1.board], graveyard: [...state.players.p1.graveyard] },
-            p2: { ...state.players.p2, hand: [...state.players.p2.hand], deck: [...state.players.p2.deck], board: [...state.players.p2.board], graveyard: [...state.players.p2.graveyard] }
-        }
+            p1: {
+                ...state.players.p1,
+                hand: [...state.players.p1.hand],
+                deck: [...state.players.p1.deck],
+                board: state.players.p1.board.map(c => c ? { ...c } : null),
+                graveyard: [...state.players.p1.graveyard]
+            },
+            p2: {
+                ...state.players.p2,
+                hand: [...state.players.p2.hand],
+                deck: [...state.players.p2.deck],
+                board: state.players.p2.board.map(c => c ? { ...c } : null),
+                graveyard: [...state.players.p2.graveyard]
+            }
+        },
+        logs: [...(state.logs || [])]
     } as GameState;
+
+    const rng = createRNG(newState.rngSeed || 999);
+    newState.rngSeed = Math.floor(rng() * 1000000);
+
     const opponentId = getOpponentId(sourcePlayerId);
 
     switch (effect.type) {
@@ -536,6 +603,8 @@ function processSingleEffect(
                         newState.logs.push(`${target.name} に ${damage} ダメージ`);
 
                         if (target.currentHealth <= 0) {
+                            // Ensure it's 0 or less for damage detection
+                            target.currentHealth = Math.min(0, target.currentHealth);
                             newState.players[opponentId].graveyard.push(target);
                             newState.players[opponentId].board = newState.players[opponentId].board.filter((c) => c?.instanceId !== target.instanceId);
                             newState.logs.push(`${target.name} を ${sourceCard.name} の効果で破壊しました！`);
@@ -571,6 +640,7 @@ function processSingleEffect(
                 // Add to Graveyard
                 dead.forEach(d => {
                     if (d) {
+                        d.currentHealth = Math.min(0, d.currentHealth); // Ensure <= 0
                         newState.players[opponentId].graveyard.push(d);
                         newState.logs.push(`${d.name} は範囲攻撃で破壊されました`);
                     }
@@ -587,7 +657,14 @@ function processSingleEffect(
             for (let i = 0; i < count; i++) {
                 if (player.deck.length > 0) {
                     const c = player.deck.pop();
-                    if (c) player.hand.push(c);
+                    if (c) {
+                        if (player.hand.length < 9) {
+                            player.hand.push(c);
+                        } else {
+                            player.graveyard.push(c);
+                            newState.logs.push(`${player.name}の手札が上限に達したため、${c.name}は墓地へ送られました`);
+                        }
+                    }
                 }
             }
             newState.logs.push(`${player.name} は ${count} 枚ドローしました`);
@@ -630,6 +707,7 @@ function processSingleEffect(
                 if (idx !== -1 && oppBoard[idx]) {
                     const card = oppBoard[idx];
                     if (card) {
+                        card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
                         newState.players[opponentId].graveyard.push(card);
                         newState.players[opponentId].board = newState.players[opponentId].board.filter(c => c?.instanceId !== card.instanceId);
                         newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
@@ -647,10 +725,13 @@ function processSingleEffect(
             const template = MOCK_CARDS.find(c => c.id === targetCardId);
             if (template) {
                 const player = newState.players[sourcePlayerId];
+                const newCard = { ...template, id: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}` }; // Instantiate
                 if (player.hand.length < 9) {
-                    const newCard = { ...template, id: `token_${Date.now()}_${Math.random()}` }; // Instantiate
                     player.hand.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を手札に加えた`);
+                } else {
+                    player.graveyard.push(newCard);
+                    newState.logs.push(`${player.name}の手札が上限に達したため、${template.name}は墓地へ送られました`);
                 }
             }
             break;
@@ -663,7 +744,7 @@ function processSingleEffect(
 
             // Shuffle
             for (let i = validIndices.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
+                const j = Math.floor(rng() * (i + 1));
                 [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
             }
 
@@ -674,6 +755,7 @@ function processSingleEffect(
             targets.forEach(idx => {
                 const card = oppBoard[idx];
                 if (card) {
+                    card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
                     newState.players[opponentId].graveyard.push(card);
                     newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                 }
@@ -703,7 +785,7 @@ function processSingleEffect(
                 if (player.board.length < 5) { // MAX_BOARD_SIZE
                     const newCard: BoardCard = {
                         ...template,
-                        instanceId: `token_${Date.now()}_${Math.random()}`,
+                        instanceId: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
                         canAttack: false,
                         currentHealth: template.health || 1,
                         maxHealth: template.health || 1,
@@ -728,7 +810,7 @@ function processSingleEffect(
             } else if (effect.targetType === 'RANDOM_FOLLOWER' || !targetId) {
                 // Pick Random
                 if (oppBoard.length > 0) {
-                    targetIdx = Math.floor(Math.random() * oppBoard.length);
+                    targetIdx = Math.floor(rng() * oppBoard.length);
                 }
             }
 
@@ -739,14 +821,59 @@ function processSingleEffect(
 
                 // Add to hand if space
                 const opponent = newState.players[opponentId];
+                // Convert back to Card (strip board props)
+                const { currentHealth, maxHealth, canAttack, attacksMade, ...baseCard } = card;
+
                 if (opponent.hand.length < 9) {
-                    // Convert back to Card (strip board props)
-                    const { currentHealth, maxHealth, canAttack, attacksMade, ...baseCard } = card;
                     opponent.hand.push(baseCard as Card);
                     newState.logs.push(`${card.name} は手札に戻された`);
                 } else {
-                    newState.logs.push(`${card.name} は手札がいっぱいで消滅した`);
+                    opponent.graveyard.push(baseCard as Card);
+                    newState.logs.push(`${card.name} は手札がいっぱいで消滅した（墓地へ）`);
                 }
+            }
+            break;
+        }
+        case 'GRANT_PASSIVE': {
+            const passive = effect.targetPassive;
+            if (!passive) break;
+
+            if (effect.targetType === 'SELF') {
+                const card = sourceCard as BoardCard;
+                if (card.instanceId) {
+                    const p = newState.players[sourcePlayerId];
+                    const boardCard = p.board.find(c => c?.instanceId === card.instanceId);
+                    if (boardCard) {
+                        if (passive === 'BARRIER') {
+                            boardCard.hasBarrier = true;
+                            newState.logs.push(`${boardCard.name} はバリアを獲得した`);
+                        } else {
+                            if (!boardCard.passiveAbilities) boardCard.passiveAbilities = [];
+                            if (!boardCard.passiveAbilities.includes(passive)) {
+                                boardCard.passiveAbilities.push(passive);
+                                newState.logs.push(`${boardCard.name} は ${passive} を得た`);
+                            }
+                        }
+                    }
+                }
+            } else if (effect.targetType === 'ALL_FOLLOWERS') {
+                const p = newState.players[sourcePlayerId];
+                p.board.forEach(c => {
+                    if (c) {
+                        // Check conditions (e.g. tag: 'Knuckler')
+                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) return;
+
+                        if (passive === 'BARRIER') {
+                            c.hasBarrier = true;
+                        } else {
+                            if (!c.passiveAbilities) c.passiveAbilities = [];
+                            if (!c.passiveAbilities.includes(passive)) {
+                                c.passiveAbilities.push(passive);
+                            }
+                        }
+                    }
+                });
+                newState.logs.push(`味方のフォロワーに ${passive} を付与した`);
             }
             break;
         }
@@ -793,8 +920,10 @@ const recalculateCosts = (state: GameState): GameState => {
 
 // Wrapper for Reducer to apply constraints (costs)
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
-    const newState = internalGameReducer(state, action);
-    return recalculateCosts(newState);
+    let newState = internalGameReducer(state, action);
+    newState = recalculateCosts(newState);
+    newState.lastHash = calculateStateHash(newState);
+    return newState;
 };
 
 const internalGameReducer = (state: GameState, action: GameAction): GameState => {
@@ -803,17 +932,52 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
     let newState = {
         ...state,
         players: {
-            p1: { ...state.players.p1, hand: [...state.players.p1.hand], deck: [...state.players.p1.deck], board: [...state.players.p1.board], graveyard: [...state.players.p1.graveyard] },
-            p2: { ...state.players.p2, hand: [...state.players.p2.hand], deck: [...state.players.p2.deck], board: [...state.players.p2.board], graveyard: [...state.players.p2.graveyard] }
-        }
+            p1: {
+                ...state.players.p1,
+                hand: [...state.players.p1.hand],
+                deck: [...state.players.p1.deck],
+                board: state.players.p1.board.map(c => c ? { ...c } : null),
+                graveyard: [...state.players.p1.graveyard]
+            },
+            p2: {
+                ...state.players.p2,
+                hand: [...state.players.p2.hand],
+                deck: [...state.players.p2.deck],
+                board: state.players.p2.board.map(c => c ? { ...c } : null),
+                graveyard: [...state.players.p2.graveyard]
+            }
+        },
+        logs: [...(state.logs || [])]
     } as GameState;  // Type assertion to preserve GameState type
+
+    const rng = createRNG(newState.rngSeed || 999);
+    newState.rngSeed = Math.floor(rng() * 1000000);
 
     switch (action.type) {
         case 'START_GAME':
             return state;
 
         case 'END_TURN': {
-            const nextPlayerId = getOpponentId(state.activePlayerId);
+            const activePlayerId = state.activePlayerId;
+            const currentPlayer = newState.players[activePlayerId];
+
+            // Trigger END_OF_TURN effects
+            const newPendingEffects = [...(newState.pendingEffects || [])];
+            currentPlayer.board.forEach(c => {
+                if (c && c.triggers) {
+                    c.triggers.filter(t => t.trigger === 'END_OF_TURN').forEach(t => {
+                        t.effects.forEach(e => {
+                            newPendingEffects.push({
+                                sourceCard: c,
+                                effect: e,
+                                sourcePlayerId: activePlayerId
+                            });
+                        });
+                    });
+                }
+            });
+
+            const nextPlayerId = getOpponentId(activePlayerId);
             const nextPlayer = newState.players[nextPlayerId];
 
             // PP Logic: Max 10. Increment by 1.
@@ -822,7 +986,14 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             if (nextPlayer.deck.length > 0) {
                 const drawnCard = nextPlayer.deck.pop();
-                if (drawnCard) nextPlayer.hand.push(drawnCard);
+                if (drawnCard) {
+                    if (nextPlayer.hand.length < 9) {
+                        nextPlayer.hand.push(drawnCard);
+                    } else {
+                        nextPlayer.graveyard.push(drawnCard);
+                        newState.logs.push(`${nextPlayer.name}の手札が上限に達したため、${drawnCard.name}は墓地へ送られました`);
+                    }
+                }
             }
 
             // Reset Board Attack Status
@@ -834,6 +1005,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             });
 
             newState.activePlayerId = nextPlayerId;
+            newState.pendingEffects = newPendingEffects;
 
             // Turn Count: Increment only if returning to P1 (Round Logic)
             if (nextPlayerId === 'p1') {
@@ -850,7 +1022,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             // Immutable: Create new array without first element
             const [currentEffect, ...remainingEffects] = newState.pendingEffects;
 
-            console.log(`[Engine] RESOLVE_EFFECT: Processing ${currentEffect.effect.type}. Remaining: ${remainingEffects.length}`);
+            console.log(`[Engine] RESOLVE_EFFECT: Processing ${currentEffect.effect.type} from ${currentEffect.sourceCard.name}. Remaining: ${remainingEffects.length}`);
 
             const targetId = action.payload?.targetId || currentEffect.targetId;
 
@@ -870,7 +1042,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
         }
 
         case 'PLAY_CARD': {
-            if (newState.activePlayerId !== action.playerId) return newState;
+            // Skip activePlayerId check for remote actions (already validated on sender side)
+            if (!(action as any).isRemote && newState.activePlayerId !== action.playerId) return newState;
 
             const { cardIndex, targetId } = action.payload;
 
@@ -880,8 +1053,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             const player = action.playerId === 'p1' ? p1 : p2;
 
-            if (cardIndex < 0 || cardIndex >= player.hand.length) return newState;
+            console.log(`[Engine] PLAY_CARD: playerId=${action.playerId}, cardIndex=${cardIndex}, handLength=${player.hand.length}, isRemote=${(action as any).isRemote}`);
+            console.log(`[Engine] PLAY_CARD: hand cards:`, player.hand.map(c => c.name));
+
+            if (cardIndex < 0 || cardIndex >= player.hand.length) {
+                console.log(`[Engine] PLAY_CARD: Invalid cardIndex! Returning unchanged state.`);
+                return newState;
+            }
             const card = player.hand[cardIndex];
+            console.log(`[Engine] PLAY_CARD: Playing card:`, card.name);
 
             if (player.pp < card.cost) return newState;
             if (card.type === 'FOLLOWER' && player.board.length >= 5) return newState;
@@ -894,7 +1074,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (card.type === 'FOLLOWER') {
                 const newFollower: BoardCard = {
                     ...card,
-                    instanceId: `inst_${Date.now()}_${Math.random()}`,
+                    instanceId: action.payload.instanceId || `inst_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
                     currentAttack: card.attack || 0,
                     currentHealth: card.health || 0,
                     maxHealth: card.health || 0,
@@ -910,7 +1090,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 player.board.push(newFollower);
                 sourceCard = newFollower;
             } else {
-                player.graveyard.push({ ...card, instanceId: `spell_${Date.now()}` } as BoardCard);
+                player.graveyard.push({ ...card, instanceId: `spell_${newState.rngSeed}_${Math.floor(rng() * 1000)}` } as BoardCard);
             }
 
             // Queue Effects
@@ -958,22 +1138,29 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             if (!follower || follower.hasEvolved) return newState;
 
+            const isRemote = (action as any).isRemote;
+
+            console.log(`[Engine] EVOLVE Logic: name=${follower.name}, useSep=${useSep}, isRemote=${isRemote}, turn=${state.turnCount}`);
+
             if (useSep) {
                 // Super Evolve Logic
-                // Turn Constraints: P1 >= 7, P2 >= 6
-                const isP1 = action.playerId === 'p1';
-                const turnReq = isP1 ? 7 : 6;
+                if (!isRemote) {
+                    // Turn Constraints: P1 >= 7, P2 >= 6
+                    const isP1 = action.playerId === 'p1';
+                    const turnReq = isP1 ? 7 : 6;
 
-                if (state.turnCount < turnReq) {
-                    console.log(`[Engine] Cannot Super Evolve: Turn ${state.turnCount} < ${turnReq}`);
-                    return newState;
+                    if (state.turnCount < turnReq) {
+                        console.log(`[Engine] Cannot Super Evolve: Turn ${state.turnCount} < ${turnReq}`);
+                        return newState;
+                    }
+
+                    if (player.sep <= 0) {
+                        console.log('[Engine] Cannot Super Evolve: No SEP');
+                        return newState;
+                    }
                 }
 
-                if (player.sep <= 0) {
-                    console.log('[Engine] Cannot Super Evolve: No SEP');
-                    return newState;
-                }
-                player.sep -= 1;
+                player.sep = Math.max(0, player.sep - 1);
                 // player.evolutionsUsed += 1; // Super Evolve doesn't consume EP
 
 
@@ -993,18 +1180,20 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             } else {
                 // Normal Evolve
-                // Turn Constraints: P1 >= 5, P2 >= 4
-                const isP1 = action.playerId === 'p1';
-                const turnReq = isP1 ? 5 : 4;
+                if (!isRemote) {
+                    // Turn Constraints: P1 >= 5, P2 >= 4
+                    const isP1 = action.playerId === 'p1';
+                    const turnReq = isP1 ? 5 : 4;
 
-                if (state.turnCount < turnReq) {
-                    console.log(`[Engine] Cannot Evolve: Turn ${state.turnCount} < ${turnReq}`);
-                    return newState;
-                }
+                    if (state.turnCount < turnReq) {
+                        console.log(`[Engine] Cannot Evolve: Turn ${state.turnCount} < ${turnReq}`);
+                        return newState;
+                    }
 
-                if (player.evolutionsUsed >= 2) { // Simple limit check
-                    console.log('[Engine] Cannot Evolve: Limit reached');
-                    return newState;
+                    if (player.evolutionsUsed >= 2) { // Simple limit check
+                        console.log('[Engine] Cannot Evolve: Limit reached');
+                        return newState;
+                    }
                 }
 
                 player.evolutionsUsed += 1;
@@ -1153,6 +1342,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     attacker.currentHealth -= counterDamage;
 
                     if (defender.currentHealth <= 0) {
+                        defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
                         defPlayer.graveyard.push(defender);
                         // Filter by ID to remove exactly this card
                         defPlayer.board = defPlayer.board.filter(c => c && c.instanceId !== defender.instanceId);
@@ -1163,6 +1353,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             // 4. Resolve Attacker Death (Counter Damage)
             if (attacker.currentHealth <= 0) {
+                attacker.currentHealth = Math.min(0, attacker.currentHealth); // Ensure <= 0
                 attPlayer.graveyard.push(attacker);
                 attPlayer.board = attPlayer.board.filter(c => c && c.instanceId !== attacker.instanceId);
                 console.log(`[Engine] Attacker ${attacker.name} destroyed.`);
@@ -1177,6 +1368,19 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             console.log(`[Engine] After commit. finalState.players.p1.hp: ${finalState.players.p1.hp}, finalState.players.p2.hp: ${finalState.players.p2.hp}`);
 
             return finalState;
+        }
+
+        // For online play: Reinitialize game with both players' correct classes
+        case 'REINIT_GAME': {
+            const { p1Class, p2Class } = action.payload;
+            console.log(`[Engine] REINIT_GAME: p1=${p1Class}, p2=${p2Class}`);
+            return initializeGame('Player 1', p1Class, 'Player 2', p2Class);
+        }
+
+        // For online play: Sync state from host
+        case 'SYNC_STATE': {
+            console.log('[Engine] SYNC_STATE received');
+            return action.payload;
         }
 
         default:
