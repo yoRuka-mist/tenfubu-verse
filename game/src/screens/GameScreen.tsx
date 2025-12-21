@@ -2380,9 +2380,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* BATTLE FIELD - Fixed Areas with smooth sliding cards */}
                 {/* ========================================== */}
 
-                {/* Opponent Slots - Fixed Y (35%) */}
+                {/* Opponent Slots - Fixed Y (Gap center at 50%) */}
                 <div style={{
-                    position: 'absolute', top: '35%', left: '0', width: '100%', height: 120,
+                    position: 'absolute', top: 'calc(50% - 125px)', left: '0', width: '100%', height: 120,
                     pointerEvents: 'none', zIndex: 10
                 }}>
                     <div style={{
@@ -2417,9 +2417,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
                 </div>
 
-                {/* Player Slots - Fixed Y (65%) */}
+                {/* Player Slots - Fixed Y (Gap center at 50%) */}
                 <div style={{
-                    position: 'absolute', top: '63%', left: '0', width: '100%', height: 120,
+                    position: 'absolute', top: 'calc(50% + 5px)', left: '0', width: '100%', height: 120,
                     pointerEvents: 'none', zIndex: 10
                 }}>
                     <div style={{
@@ -2441,7 +2441,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         position: 'absolute',
                                         left: '50%',
                                         top: 0,
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : 'none'}`,
+                                        transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
                                         transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                         cursor: 'pointer',
                                         pointerEvents: 'auto',
@@ -2501,7 +2501,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* Size: 240px, EP/SEP at top, HP left of EP */}
                 {/* ========================================== */}
                 <div ref={playerLeaderRef} style={{
-                    position: 'absolute', bottom: -60, left: '50%', transform: 'translateX(-50%)',
+                    position: 'absolute', bottom: -50, left: '50%', transform: 'translateX(-50%)',
                     width: 240, height: 240, borderRadius: '50%',
                     zIndex: 200
                 }}>
