@@ -12,9 +12,10 @@ interface CardProps {
     canAttack?: boolean; // For manual override if needed
     isOnBoard?: boolean; // New prop to distinguish Board vs Hand context
     turnCount?: number; // Current game turn count from engine
+    className?: string; // For custom animations
 }
 
-export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, className }) => {
     // Determine stats to show
     const attack = 'currentAttack' in card ? (card as any).currentAttack : card.attack;
     const health = 'currentHealth' in card ? (card as any).currentHealth : card.health;
@@ -99,13 +100,13 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     // --- Normal Variant (On Board / Hand) ---
     return (
         <div
-            className={`card card-container ${isReady ? 'ready' : ''}`}
+            className={`card card-container ${isReady ? 'ready' : ''} ${className || ''}`}
             style={{
                 width: 140, height: 200, // Default size
                 ...style,
                 position: 'relative', // Needed for absolute positioned effects
                 cursor: onClick ? 'pointer' : 'default',
-                transform: isSelected ? 'translateY(-20px)' : style?.transform, // Lift if selected
+                transform: isSelected ? 'translateY(-10px)' : style?.transform, // Lift if selected (halved from -20px)
                 boxShadow: glowColor || (isReady
                     ? '0 0 10px #f6e05e'
                     : style?.boxShadow),
