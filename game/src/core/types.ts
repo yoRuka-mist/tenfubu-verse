@@ -15,7 +15,7 @@ export type EffectType =
     | 'GRANT_PASSIVE'
     | 'DAMAGE' | 'SELECT_DAMAGE' | 'RANDOM_DAMAGE' | 'AOE_DAMAGE' | 'SELECT_DAMAGE_ALL' | 'DAMAGE_LEADER'
     | 'SET_MAX_HP'
-    | 'HEAL_LEADER' | 'HEAL_FOLLOWER' | 'BUFF_STATS' | 'GENERATE_CARD' | 'COST_REDUCTION' | 'CUSTOM'; // Keep legacy for compatibility for now
+    | 'HEAL_LEADER' | 'HEAL_FOLLOWER' | 'BUFF_STATS' | 'GENERATE_CARD' | 'COST_REDUCTION' | 'CUSTOM' | 'RANDOM_SET_HP'; // Keep legacy for compatibility for now
 
 export interface AbilityEffect {
     type: EffectType;
@@ -41,7 +41,7 @@ export interface Card {
     attack?: number; // For followers
     health?: number; // For followers
     description: string;
-    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE';
+    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE' | 'THUNDER';
     tags?: string[]; // e.g. 'Knuckler'
 
     // New ability system
@@ -66,6 +66,8 @@ export interface BoardCard extends Card {
     hasEvolved?: boolean; // Track evolution state
     turnPlayed: number; // For Rush turn restriction
     hasBarrier?: boolean; // Barrier state (Damage 0 once)
+    baseAttack?: number; // Original attack before buffs
+    baseHealth?: number; // Original health before buffs
 }
 
 export interface Player {

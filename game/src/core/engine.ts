@@ -59,7 +59,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 6, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: 'ファンファーレ：自分のリーダーを2回復、2枚ドロー。進化時：相手のフォロワーを1体破壊。',
+        description: 'ファンファーレ：自分のリーダーを4回復。進化時：自分のリーダーを4回復。',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
         attackEffectType: 'WATER',
@@ -67,14 +67,13 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'HEAL_LEADER', value: 2, targetType: 'SELF' },
-                    { type: 'DRAW', value: 2, targetType: 'SELF' }
+                    { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' }
                 ]
             },
             {
                 trigger: 'EVOLVE',
                 effects: [
-                    { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' }
+                    { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' }
                 ]
             }
         ]
@@ -107,17 +106,26 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_tsubumaru', name: 'つぶまる', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 3,
-        description: '[守護]',
+        description: '[守護] 進化時：「退職代行」を手札に加える。',
         imageUrl: '/cards/tsubumaru.png',
         evolvedImageUrl: '/cards/tsubumaru_2.png',
         passiveAbilities: ['WARD'],
-        attackEffectType: 'SLASH'
+        attackEffectType: 'SLASH',
+        triggers: [
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'GENERATE_CARD', targetCardId: 's_resignation_proxy' }
+                ]
+            }
+        ]
     },
     {
         id: 'c_barura', name: 'バルラ', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 4,
         description: '進化時：2枚ドロー。相手のフォロワー1体に3ダメージ。',
-        imageUrl: '/cards/barura.jpg',
+        imageUrl: '/cards/barura.png',
+        evolvedImageUrl: '/cards/barura_2.png',
         triggers: [
             {
                 trigger: 'EVOLVE',
@@ -160,6 +168,7 @@ const MOCK_CARDS: Card[] = [
         attack: 3, health: 3,
         description: 'ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
         imageUrl: '/cards/nayuta.png',
+        evolvedImageUrl: '/cards/nayuta_2.png',
         attackEffectType: 'RAY',
         triggers: [
             { trigger: 'FANFARE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] },
@@ -171,9 +180,10 @@ const MOCK_CARDS: Card[] = [
     { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護] ファンファーレ：「米」を手札に加える', imageUrl: '/cards/yunagi.jpg', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
     {
         id: 'c_nayuta_ward', name: 'なゆた', cost: 5, type: 'FOLLOWER',
-        attack: 4, health: 4,
+        attack: 3, health: 3,
         description: '[守護] ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
         imageUrl: '/cards/nayuta.png',
+        evolvedImageUrl: '/cards/nayuta_2.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'RAY',
         triggers: [
@@ -185,16 +195,17 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3点。相手のフォロワーを1体選び、破壊する。相手のフォロワーを1体をランダムに手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは守護を得る。',
+        description: 'ファンファーレ：相手のリーダーに3点ダメージ。相手のフォロワーを1体選び、破壊する。相手のフォロワーを1体選び、手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+1/+1され守護を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
+        attackEffectType: 'THUNDER',
         triggers: [
             {
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'DAMAGE', value: 3, targetType: 'OPPONENT' },
                     { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
-                    { type: 'RETURN_TO_HAND', targetType: 'RANDOM_FOLLOWER' } // Technical limitation: converted Select to Random
+                    { type: 'RETURN_TO_HAND', targetType: 'SELECT_FOLLOWER' }
                 ]
             },
             {
@@ -202,7 +213,8 @@ const MOCK_CARDS: Card[] = [
                 effects: [
                     { type: 'SUMMON_CARD', targetCardId: 'c_tsubumaru' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
-                    { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
+                    { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS' }
                 ]
             }
         ]
@@ -210,17 +222,27 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuki', name: 'ユキ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 2,
-        description: '[突進]',
-        imageUrl: '/cards/yuki.jpg',
+        description: '[突進] 進化時：自分のフォロワーすべては+1/+1する。',
+        imageUrl: '/cards/yuki.png',
+        evolvedImageUrl: '/cards/yuki_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH'],
-        attackEffectType: 'IMPACT'
+        attackEffectType: 'IMPACT',
+        triggers: [
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS' }
+                ]
+            }
+        ]
     },
     {
         id: 'c_white_tsubaki', name: '無敵の闘士　白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
         description: '突進。相手のターン中、相手のフォロワーからダメージを受けない',
         imageUrl: '/cards/white_tsubaki.png',
+        evolvedImageUrl: '/cards/white_tsubaki_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE'],
         attackEffectType: 'ICE'
@@ -439,6 +461,62 @@ const MOCK_CARDS: Card[] = [
             }
         ],
         attackEffectType: 'SLASH'
+    },
+    {
+        id: 's_resignation_proxy', name: '退職代行', cost: 3, type: 'SPELL',
+        description: '相手のフォロワー1体を破壊する。自分のフォロワー1体をランダムに破壊する。',
+        imageUrl: '/cards/taisyokudaiko.png',
+        tags: ['Token'],
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
+                { type: 'RANDOM_DESTROY', targetType: 'SELF', value: 1 }
+            ]
+        }]
+    },
+    {
+        id: 's_tenfubu_yabe_hutari', name: 'てんふぶのヤベー2人', cost: 4, type: 'SPELL',
+        description: '場にユキとぽてちを出す。',
+        imageUrl: '/cards/tenfubuyabehutari.png',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'SUMMON_CARD', targetCardId: 'c_yuki' },
+                { type: 'SUMMON_CARD', targetCardId: 'c_potechi' }
+            ]
+        }]
+    },
+    {
+        id: 's_samurai_tea', name: '侍茶', cost: 2, type: 'SPELL',
+        description: '自分のフォロワーすべてを+1/+1する',
+        imageUrl: '/cards/samuraitea.png',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS' }
+            ]
+        }]
+    },
+    {
+        id: 'c_amandava', name: 'amandava', cost: 5, attack: 2, health: 3, type: 'FOLLOWER',
+        description: 'ファンファーレ：相手のフォロワーからランダム2体のHPを1にする。進化時：相手のフォロワーすべてに1ダメージ',
+        imageUrl: '/cards/amandava.png',
+        attackEffectType: 'SHOT',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'RANDOM_SET_HP', value: 2, value2: 1, targetType: 'OPPONENT' }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'AOE_DAMAGE', value: 1, targetType: 'ALL_FOLLOWERS' }
+                ]
+            }
+        ]
     }
 ];
 
@@ -488,7 +566,7 @@ export function createPlayer(id: string, name: string, cls: ClassType, rng: () =
         !c.tags?.includes('Token') && // Exclude cards with 'Token' tag
         c.id !== 'c_yunagi_ward' &&
         c.id !== 'c_nayuta_ward' &&
-        c.id !== 'c_tsubumaru' &&
+        // c.id !== 'c_tsubumaru' && // Enable Tsubumaru in deck
         c.id !== 'c_sia'
     );
     // Tsubumaru (id: c_tsubumaru) is defined as a card in MOCK_CARDS (Line 86). 
@@ -605,7 +683,7 @@ function processSingleEffect(
                             // Ensure it's 0 or less for damage detection
                             target.currentHealth = Math.min(0, target.currentHealth);
                             newState.players[opponentId].graveyard.push(target);
-                            newState.players[opponentId].board = newState.players[opponentId].board.filter((c) => c?.instanceId !== target.instanceId);
+                            newState.players[opponentId].board[idx] = null;
                             newState.logs.push(`${target.name} は破壊されました`);
                         }
                     }
@@ -648,8 +726,12 @@ function processSingleEffect(
 
                 newState.logs.push(`${sourceCard.name} は相手の全フォロワーに ${damage} ダメージを与えました`);
 
-                // Remove dead from board
-                newState.players[opponentId].board = oppBoard.filter(c => c && c.currentHealth > 0);
+                // Remove dead from board (keep stable null slots)
+                oppBoard.forEach((c, idx) => {
+                    if (c && c.currentHealth <= 0) {
+                        oppBoard[idx] = null;
+                    }
+                });
             }
             break;
         }
@@ -711,7 +793,7 @@ function processSingleEffect(
                     if (card) {
                         card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
                         newState.players[opponentId].graveyard.push(card);
-                        newState.players[opponentId].board = newState.players[opponentId].board.filter(c => c?.instanceId !== card.instanceId);
+                        newState.players[opponentId].board[idx] = null;
                         newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                     }
                 }
@@ -740,9 +822,11 @@ function processSingleEffect(
         }
         case 'RANDOM_DESTROY': {
             const count = effect.value || 1;
-            const oppBoard = newState.players[opponentId].board;
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
+
             // Get all valid indices
-            const validIndices = oppBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+            const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
 
             // Shuffle
             for (let i = validIndices.length - 1; i > 0; i--) {
@@ -755,18 +839,42 @@ function processSingleEffect(
 
             // Destroy
             targets.forEach(idx => {
-                const card = oppBoard[idx];
+                const card = targetBoard[idx];
                 if (card) {
                     card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
-                    newState.players[opponentId].graveyard.push(card);
+                    newState.players[targetPid].graveyard.push(card);
+                    targetBoard[idx] = null;
                     newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                 }
             });
+            break;
+        }
+        case 'RANDOM_SET_HP': {
+            const count = effect.value || 1;
+            const newHp = effect.value2 || 1;
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
 
-            // Remove from board (Filter out destroyed)
-            // Note: We need to filter based on ID or rebuild board excluding the targeted indices
-            // Safer to just filter logic:
-            newState.players[opponentId].board = oppBoard.filter((_, i) => !targets.includes(i));
+            // Get all valid indices
+            const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+
+            // Shuffle
+            for (let i = validIndices.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
+            }
+
+            // Pick Top N
+            const targets = validIndices.slice(0, count);
+
+            // Set HP
+            targets.forEach(idx => {
+                const card = targetBoard[idx];
+                if (card) {
+                    card.currentHealth = newHp;
+                    newState.logs.push(`${card.name} のHPは ${newHp} になりました`);
+                }
+            });
             break;
         }
         case 'SET_MAX_HP': {
@@ -788,7 +896,7 @@ function processSingleEffect(
                     const newCard: BoardCard = {
                         ...template,
                         instanceId: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
-                        canAttack: false,
+                        canAttack: template.passiveAbilities?.includes('STORM') || template.passiveAbilities?.includes('RUSH') || false,
                         currentHealth: template.health || 1,
                         maxHealth: template.health || 1,
                         attack: template.attack || 0,
@@ -818,8 +926,7 @@ function processSingleEffect(
 
             if (targetIdx !== -1 && oppBoard[targetIdx]) {
                 const card = oppBoard[targetIdx]!;
-                // Remove from board
-                newState.players[opponentId].board = oppBoard.filter(c => c?.instanceId !== card.instanceId);
+                newState.players[opponentId].board[targetIdx] = null;
 
                 // Add to hand if space
                 const opponent = newState.players[opponentId];
@@ -876,6 +983,30 @@ function processSingleEffect(
                     }
                 });
                 newState.logs.push(`味方のフォロワーに ${passive} を付与した`);
+            }
+            break;
+        }
+        case 'BUFF_STATS': {
+            const attackBuff = effect.value || 0;
+            const healthBuff = effect.value2 || 0;
+
+            if (effect.targetType === 'ALL_FOLLOWERS') {
+                const p = newState.players[sourcePlayerId];
+                p.board.forEach(c => {
+                    if (c) {
+                        // Track original stats for display purposes
+                        if (!c.baseAttack) c.baseAttack = c.attack || 0;
+                        if (!c.baseHealth) c.baseHealth = c.health || 0;
+
+                        c.attack = (c.attack || 0) + attackBuff;
+                        c.currentAttack = (c.currentAttack || 0) + attackBuff;
+                        c.health = (c.health || 0) + healthBuff;
+                        c.maxHealth = (c.maxHealth || 0) + healthBuff;
+                        c.currentHealth = (c.currentHealth || 0) + healthBuff;
+
+                        newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
+                    }
+                });
             }
             break;
         }
@@ -1035,6 +1166,13 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 currentEffect.effect,
                 targetId
             );
+
+            // Cleanup null board slots if no effects remain
+            if (remainingEffects.length === 0) {
+                Object.values(processedState.players).forEach(p => {
+                    p.board = p.board.filter(Boolean);
+                });
+            }
 
             // Return completely new state object with updated pendingEffects
             return {
@@ -1373,8 +1511,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     if (defender.currentHealth <= 0) {
                         defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
                         defPlayer.graveyard.push(defender);
-                        // Filter by ID to remove exactly this card
-                        defPlayer.board = defPlayer.board.filter(c => c && c.instanceId !== defender.instanceId);
+                        defPlayer.board[targetIndex] = null;
                         newState.logs.push(`　${defender.name} は破壊されました`);
                     }
                 }
@@ -1384,7 +1521,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (attacker.currentHealth <= 0) {
                 attacker.currentHealth = Math.min(0, attacker.currentHealth); // Ensure <= 0
                 attPlayer.graveyard.push(attacker);
-                attPlayer.board = attPlayer.board.filter(c => c && c.instanceId !== attacker.instanceId);
+                attPlayer.board[attackerIndex] = null;
                 newState.logs.push(`　${attacker.name} は破壊されました`);
             }
 

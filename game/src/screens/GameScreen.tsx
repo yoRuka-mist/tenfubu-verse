@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useReducer } from 'react';
+﻿import React, { useEffect, useLayoutEffect, useReducer } from 'react';
 import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
@@ -21,23 +21,30 @@ interface GameScreenProps {
 
 // --- Visual Effects ---
 const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
-    // Sprite Configuration for Thunder (Updated: 8x8)
-    const spriteConfig = {
-        cols: 8,
-        rows: 8,
-        fps: 60, // Faster FPS for 64 frames to keep it snappy
-        scale: type === 'SHOT' ? 0.75 : 1.5
-    };
+    // Sprite Configuration (Updated for 8x8 standardization)
+    const spriteConfig = React.useMemo(() => {
+        let cols = 8;
+        let rows = 8;
+        let fps = 60;
+        let size = 256;
+
+        if (type === 'SHOT') {
+            size = 128; // Half size
+        }
+
+        return { cols, rows, fps, size };
+    }, [type]);
 
     React.useEffect(() => {
         // Duration based on animation type
-        const duration = type === 'LIGHTNING'
+        const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE'].includes(type);
+        const duration = isSprite
             ? (spriteConfig.cols * spriteConfig.rows) / spriteConfig.fps * 1000
             : 800;
 
         const timer = setTimeout(onComplete, duration);
         return () => clearTimeout(timer);
-    }, [onComplete, type]);
+    }, [onComplete, type, spriteConfig]);
 
     // SE Trigger Logic
     React.useEffect(() => {
@@ -57,16 +64,22 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         } else if (type === 'IMPACT') {
             playSE('panch1.mp3', 0.6, 100);
             playSE('panch2.mp3', 0.6, 500);
-        } else if (type === 'LIGHTNING') {
+        } else if (type === 'LIGHTNING' || type === 'THUNDER') {
             playSE('thunder.mp3', 0.5);
         } else if (type === 'FIREBALL') {
             playSE('explosion.mp3', 0.5);
+        } else if (type === 'FIRE') {
+            playSE('fire.mp3', 0.5);
         } else if (type === 'SLASH') {
             playSE('slash.mp3', 0.5);
         } else if (type === 'ICE') {
             playSE('ice.mp3', 0.5);
         } else if (type === 'WATER') {
             playSE('water.mp3', 0.5);
+        } else if (type === 'RAY') {
+            playSE('ray.mp3', 0.6);
+        } else if (type === 'SUMI') {
+            playSE('yami.mp3', 0.6);
         }
     }, [type, audioSettings]);
 
@@ -76,27 +89,25 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
-    if (type === 'LIGHTNING' || type === 'IMPACT' || type === 'SUMI' || type === 'SHOT' || type === 'ICE' || type === 'WATER') {
-        const isImpact = type === 'IMPACT';
-        const isSumi = type === 'SUMI';
-        const isShot = type === 'SHOT';
-        const isIce = type === 'ICE';
-        const isWater = type === 'WATER';
+    const isSpriteType = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE'].includes(type);
 
+    if (isSpriteType) {
         // Map Type to Image
         let bgImage = '/effects/thunder.png';
-        if (isImpact) bgImage = '/effects/impact.png';
-        if (isSumi) bgImage = '/effects/sumi.png';
-        if (isShot) bgImage = '/effects/shot.png';
-        if (isIce) bgImage = '/effects/ice.png';
-        if (isWater) bgImage = '/effects/water.png';
+        if (type === 'IMPACT') bgImage = '/effects/impact.png';
+        if (type === 'SUMI') bgImage = '/effects/sumi.png';
+        if (type === 'SHOT') bgImage = '/effects/shot.png';
+        if (type === 'ICE') bgImage = '/effects/ice.png';
+        if (type === 'WATER') bgImage = '/effects/water.png';
+        if (type === 'RAY') bgImage = '/effects/ray.png';
+        if (type === 'FIRE') bgImage = '/effects/fire.png';
 
         const steps = spriteConfig.cols * spriteConfig.rows;
 
         return (
             <div style={{
                 ...style,
-                width: 256, height: 256,
+                width: spriteConfig.size, height: spriteConfig.size,
                 transform: `${style?.transform || ''}`
             }}>
                 <div style={{
@@ -130,6 +141,27 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     } else if (type === 'FIREBALL') {
         imgSrc = '/effects/fireball.png';
         animation = 'explode 0.5s ease-out forwards';
+    } else if (type === 'BEAM') {
+        return (
+            <div style={{
+                position: 'fixed', left: x, top: y,
+                width: 400, height: 30,
+                background: 'linear-gradient(90deg, transparent, #faf089, #fff, #faf089, transparent)',
+                transform: 'translate(-50%, -50%) rotate(-45deg)',
+                boxShadow: '0 0 20px #faf089',
+                opacity: 0,
+                animation: 'beamShoot 0.4s ease-out forwards',
+                pointerEvents: 'none', zIndex: 5000
+            }}>
+                <style>{`
+                    @keyframes beamShoot {
+                        0% { width: 0; opacity: 1; transform: translate(-50%, -50%) rotate(-45deg) scaleX(0); }
+                        20% { width: 400px; opacity: 1; transform: translate(-50%, -50%) rotate(-45deg) scaleX(1); }
+                        100% { width: 400px; opacity: 0; transform: translate(-50%, -50%) rotate(-45deg) scaleX(1.2); }
+                    }
+                `}</style>
+            </div>
+        );
     }
 
     if (!imgSrc) return null;
@@ -755,6 +787,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return { bgm: 0.3, se: 0.5, voice: 0.5, enabled: true };
         }
     });
+
+    const playSE = React.useCallback((file: string, volume: number = 0.5) => {
+        if (!audioSettings.enabled) return;
+        const audio = new Audio(`/se/${file}`);
+        audio.volume = audioSettings.se * volume;
+        audio.play().catch(e => console.warn("SE Play prevented", e));
+    }, [audioSettings]);
+
     const bgmRef = React.useRef<HTMLAudioElement | null>(null);
     const [showSettings, setShowSettings] = React.useState(false);
 
@@ -770,11 +810,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         }
     }, [audioSettings]);
-
     const [showMenu, setShowMenu] = React.useState(false);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(true);
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
 
+    // --- Board Stability Helper ---
     const [shake, setShake] = React.useState(false); // Screen Shake State
 
     // Target Selection State
@@ -829,26 +869,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE') {
                 const effectType = current.sourceCard.attackEffectType || 'SLASH';
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
-
-                let targetIdx = -1;
-                const oppBoard = gameState.players[targetPid].board;
-
-                if (current.targetId) {
-                    targetIdx = oppBoard.findIndex(c => c?.instanceId === current.targetId);
-                }
+                const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
 
                 if (current.effect.type === 'AOE_DAMAGE') {
-                    // For AOE, play effect on ALL valid targets on the board
-                    oppBoard.forEach((c, i) => {
+                    const oppBoard = gameState.players[targetPid].board;
+                    oppBoard.forEach((c) => {
                         if (c) {
-                            // Stagger slightly or play all at once?
-                            // Play all at once for impact.
-                            playEffect(effectType, targetPid, i);
+                            const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
+                            if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                         }
                     });
-                } else {
-                    // Single Target (or derived from targetId)
-                    playEffect(effectType, targetPid, targetIdx);
+                } else if (current.targetId) {
+                    const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
+                    if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                 }
             }
 
@@ -861,7 +894,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }, delay);
             return () => clearTimeout(timer);
         }
-    }, [gameState.pendingEffects, currentPlayerId, opponentPlayerId, animatingCard]);
+    }, [gameState.pendingEffects, currentPlayerId, opponentPlayerId, animatingCard, visualPlayerBoard, visualOpponentBoard]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
@@ -1033,8 +1066,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // BGM Auto-Play (User Interaction Required usually)
     // BGM Init
     React.useEffect(() => {
-        const bgms = ['/bgm/Green Misty Mountains.mp3', '/bgm/ouka.mp3'];
-        const selectedBgm = bgms[Math.floor(Math.random() * bgms.length)];
+        // Use selected background music based on leader
+        const selectedBgm = player.class === 'AJA' ? '/bgm/battle_azya.mp3' : '/bgm/battle_senka.mp3';
         const bgm = new Audio(selectedBgm);
         bgm.loop = true;
         bgm.volume = audioSettings.enabled ? audioSettings.bgm : 0;
@@ -1044,15 +1077,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const playPromise = bgm.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    console.log("Auto-play prevented (BGM). Click to interact first.", error);
+                    console.warn("BGM Auto-play prevented:", error);
                 });
             }
         }
+
         return () => {
             bgm.pause();
             bgm.currentTime = 0;
         };
-    }, []);
+    }, [player.class, audioSettings.enabled, audioSettings.bgm]);
     useEffect(() => {
         if (!adapter) return;
         adapter.onMessage((msg) => {
@@ -1164,6 +1198,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             useSep,
             targetId
         });
+        playSE('fon.mp3', 0.7); // Evolve sound
     };
 
     // Ref for pending evolve action (to dispatch after animation completes)
@@ -1179,6 +1214,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Handle Evolution Animation Phase Change - use useCallback to prevent unnecessary re-renders
     const handleEvolvePhaseChange = React.useCallback((newPhase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => {
         console.log('[GameScreen] handleEvolvePhaseChange:', newPhase);
+        if (newPhase === 'LAND') {
+            playSE('gan.mp3', 0.6);
+        }
         if (newPhase === 'DONE') {
             // Animation complete - store pending action in ref and clear animation
             setEvolveAnimation(prev => {
@@ -1195,7 +1233,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         } else {
             setEvolveAnimation(prev => prev ? { ...prev, phase: newPhase } : null);
         }
-    }, [currentPlayerId]);
+    }, [currentPlayerId, playSE]);
 
     // Handle Play Card with Animation
     const handlePlayCard = (index: number, startX: number, startY: number) => {
@@ -1205,7 +1243,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         console.log(`[handlePlayCard] index: ${index}, card: ${card?.name}, needsTarget check...`);
 
-        // Check for Target Selection Requirement (Fanfare or Triggers)
         const needsTarget =
             (card.type === 'SPELL' && card.triggers?.some(t => t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))) ||
             (card.type === 'FOLLOWER' && (
@@ -1213,20 +1250,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))
             ));
 
-        console.log(`[handlePlayCard] needsTarget: ${needsTarget}`);
+        // Check if there are ANY valid targets on opponent's board (not Stealthed and not Aura)
+        const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
+        const hasValidTargets = opponentBoard.some(c =>
+            c &&
+            !c.passiveAbilities?.includes('STEALTH') &&
+            !c.passiveAbilities?.includes('AURA')
+        );
 
-        if (needsTarget) {
+        console.log(`[handlePlayCard] needsTarget: ${needsTarget}, hasValidTargets: ${hasValidTargets}`);
+
+        if (needsTarget && hasValidTargets) {
             setTargetingState({ type: 'PLAY', sourceIndex: index });
             setDragState(null); // Stop dragging
             return;
         }
 
-        // Determine target position (Center of screen approx)
-        const targetX = window.innerWidth / 2;
+        // Determine target position (Center of board area - right of sidebar)
+        const sidebarWidth = 340;
+        const targetX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
         const targetY = window.innerHeight / 2;
 
         const onComplete = () => {
             if (card.type !== 'SPELL') {
+                playSE('gan.mp3', 0.6); // Land sound
                 triggerShake(); // Trigger Shake on Land ONLY if not Spell
             }
             // Dispatch only once
@@ -1303,13 +1350,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currP = player.hand.length;
         const currO = opponent.hand.length;
 
-        const playSE = (file: string, volume: number = 0.5) => {
-            if (!audioSettings.enabled) return;
-            const audio = new Audio(`/se/${file}`);
-            audio.volume = audioSettings.se * volume;
-            audio.play().catch(e => console.warn("SE Play prevented", e));
-        };
-
         if (currP > prev.player) {
             // Player Drew
             setDrawAnimation({ isPlayer: true, count: currP - prev.player, status: 'FLYING' });
@@ -1324,7 +1364,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         prevHandSizeRef.current = { player: currP, opponent: currO };
-    }, [player.hand.length, opponent.hand.length, audioSettings]);
+    }, [player.hand.length, opponent.hand.length, audioSettings, playSE]);
 
     // --- AI Logic (Restored) ---
 
@@ -1395,8 +1435,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const bestCard = playable[0];
                         let targetId = undefined;
                         const enemyBoard = state.players[currentPlayerId].board;
-                        if (enemyBoard.length > 0 && enemyBoard[0]) {
-                            targetId = enemyBoard[0].instanceId;
+                        // Filter targetable enemies (No Stealth/Aura)
+                        const targetableEnemies = enemyBoard.filter(c =>
+                            c &&
+                            !c.passiveAbilities?.includes('STEALTH') &&
+                            !c.passiveAbilities?.includes('AURA')
+                        );
+
+                        if (targetableEnemies.length > 0) {
+                            targetId = targetableEnemies[0]!.instanceId;
                         }
 
                         // Animation First
@@ -1407,7 +1454,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setPlayingCardAnim({
                             card: bestCard,
                             startX, startY,
-                            targetX: startX, targetY: window.innerHeight / 2, // Center
+                            targetX: startX, targetY: window.innerHeight / 2, // Center of right side
                             onComplete: () => {
                                 triggerShake();
                                 dispatch({
@@ -1415,6 +1462,40 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     playerId: opponentPlayerId,
                                     payload: { cardIndex: bestCard.originalIndex, targetId }
                                 });
+
+                                // --- AI amandava FANFARE Visuals ---
+                                if (bestCard.id === 'c_amandava') {
+                                    const playerBoard = gameStateRef.current.players[currentPlayerId].board;
+                                    playerBoard.forEach((c, i) => {
+                                        if (c) {
+                                            // Since it's random 2, we just show effects on the board or guess
+                                            // For visuals, showing it on 2 random valid targets is fine
+                                            setTimeout(() => {
+                                                playEffect('SHOT', currentPlayerId, i);
+                                            }, 200);
+                                        }
+                                    });
+                                }
+
+                                // --- AI Azya FANFARE Visuals ---
+                                if (bestCard.id === 'c_azya') {
+                                    // 1. Damage to Player Leader
+                                    setTimeout(() => {
+                                        playEffect('THUNDER', currentPlayerId, -1);
+                                    }, 200);
+
+                                    // 2. Destroy Target (if targetId was set)
+                                    if (targetId) {
+                                        const playerBoard = gameStateRef.current.players[currentPlayerId].board;
+                                        const targetIdx = playerBoard.findIndex(c => c?.instanceId === targetId);
+                                        if (targetIdx !== -1) {
+                                            setTimeout(() => {
+                                                playEffect('THUNDER', currentPlayerId, targetIdx);
+                                            }, 400);
+                                        }
+                                    }
+                                }
+
                                 setPlayingCardAnim(null);
                             }
                         });
@@ -1441,7 +1522,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const target = candidates[candidates.length - 1];
                             let targetId = undefined;
                             const enemyBoard = state.players[currentPlayerId].board;
-                            const validTargets = enemyBoard.filter(c => c !== null);
+                            // Filter targets for Evolve effect (No Stealth/Aura)
+                            const validTargets = enemyBoard.filter(c =>
+                                c !== null &&
+                                !c.passiveAbilities?.includes('STEALTH') &&
+                                !c.passiveAbilities?.includes('AURA')
+                            );
                             if (validTargets.length > 0) {
                                 targetId = validTargets[0]!.instanceId;
                             }
@@ -1452,7 +1538,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             if (cardRect) {
                                 setEvolveAnimation({
-                                    card: target.c,
+                                    card: target.c!,
+                                    evolvedImageUrl: target.c!.evolvedImageUrl,
                                     startX: cardRect.left + cardRect.width / 2,
                                     startY: cardRect.top + cardRect.height / 2,
                                     useSep: useSuper,
@@ -1546,7 +1633,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     for (let t = 0; t < playerBoard.length; t++) {
                                         const target = playerBoard[t];
                                         if (!target) continue;
-                                        if (target.passiveAbilities?.includes('STEALTH')) continue; // Skip Stealth
+                                        if (target.passiveAbilities?.includes('STEALTH') || target.passiveAbilities?.includes('AURA')) continue; // Skip Stealth/Aura
                                         // Simple Logic: Kill small things or trade
                                         bestTarget = t;
                                         break;
@@ -1566,7 +1653,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     for (let t = 0; t < playerBoard.length; t++) {
                                         const target = playerBoard[t];
                                         if (!target) continue;
-                                        if (target.passiveAbilities?.includes('STEALTH')) continue; // Skip Stealth
+                                        if (target.passiveAbilities?.includes('STEALTH') || target.passiveAbilities?.includes('AURA')) continue; // Skip Stealth/Aura
 
                                         if (attacker.currentAttack >= target.currentHealth && (target.currentAttack || 0) < attacker.currentHealth) {
                                             bestTarget = t;
@@ -1900,7 +1987,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const needsTarget = card?.triggerAbilities?.EVOLVE?.targetType === 'SELECT_FOLLOWER' ||
                         card?.triggers?.some(t => t.trigger === 'EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'));
 
-                    if (needsTarget) {
+                    // Check valid targets
+                    const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                    const hasValidTargets = opponentBoard.some(c =>
+                        c &&
+                        !c.passiveAbilities?.includes('STEALTH') &&
+                        !c.passiveAbilities?.includes('AURA')
+                    );
+
+                    if (needsTarget && hasValidTargets) {
                         setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex });
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
@@ -2013,6 +2108,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 });
             }
 
+            // --- 退職代行 (s_resignation_proxy) Visuals ---
+            if (card.id === 's_resignation_proxy') {
+                // 1. Target enemy destruction effect
+                playEffect('SUMI', targetPlayerId, targetIndex);
+
+                // 2. Self random destruction effect (Delayed slightly)
+                setTimeout(() => {
+                    const selfBoard = gameStateRef.current.players[currentPlayerId].board;
+                    const validSelfIndices = selfBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                    if (validSelfIndices.length > 0) {
+                        // We don't know EXACTLY which one RNG will pick yet, but visually we can hint at all or pick one to show
+                        // To be accurate, we just show a subtle effect or use the same logic as engine will
+                        // For simplicity, let's just show an effect on the whole board area or a random one
+                        const randomIdx = validSelfIndices[Math.floor(Math.random() * validSelfIndices.length)];
+                        playEffect('SUMI', currentPlayerId, randomIdx);
+                    }
+                }, 500);
+            }
+
             // Animation for spell/card
             const sidebarWidth = 340;
             const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
@@ -2031,6 +2145,32 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         playerId: currentPlayerId,
                         payload: { cardIndex: index, targetId }
                     });
+
+                    // --- Player amandava FANFARE Visuals ---
+                    if (card.id === 'c_amandava') {
+                        const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                        opponentBoard.forEach((c, i) => {
+                            if (c) {
+                                setTimeout(() => {
+                                    playEffect('SHOT', opponentPlayerId, i);
+                                }, 200);
+                            }
+                        });
+                    }
+
+                    // --- Player Azya FANFARE Visuals ---
+                    if (card.id === 'c_azya') {
+                        // 1. Damage to Leader
+                        setTimeout(() => {
+                            playEffect('THUNDER', opponentPlayerId, -1);
+                        }, 200);
+
+                        // 2. Destroy Target
+                        setTimeout(() => {
+                            playEffect('THUNDER', targetPlayerId, targetIndex);
+                        }, 400);
+                    }
+
                     setPlayingCardAnim(null);
                 }
             });
@@ -2410,7 +2550,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         cursor: targetingState ? 'crosshair' : 'pointer',
                                         pointerEvents: 'auto'
                                     }}>
-                                    {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation?.card.instanceId === c.instanceId) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                 </div>
                             );
                         })}
@@ -2447,7 +2587,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         pointerEvents: 'auto',
                                         zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                     }}>
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation?.card.instanceId === c.instanceId) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                 </div>
                             );
                         })}
@@ -2501,7 +2641,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* Size: 240px, EP/SEP at top, HP left of EP */}
                 {/* ========================================== */}
                 <div ref={playerLeaderRef} style={{
-                    position: 'absolute', bottom: -50, left: '50%', transform: 'translateX(-50%)',
+                    position: 'absolute', bottom: -40, left: '50%', transform: 'translateX(-50%)',
                     width: 240, height: 240, borderRadius: '50%',
                     zIndex: 200
                 }}>
@@ -2713,12 +2853,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'fixed', left: dragState.currentX, top: dragState.currentY,
                         transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                        opacity: 1.0, width: 60, height: 60, borderRadius: '50%',
-                        background: (dragState as any).useSep ? '#9f7aea' : '#ECC94B',
-                        boxShadow: (dragState as any).useSep ? '0 0 15px #9f7aea' : '0 0 15px #ECC94B',
-                        border: (dragState as any).useSep ? '3px solid #b794f4' : '3px solid #F6E05E',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        opacity: 0.9, width: 40, height: 40, borderRadius: '50%',
+                        background: (dragState as any).useSep
+                            ? 'radial-gradient(circle, #fff 0%, #b794f4 40%, #9f7aea 100%)'
+                            : 'radial-gradient(circle, #fff 0%, #f6e05e 40%, #ecc94b 100%)',
+                        boxShadow: (dragState as any).useSep
+                            ? '0 0 20px #9f7aea, 0 0 40px rgba(159, 122, 234, 0.6), 0 0 60px rgba(159, 122, 234, 0.4)'
+                            : '0 0 20px #ecc94b, 0 0 40px rgba(236, 201, 75, 0.6), 0 0 60px rgba(236, 201, 75, 0.4)',
+                        border: '2px solid white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        filter: 'blur(1px)'
                     }}>
+                        {/* Inner intense light */}
+                        <div style={{
+                            width: 15, height: 15, borderRadius: '50%', background: 'white',
+                            boxShadow: '0 0 10px white'
+                        }} />
                     </div>
                 )
             }
@@ -2737,8 +2887,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <defs>
                             <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                                 <polygon points="0 0, 10 3.5, 0 7" fill={
-                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#9f7aea' :
-                                        (dragState.sourceType === 'EVOLVE' ? '#ecc94b' :
+                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#b794f4' :
+                                        (dragState.sourceType === 'EVOLVE' ? '#f6e05e' :
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                 } />
                             </marker>
@@ -2772,7 +2922,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             strokeWidth="6"
                             strokeDasharray="10,5"
                             markerEnd="url(#arrowhead)"
-                            filter={(dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? undefined : `url(#${dragState.sourceType === 'EVOLVE' ? 'yellow' : 'yellow'}Glow)`}
+                            filter={
+                                (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'url(#purpleGlow)' :
+                                    (dragState.sourceType === 'EVOLVE' ? 'url(#yellowGlow)' : 'none')
+                            }
                         />
                     </>
                 )}

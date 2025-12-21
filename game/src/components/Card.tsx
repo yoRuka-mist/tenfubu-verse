@@ -23,6 +23,12 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     const isReady = 'canAttack' in card ? (card as any).canAttack : false;
     const turnPlayed = 'turnPlayed' in card ? (card as any).turnPlayed : undefined;
 
+    // Check if stats are buffed
+    const baseAttack = 'baseAttack' in card ? (card as any).baseAttack : undefined;
+    const baseHealth = 'baseHealth' in card ? (card as any).baseHealth : undefined;
+    const isAttackBuffed = baseAttack !== undefined && attack > baseAttack;
+    const isHealthBuffed = baseHealth !== undefined && (health > baseHealth || maxHealth > baseHealth);
+
     // Determine which image to show (evolved or base)
     const hasEvolved = 'hasEvolved' in card ? (card as any).hasEvolved : false;
     const evolvedImageUrl = 'evolvedImageUrl' in card ? (card as any).evolvedImageUrl : undefined;
@@ -191,7 +197,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                 </defs>
                                 <polygon points="12,2 22,22 2,22" fill="url(#blueGrad)" stroke="white" strokeWidth="1" strokeLinejoin="round" />
                             </svg>
-                            <span style={{ zIndex: 11, color: 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{attack}</span>
+                            <span style={{ zIndex: 11, color: isAttackBuffed ? '#faf089' : 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{attack}</span>
                         </div>
 
                         {/* Health */}
@@ -212,7 +218,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                 </defs>
                                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="url(#redGrad)" stroke="white" strokeWidth="1.5" />
                             </svg>
-                            <span style={{ zIndex: 11, color: isDamaged ? '#fc8181' : 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{health}</span>
+                            <span style={{ zIndex: 11, color: isHealthBuffed ? '#faf089' : isDamaged ? '#fc8181' : 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{health}</span>
                         </div>
                     </>
                 )}
