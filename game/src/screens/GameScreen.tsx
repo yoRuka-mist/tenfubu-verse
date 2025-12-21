@@ -20,7 +20,7 @@ interface GameScreenProps {
 
 
 // --- Visual Effects ---
-const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: number, onComplete: () => void }) => {
+const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
     // Sprite Configuration for Thunder (Updated: 8x8)
     const spriteConfig = {
         cols: 8,
@@ -38,6 +38,37 @@ const AttackEffect = ({ type, x, y, onComplete }: { type: string, x: number, y: 
         const timer = setTimeout(onComplete, duration);
         return () => clearTimeout(timer);
     }, [onComplete, type]);
+
+    // SE Trigger Logic
+    React.useEffect(() => {
+        if (!audioSettings || !audioSettings.enabled) return;
+
+        const playSE = (file: string, volume: number = 0.5, delay: number = 0) => {
+            setTimeout(() => {
+                const audio = new Audio(`/se/${file}`);
+                audio.volume = (audioSettings.se || 0.5) * volume;
+                audio.play().catch(e => console.warn("SE Play prevented", e));
+            }, delay);
+        };
+
+        if (type === 'SHOT') {
+            playSE('shot.mp3', 0.6);
+            playSE('hibi.mp3', 0.4, 400);
+        } else if (type === 'IMPACT') {
+            playSE('panch1.mp3', 0.6, 100);
+            playSE('panch2.mp3', 0.6, 500);
+        } else if (type === 'LIGHTNING') {
+            playSE('thunder.mp3', 0.5);
+        } else if (type === 'FIREBALL') {
+            playSE('explosion.mp3', 0.5);
+        } else if (type === 'SLASH') {
+            playSE('slash.mp3', 0.5);
+        } else if (type === 'ICE') {
+            playSE('ice.mp3', 0.5);
+        } else if (type === 'WATER') {
+            playSE('water.mp3', 0.5);
+        }
+    }, [type, audioSettings]);
 
     const style: React.CSSProperties = {
         position: 'fixed', left: x, top: y, transform: 'translate(-50%, -50%)',
@@ -1002,7 +1033,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // BGM Auto-Play (User Interaction Required usually)
     // BGM Init
     React.useEffect(() => {
-        const bgm = new Audio('/bgm/Green Misty Mountains.mp3');
+        const bgms = ['/bgm/Green Misty Mountains.mp3', '/bgm/ouka.mp3'];
+        const selectedBgm = bgms[Math.floor(Math.random() * bgms.length)];
+        const bgm = new Audio(selectedBgm);
         bgm.loop = true;
         bgm.volume = audioSettings.enabled ? audioSettings.bgm : 0;
         bgmRef.current = bgm;
@@ -1258,19 +1291,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currP = player.hand.length;
         const currO = opponent.hand.length;
 
+        const playSE = (file: string, volume: number = 0.5) => {
+            if (!audioSettings.enabled) return;
+            const audio = new Audio(`/se/${file}`);
+            audio.volume = audioSettings.se * volume;
+            audio.play().catch(e => console.warn("SE Play prevented", e));
+        };
+
         if (currP > prev.player) {
             // Player Drew
             setDrawAnimation({ isPlayer: true, count: currP - prev.player, status: 'FLYING' });
+            playSE('card.mp3', 0.5);
             setTimeout(() => setDrawAnimation(null), 800);
         }
         if (currO > prev.opponent) {
             // Opponent Drew
             setDrawAnimation({ isPlayer: false, count: currO - prev.opponent, status: 'FLYING' });
+            playSE('card.mp3', 0.5);
             setTimeout(() => setDrawAnimation(null), 800);
         }
 
         prevHandSizeRef.current = { player: currP, opponent: currO };
-    }, [player.hand.length, opponent.hand.length]);
+    }, [player.hand.length, opponent.hand.length, audioSettings]);
 
     // --- AI Logic (Restored) ---
 
@@ -2653,7 +2695,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         display: 'flex', alignItems: 'flex-end', height: 160,
                         pointerEvents: 'none',
                         transition: 'all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                        padding: isHandExpanded ? '0 20px 20px 20px' : 0,
+                        padding: isHandExpanded ? '0 20px 5px 20px' : 0,
                         justifyContent: 'center', // Always center, rely on positioning
                         zIndex: 3000 // Higher zIndex
                     }}>
@@ -2686,7 +2728,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                 // Y Position: "Stick to bottom".
                                 // Flat alignment.
-                                translateY = 10; // Pushed down slightly to align with bottom edge
+                                translateY = 45; // Pushed down more to align with bottom edge
 
                                 // Rotation: Small rotation for fan look, but keep it tight?
                                 // Let's keep slight fan but anchored.
@@ -2696,7 +2738,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // EXPANDED Hand Logic (Standard Centered)
                                 const spacing = 130;
                                 offsetX = (i - (player.hand.length - 1) / 2) * spacing;
-                                translateY = -20; // Move up slightly
+                                translateY = 5; // Move down to bottom
                                 rotate = 0; // Flat
                             }
 
@@ -2963,6 +3005,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         x={effect.x}
                         y={effect.y}
                         onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
+                        audioSettings={audioSettings}
                     />
                 ))
             }

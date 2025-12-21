@@ -159,7 +159,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_nayuta', name: 'なゆた', cost: 5, type: 'FOLLOWER',
         attack: 3, health: 3,
         description: 'ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
-        imageUrl: '/cards/nayuta.jpg',
+        imageUrl: '/cards/nayuta.png',
         attackEffectType: 'RAY',
         triggers: [
             { trigger: 'FANFARE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] },
@@ -173,7 +173,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_nayuta_ward', name: 'なゆた', cost: 5, type: 'FOLLOWER',
         attack: 4, health: 4,
         description: '[守護] ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
-        imageUrl: '/cards/nayuta.jpg',
+        imageUrl: '/cards/nayuta.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'RAY',
         triggers: [

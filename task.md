@@ -21,6 +21,10 @@
 - [x] AIロジックの修復（Brace mismatch等）の解消
 - [x] 型エラー（instanceId欠如、player再宣言等）の解消
 - [x] ルイ・ユー進化時のWATERエフェクト追加
+- [x] 「なゆた」のイラスト更新 (nayuta.png)
+- [x] 手札位置の更なる調整 (画面下端への接近)
+- [x] BGMランダム再生実装 (ouka.mp3追加)
+- [x] 効果音(SE)の追加とタイミング調整 (shot, impact, draw)
 
 ## 残りタスク
 - [ ] 勝利・敗北演出の実装
