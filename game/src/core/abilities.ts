@@ -284,12 +284,12 @@ function processSingleEffect(
             const tokenCardId = effect.targetCardId;
             if (!tokenCardId) break;
 
-            // Mock Token for now (generic). 
+            // Mock Token for now (generic).
             const tokenCard: BoardCard = {
                 id: tokenCardId, name: 'Token', cost: 1, type: 'FOLLOWER',
                 attack: 1, health: 1, currentAttack: 1, currentHealth: 1, maxHealth: 1,
                 description: '', canAttack: false, instanceId: `token_${Date.now()}_${Math.random()}`,
-                attacksMade: 0
+                attacksMade: 0, turnPlayed: newState.turnCount
             };
 
             const p = { ...newState.players[playerId] };
@@ -505,7 +505,7 @@ export function canFollowerAttack(card: BoardCard, targetIsLeader: boolean): boo
 }
 
 export function isValidAttackTarget(
-    attackerPlayer: Player,
+    _attackerPlayer: Player,
     targetPlayer: Player,
     targetIsLeader: boolean,
     targetIndex?: number,

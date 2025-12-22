@@ -457,12 +457,31 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT') ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
                 transformStyle: 'preserve-3d'
             }}>
-                {/* Glow Effect */}
+                {/* Outer Background Glow - Yellow for normal evolve, Purple for super evolve */}
                 <div style={{
                     position: 'absolute',
-                    inset: -20,
-                    background: `radial-gradient(circle, rgba(255,255,255,${glowIntensity / 100}) 0%, transparent 70%)`,
-                    borderRadius: 20,
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: 300 + glowIntensity * 3,
+                    height: 400 + glowIntensity * 3,
+                    background: useSep
+                        ? `radial-gradient(ellipse, rgba(159, 122, 234, ${glowIntensity / 80}) 0%, rgba(128, 90, 213, ${glowIntensity / 120}) 30%, transparent 70%)`
+                        : `radial-gradient(ellipse, rgba(251, 211, 141, ${glowIntensity / 80}) 0%, rgba(236, 201, 75, ${glowIntensity / 120}) 30%, transparent 70%)`,
+                    filter: `blur(${20 + glowIntensity / 3}px)`,
+                    pointerEvents: 'none',
+                    opacity: glowIntensity > 10 ? 1 : 0,
+                    transition: 'opacity 0.3s'
+                }} />
+
+                {/* Inner Glow Effect */}
+                <div style={{
+                    position: 'absolute',
+                    inset: -30,
+                    background: useSep
+                        ? `radial-gradient(circle, rgba(183, 148, 244, ${glowIntensity / 60}) 0%, rgba(159, 122, 234, ${glowIntensity / 100}) 40%, transparent 70%)`
+                        : `radial-gradient(circle, rgba(255, 251, 235, ${glowIntensity / 60}) 0%, rgba(251, 211, 141, ${glowIntensity / 100}) 40%, transparent 70%)`,
+                    borderRadius: 30,
                     filter: `blur(${glowIntensity / 2}px)`,
                     pointerEvents: 'none'
                 }} />
@@ -473,7 +492,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     height: 240,
                     borderRadius: 12,
                     overflow: 'hidden',
-                    boxShadow: `0 0 ${30 + glowIntensity}px rgba(255,255,255,0.8)`,
+                    boxShadow: useSep
+                        ? `0 0 ${30 + glowIntensity}px rgba(159, 122, 234, 0.9), 0 0 ${50 + glowIntensity * 1.5}px rgba(128, 90, 213, 0.5)`
+                        : `0 0 ${30 + glowIntensity}px rgba(251, 211, 141, 0.9), 0 0 ${50 + glowIntensity * 1.5}px rgba(236, 201, 75, 0.5)`,
                     position: 'relative'
                 }}>
                     {/* Card Image */}
@@ -811,7 +832,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
     }, [audioSettings]);
     const [showMenu, setShowMenu] = React.useState(false);
-    const [isGameStartAnim, setIsGameStartAnim] = React.useState(true);
+    const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
+    const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
+    const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
 
     // --- Board Stability Helper ---
@@ -1049,44 +1072,73 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }, 300);
     };
 
-    // Initial Game Start Animation (No changes)
+    // Coin Toss and Game Start Animation Sequence
     useEffect(() => {
-        if (gameState.phase === 'INIT') {
-            const timer = setTimeout(() => {
-                setIsGameStartAnim(false);
-                // Transition to Turn 1 (Normally handled by reducer state, but here just visual)
-                // In a real engine, we'd dispatch 'START_MATCH'
-            }, 3000);
-            return () => clearTimeout(timer);
-        } else {
-            setIsGameStartAnim(false);
-        }
-    }, []);
+        if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE') {
+            // Start coin toss animation
+            setCoinTossPhase('TOSSING');
 
-    // BGM Auto-Play (User Interaction Required usually)
-    // BGM Init
+            // Determine result (random for CPU, or based on host status for online)
+            const isFirst = gameMode === 'CPU' ? Math.random() > 0.5 : (gameMode === 'HOST');
+
+            // After toss animation, show result
+            setTimeout(() => {
+                setCoinTossResult(isFirst ? 'FIRST' : 'SECOND');
+                setCoinTossPhase('RESULT');
+
+                // After showing result, show GAME START
+                setTimeout(() => {
+                    setCoinTossPhase('DONE');
+                    setIsGameStartAnim(true);
+
+                    // Hide GAME START after short display
+                    setTimeout(() => {
+                        setIsGameStartAnim(false);
+                    }, 1200);
+                }, 1500);
+            }, 1800);
+        }
+    }, [gameState.phase, coinTossPhase, gameMode]);
+
+    // BGM Auto-Play - Initialize once based on player class
+    const bgmInitializedRef = React.useRef(false);
     React.useEffect(() => {
+        if (bgmInitializedRef.current) return;
+        bgmInitializedRef.current = true;
+
         // Use selected background music based on leader
         const selectedBgm = player.class === 'AJA' ? '/bgm/battle_azya.mp3' : '/bgm/battle_senka.mp3';
         const bgm = new Audio(selectedBgm);
         bgm.loop = true;
-        bgm.volume = audioSettings.enabled ? audioSettings.bgm : 0;
+        bgm.volume = audioSettings.bgm;
         bgmRef.current = bgm;
 
-        if (audioSettings.enabled) {
-            const playPromise = bgm.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.warn("BGM Auto-play prevented:", error);
-                });
+        // Try to play on first user interaction
+        const tryPlay = () => {
+            if (bgmRef.current && bgmRef.current.paused && audioSettings.enabled) {
+                bgmRef.current.play().catch(e => console.warn("BGM play prevented:", e));
             }
+            document.removeEventListener('click', tryPlay);
+            document.removeEventListener('keydown', tryPlay);
+        };
+
+        document.addEventListener('click', tryPlay);
+        document.addEventListener('keydown', tryPlay);
+
+        // Also try immediate play
+        if (audioSettings.enabled) {
+            bgm.play().catch(() => {
+                // Autoplay blocked, waiting for user interaction
+            });
         }
 
         return () => {
             bgm.pause();
             bgm.currentTime = 0;
+            document.removeEventListener('click', tryPlay);
+            document.removeEventListener('keydown', tryPlay);
         };
-    }, [player.class, audioSettings.enabled, audioSettings.bgm]);
+    }, [player.class]); // Only depends on player.class
     useEffect(() => {
         if (!adapter) return;
         adapter.onMessage((msg) => {
@@ -1214,6 +1266,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Handle Evolution Animation Phase Change - use useCallback to prevent unnecessary re-renders
     const handleEvolvePhaseChange = React.useCallback((newPhase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => {
         console.log('[GameScreen] handleEvolvePhaseChange:', newPhase);
+        if (newPhase === 'WHITE_FADE') {
+            playSE('fon.mp3', 0.7); // Evolve sound for all (including opponent)
+        }
         if (newPhase === 'LAND') {
             playSE('gan.mp3', 0.6);
         }
@@ -1391,7 +1446,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 lastProcessedTurn.current = currentTurnKey;
 
                 // Helper to wait for all visual and logical effects to settle
-                const waitForIdle = async (initialDelay = 500) => {
+                const waitForIdle = async (initialDelay = 300) => {
                     // Initial wait for state propagation
                     await new Promise(r => setTimeout(r, initialDelay));
 
@@ -1406,17 +1461,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving;
                     };
 
-                    // Wait until idle
-                    while (!checkIdle()) {
-                        await new Promise(r => setTimeout(r, 200));
+                    // Wait until idle (with timeout to prevent infinite loop)
+                    let waitCount = 0;
+                    while (!checkIdle() && waitCount < 30) {
+                        await new Promise(r => setTimeout(r, 100));
+                        waitCount++;
                     }
-
-                    // Extra pause for readability (User desired 1-few seconds)
-                    await new Promise(r => setTimeout(r, 1200));
                 };
 
-                // 1. Thinking time
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // 1. Thinking time (short pause)
+                await new Promise(resolve => setTimeout(resolve, 800));
                 if (!aiProcessing.current) return;
 
                 // 2. Play MAX Cost Card
@@ -1501,7 +1555,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         });
 
                         // Wait for idle (Animation + Effects)
-                        await waitForIdle(1500);
+                        await waitForIdle(600);
                     }
                 }
 
@@ -1552,7 +1606,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // handleEvolvePhaseChange will set it when animation completes (DONE phase).
 
                                 // Wait for animation sequence (~2s)
-                                await waitForIdle(2500);
+                                await waitForIdle(800);
                             } else {
                                 // Fallback if no visual ref (should be rare)
                                 dispatchAndSend({
@@ -1564,7 +1618,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         targetId: targetId
                                     }
                                 });
-                                await waitForIdle(1000);
+                                await waitForIdle(400);
                             }
                         }
                     }
@@ -1698,7 +1752,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 if (defender && (defender.currentAttack || 0) > 0) hasCounter = true;
                             }
 
-                            await waitForIdle(hasCounter ? 850 : 500);
+                            await waitForIdle(hasCounter ? 500 : 300);
 
                             dispatch({
                                 type: 'ATTACK',
@@ -1706,7 +1760,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 payload: { attackerIndex: i, targetIndex, targetIsLeader }
                             });
 
-                            await waitForIdle(600); // Wait for damage text
+                            await waitForIdle(300); // Wait for damage text
                             break;
                         }
                         if (!actionTaken) continueAttacking = false;
@@ -2617,24 +2671,106 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* ========================================== */}
                 <BattleLog logs={gameState.logs || []} />
 
-                {/* GAME START overlay - always rendered to prevent layout shift */}
-                <div style={{
-                    position: 'absolute', inset: 0, zIndex: 3000,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    opacity: isGameStartAnim ? 1 : 0,
-                    transition: isGameStartAnim ? 'none' : 'opacity 0.5s ease-in 2.5s',
-                    pointerEvents: 'none'
-                }}>
+                {/* Coin Toss Overlay */}
+                {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (
                     <div style={{
-                        fontSize: '4rem', fontWeight: 900, color: '#f6e05e',
-                        textShadow: '0 0 20px rgba(246, 224, 94, 0.8), 0 0 10px black',
-                        background: 'linear-gradient(to right, transparent, rgba(0,0,0,0.8), transparent)',
-                        padding: '20px 50px', width: '100%', textAlign: 'center'
+                        position: 'absolute', inset: 0, zIndex: 4000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(0,0,0,0.85)',
+                        pointerEvents: 'none'
                     }}>
-                        GAME START
-                        <div style={{ fontSize: "1.2rem", color: "white", marginTop: 10, letterSpacing: 5 }}>対戦開始</div>
+                        <div style={{ textAlign: 'center' }}>
+                            {/* Coin */}
+                            <div style={{
+                                width: 120, height: 120, margin: '0 auto 30px',
+                                borderRadius: '50%',
+                                background: coinTossPhase === 'RESULT'
+                                    ? (coinTossResult === 'FIRST' ? 'linear-gradient(135deg, #ffd700, #ff8c00)' : 'linear-gradient(135deg, #c0c0c0, #808080)')
+                                    : 'linear-gradient(135deg, #ffd700, #ff8c00)',
+                                boxShadow: coinTossPhase === 'RESULT'
+                                    ? `0 0 40px ${coinTossResult === 'FIRST' ? '#ffd700' : '#c0c0c0'}, 0 0 80px ${coinTossResult === 'FIRST' ? 'rgba(255,215,0,0.5)' : 'rgba(192,192,192,0.5)'}`
+                                    : '0 0 30px #ffd700',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '3rem', fontWeight: 900, color: '#1a202c',
+                                animation: coinTossPhase === 'TOSSING' ? 'coinFlip 0.3s ease-in-out infinite' : 'coinLand 0.5s ease-out',
+                                border: '4px solid rgba(255,255,255,0.3)'
+                            }}>
+                                {coinTossPhase === 'RESULT' ? (coinTossResult === 'FIRST' ? '先' : '後') : '?'}
+                            </div>
+
+                            {/* Text */}
+                            <div style={{
+                                fontSize: coinTossPhase === 'RESULT' ? '2.5rem' : '1.8rem',
+                                fontWeight: 900,
+                                color: coinTossResult === 'FIRST' ? '#ffd700' : (coinTossResult === 'SECOND' ? '#c0c0c0' : 'white'),
+                                textShadow: '0 0 20px currentColor, 0 2px 4px black',
+                                animation: coinTossPhase === 'RESULT' ? 'textPop 0.5s ease-out' : 'none'
+                            }}>
+                                {coinTossPhase === 'TOSSING' && 'コイントス中...'}
+                                {coinTossPhase === 'RESULT' && (coinTossResult === 'FIRST' ? '先攻' : '後攻')}
+                            </div>
+
+                            {coinTossPhase === 'RESULT' && (
+                                <div style={{
+                                    fontSize: '1rem', color: '#a0aec0', marginTop: 10,
+                                    animation: 'fadeIn 0.5s ease-out 0.3s both'
+                                }}>
+                                    {coinTossResult === 'FIRST' ? 'あなたの先攻です' : '相手の先攻です'}
+                                </div>
+                            )}
+                        </div>
+
+                        <style>{`
+                            @keyframes coinFlip {
+                                0%, 100% { transform: rotateY(0deg) scale(1); }
+                                50% { transform: rotateY(180deg) scale(1.1); }
+                            }
+                            @keyframes coinLand {
+                                0% { transform: rotateY(720deg) scale(0.5); }
+                                70% { transform: rotateY(0deg) scale(1.2); }
+                                100% { transform: rotateY(0deg) scale(1); }
+                            }
+                            @keyframes textPop {
+                                0% { transform: scale(0.5); opacity: 0; }
+                                70% { transform: scale(1.2); }
+                                100% { transform: scale(1); opacity: 1; }
+                            }
+                        `}</style>
                     </div>
-                </div>
+                )}
+
+                {/* GAME START overlay - Rich Animation */}
+                {isGameStartAnim && (
+                    <div style={{
+                        position: 'absolute', inset: 0, zIndex: 3000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(0,0,0,0.7)',
+                        pointerEvents: 'none',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <div style={{
+                            fontSize: '5rem', fontWeight: 900,
+                            background: 'linear-gradient(135deg, #ffd700, #ff6b6b, #ffd700)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            textShadow: 'none',
+                            filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.8)) drop-shadow(0 0 40px rgba(255,107,107,0.5))',
+                            animation: 'gameStartPop 0.8s ease-out',
+                            letterSpacing: '0.2em'
+                        }}>
+                            GAME START
+                        </div>
+
+                        <style>{`
+                            @keyframes gameStartPop {
+                                0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+                                50% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+                                70% { transform: scale(0.95) rotate(-2deg); }
+                                100% { transform: scale(1) rotate(0deg); opacity: 1; }
+                            }
+                        `}</style>
+                    </div>
+                )}
 
                 {/* ========================================== */}
                 {/* PLAYER LEADER - Fixed at bottom center */}
@@ -2847,29 +2983,49 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
             </div>
 
-            {/* Board Ghost Removed - using arrow only */}
+            {/* Evolve Drag Light Orb - Enhanced Glow */}
             {
                 dragState?.sourceType === 'EVOLVE' && (
-                    <div style={{
-                        position: 'fixed', left: dragState.currentX, top: dragState.currentY,
-                        transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                        opacity: 0.9, width: 40, height: 40, borderRadius: '50%',
-                        background: (dragState as any).useSep
-                            ? 'radial-gradient(circle, #fff 0%, #b794f4 40%, #9f7aea 100%)'
-                            : 'radial-gradient(circle, #fff 0%, #f6e05e 40%, #ecc94b 100%)',
-                        boxShadow: (dragState as any).useSep
-                            ? '0 0 20px #9f7aea, 0 0 40px rgba(159, 122, 234, 0.6), 0 0 60px rgba(159, 122, 234, 0.4)'
-                            : '0 0 20px #ecc94b, 0 0 40px rgba(236, 201, 75, 0.6), 0 0 60px rgba(236, 201, 75, 0.4)',
-                        border: '2px solid white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        filter: 'blur(1px)'
-                    }}>
-                        {/* Inner intense light */}
+                    <>
+                        {/* Outer glow layer */}
                         <div style={{
-                            width: 15, height: 15, borderRadius: '50%', background: 'white',
-                            boxShadow: '0 0 10px white'
+                            position: 'fixed', left: dragState.currentX, top: dragState.currentY,
+                            transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 999,
+                            width: 80, height: 80, borderRadius: '50%',
+                            background: (dragState as any).useSep
+                                ? 'radial-gradient(circle, rgba(159, 122, 234, 0.4) 0%, rgba(159, 122, 234, 0.1) 50%, transparent 70%)'
+                                : 'radial-gradient(circle, rgba(236, 201, 75, 0.4) 0%, rgba(236, 201, 75, 0.1) 50%, transparent 70%)',
+                            filter: 'blur(10px)',
+                            animation: 'evolveOrbPulse 1s ease-in-out infinite'
                         }} />
-                    </div>
+                        {/* Main orb */}
+                        <div style={{
+                            position: 'fixed', left: dragState.currentX, top: dragState.currentY,
+                            transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
+                            width: 45, height: 45, borderRadius: '50%',
+                            background: (dragState as any).useSep
+                                ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 20%, #b794f4 50%, #9f7aea 100%)'
+                                : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 20%, #f6e05e 50%, #ecc94b 100%)',
+                            boxShadow: (dragState as any).useSep
+                                ? '0 0 15px #b794f4, 0 0 30px rgba(159, 122, 234, 0.8), 0 0 50px rgba(159, 122, 234, 0.5), 0 0 80px rgba(159, 122, 234, 0.3), inset 0 0 15px rgba(255,255,255,0.5)'
+                                : '0 0 15px #f6e05e, 0 0 30px rgba(236, 201, 75, 0.8), 0 0 50px rgba(236, 201, 75, 0.5), 0 0 80px rgba(236, 201, 75, 0.3), inset 0 0 15px rgba(255,255,255,0.5)',
+                            border: '2px solid rgba(255,255,255,0.8)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            {/* Inner bright core */}
+                            <div style={{
+                                width: 18, height: 18, borderRadius: '50%',
+                                background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.3) 100%)',
+                                boxShadow: '0 0 15px white, 0 0 25px rgba(255,255,255,0.8)'
+                            }} />
+                        </div>
+                        <style>{`
+                            @keyframes evolveOrbPulse {
+                                0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+                                50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+                            }
+                        `}</style>
+                    </>
                 )
             }
 
@@ -2892,21 +3048,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                 } />
                             </marker>
-                            <filter id="yellowGlow" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-                                <feFlood floodColor="#ecc94b" floodOpacity="0.8" result="color" />
-                                <feComposite in="color" in2="blur" operator="in" result="glow" />
+                            <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+                                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+                                <feFlood floodColor="#ffd700" floodOpacity="1" result="color1" />
+                                <feFlood floodColor="#ecc94b" floodOpacity="0.6" result="color2" />
+                                <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+                                <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
                                 <feMerge>
-                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow2" />
+                                    <feMergeNode in="glow1" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
                             </filter>
-                            <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-                                <feFlood floodColor="#9f7aea" floodOpacity="0.8" result="color" />
-                                <feComposite in="color" in2="blur" operator="in" result="glow" />
+                            <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+                                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+                                <feFlood floodColor="#b794f4" floodOpacity="1" result="color1" />
+                                <feFlood floodColor="#9f7aea" floodOpacity="0.6" result="color2" />
+                                <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+                                <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
                                 <feMerge>
-                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow2" />
+                                    <feMergeNode in="glow1" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
                             </filter>

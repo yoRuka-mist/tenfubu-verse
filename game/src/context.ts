@@ -1,4 +1,5 @@
-import { ClassType } from '../core/types';
+import React from 'react';
+import { ClassType } from './core/types';
 
 export interface GameMetadata {
     mode: 'CPU' | 'ONLINE' | 'HOST';
