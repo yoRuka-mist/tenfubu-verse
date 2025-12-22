@@ -1080,6 +1080,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE') {
             // Start coin toss animation
             setCoinTossPhase('TOSSING');
+            playSE('coin.mp3', 0.7); // Coin toss sound
 
             // Determine result (random for CPU, or based on host status for online)
             const isFirst = gameMode === 'CPU' ? Math.random() > 0.5 : (gameMode === 'HOST');
@@ -1101,7 +1102,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }, 1500);
             }, 1800);
         }
-    }, [gameState.phase, coinTossPhase, gameMode]);
+    }, [gameState.phase, coinTossPhase, gameMode, playSE]);
+
 
     // BGM Auto-Play - Initialize once based on player class
     const bgmInitializedRef = React.useRef(false);
