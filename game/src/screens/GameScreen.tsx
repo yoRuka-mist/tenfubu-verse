@@ -1235,7 +1235,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         bgmInitializedRef.current = true;
 
         // Use selected background music based on leader
-        const selectedBgm = player.class === 'AJA' ? '/bgm/battle_azya.mp3' : '/bgm/battle_senka.mp3';
+        const selectedBgm = player.class === 'AJA' ? '/bgm/Green Misty Mountains.mp3' : '/bgm/ouka.mp3';
         const bgm = new Audio(selectedBgm);
         bgm.loop = true;
         bgm.volume = audioSettings.bgm;
@@ -2264,22 +2264,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // 2. Dispatch Action
         if (targetingState.type === 'PLAY') {
             const index = targetingState.sourceIndex;
-            const card = player.hand[index];
+
+            // Use playerRef to ensure we have the latest state
+            const currentPlayer = playerRef.current;
+            const animCard = currentPlayer.hand[index];
+
+            if (!animCard) {
+                console.error('[handleTargetClick] Card not found at index:', index);
+                setTargetingState(null);
+                return;
+            }
 
             // --- C_Y Visuals Trigger ---
-            if (card.id === 'c_y') {
+            if (animCard.id === 'c_y') {
                 // 1. Lightning on Target (Now SUMI)
                 playEffect('SUMI', 'p2', targetIndex);
 
-                // 2. AOE on all OTHER enemies (Logic: Y targets 1, AOE hits others? No, AOE hits ALL enemies)
-                // engine.ts: "AOE_DAMAGE value: 2 targetType: 'ALL_FOLLOWERS'"
-                // Wait, engine logic (AOE_DAMAGE) usually hits All *Other*? Or All?
-                // Text: "逶ｸ謇九・繝輔か繝ｭ繝ｯ繝ｼ1菴薙↓4繝繝｡繝ｼ繧ｸ縲ら嶌謇九・繝輔か繝ｭ繝ｯ繝ｼ縺吶∋縺ｦ縺ｫ2繝繝｡繝ｼ繧ｸ縲・
-                // So it hits the target 4, then hits *everyone* (including target) 2? Or hits *others* 2?
-                // Engine definition: { type: 'AOE_DAMAGE', value: 2, targetType: 'ALL_FOLLOWERS' }
-                // Implementation in processSingleEffect (likely viewed previously) usually hits ALL valid targets.
-                // So visually, we should hit ALL enemy followers.
-
+                // 2. AOE on all OTHER enemies
                 const opponentBoard = gameStateRef.current.players[opponentPlayerId].board; // Safe access via Ref
                 opponentBoard.forEach((c, i) => {
                     if (c) {
@@ -2292,7 +2293,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // --- 退職代行 (s_resignation_proxy) Visuals ---
-            if (card.id === 's_resignation_proxy') {
+            if (animCard.id === 's_resignation_proxy') {
                 // 1. Target enemy destruction effect
                 playEffect('SUMI', targetPlayerId, targetIndex);
 
@@ -2301,9 +2302,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const selfBoard = gameStateRef.current.players[currentPlayerId].board;
                     const validSelfIndices = selfBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                     if (validSelfIndices.length > 0) {
-                        // We don't know EXACTLY which one RNG will pick yet, but visually we can hint at all or pick one to show
-                        // To be accurate, we just show a subtle effect or use the same logic as engine will
-                        // For simplicity, let's just show an effect on the whole board area or a random one
                         const randomIdx = validSelfIndices[Math.floor(Math.random() * validSelfIndices.length)];
                         playEffect('SUMI', currentPlayerId, randomIdx);
                     }
@@ -2315,19 +2313,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
             const startY = window.innerHeight - 100;
 
-            // Use playerRef to ensure we have the latest state
-            const currentPlayer = playerRef.current;
-            const animCard = currentPlayer.hand[index];
-
-            if (!animCard) {
-                console.error('[handleTargetClick] Card not found at index:', index);
-                setTargetingState(null);
-                return;
-            }
-
             // Create onComplete handler that captures necessary values
             const onComplete = () => {
-                const isSpell = card.type === 'SPELL';
+                const isSpell = animCard.type === 'SPELL';
                 if (!isSpell) triggerShake();
                 dispatchAndSend({
                     type: 'PLAY_CARD',
@@ -2336,7 +2324,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 });
 
                 // --- Player amandava FANFARE Visuals ---
-                if (card.id === 'c_amandava') {
+                if (animCard.id === 'c_amandava') {
                     const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
                     opponentBoard.forEach((c, i) => {
                         if (c) {
@@ -2348,7 +2336,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 // --- Player Azya FANFARE Visuals ---
-                if (card.id === 'c_azya') {
+                if (animCard.id === 'c_azya') {
                     // 1. Damage to Leader
                     setTimeout(() => {
                         playEffect('THUNDER', opponentPlayerId, -1);
