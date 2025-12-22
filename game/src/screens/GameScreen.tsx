@@ -304,26 +304,37 @@ interface EvolutionAnimationProps {
     phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND';
     onPhaseChange: (phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND' | 'DONE') => void;
     onShake: () => void;
-    useSep?: boolean; // Add useSep prop
+    useSep?: boolean;
+    playSE?: (file: string, volume?: number) => void;
 }
 
-const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep }) => {
+const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE }) => {
     const [rotateY, setRotateY] = React.useState(0);
+    const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
     const [whiteness, setWhiteness] = React.useState(0);
     const [glowIntensity, setGlowIntensity] = React.useState(0);
     const [scale, setScale] = React.useState(1);
     const [position, setPosition] = React.useState({ x: startX, y: startY });
     const [showParticles, setShowParticles] = React.useState(false);
+    const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; delay: number; }[]>([]);
+    const [burstParticles, setBurstParticles] = React.useState<{ id: number; angle: number; dist: number; size: number; delay: number; }[]>([]);
+    const [vibrate, setVibrate] = React.useState(false);
 
     // Use refs to avoid stale closures
     const onPhaseChangeRef = React.useRef(onPhaseChange);
     const onShakeRef = React.useRef(onShake);
+    const playSERef = React.useRef(playSE);
     React.useEffect(() => {
         onPhaseChangeRef.current = onPhaseChange;
         onShakeRef.current = onShake;
-    }, [onPhaseChange, onShake]);
+        playSERef.current = playSE;
+    }, [onPhaseChange, onShake, playSE]);
 
-    // Phase Timing - only depends on phase now
+    // Card display size (2x larger than before: 180*2=360, 240*2=480)
+    const cardWidth = 360;
+    const cardHeight = 480;
+
+    // Phase Timing
     React.useEffect(() => {
         console.log('[EvolutionAnimation] Phase:', phase);
         let timer: ReturnType<typeof setTimeout>;
@@ -331,91 +342,135 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
         switch (phase) {
             case 'ZOOM_IN':
-                // Start at card position, then animate to center
-                // Board card size: 100x130, Animation card size: 180x240
-                // Scale ratio: 100/180 ≈ 0.55
+                // Start at card position, scale to match board card size initially
                 setPosition({ x: startX, y: startY });
-                setScale(0.55); // Match board card size initially
+                setScale(0.25); // Match board card size (90/360)
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
-                    const boardActualWidth = window.innerWidth - 340; // Sidebar is 340px
-                    const boardCenterX = 340 + (boardActualWidth / 2);
-                    setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 50 });
-                    setScale(1.5); // Zoom in to large size
+                    // Move to left-center of board area (slightly left of center)
+                    const boardActualWidth = window.innerWidth - 340;
+                    const boardCenterX = 340 + (boardActualWidth * 0.42); // Slightly left of center
+                    setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
+                    setScale(1.0); // Full size (2x original)
                 }, 50);
+                // Play kirakira sound when card arrives
+                const kirakiraTimer = setTimeout(() => {
+                    playSERef.current?.('kirakira.mp3', 0.7);
+                }, 600);
                 // Transition to next phase after animation completes
                 const zoomTimer = setTimeout(() => {
                     onPhaseChangeRef.current('WHITE_FADE');
-                }, 650); // 50ms delay + 600ms transition
+                }, 700);
                 return () => {
                     clearTimeout(timer);
                     clearTimeout(zoomTimer);
+                    clearTimeout(kirakiraTimer);
                 };
 
             case 'WHITE_FADE':
-                // Gradually increase whiteness and glow
+                // Create charge particles that will converge toward the card
+                const particles = Array(20).fill(0).map((_, i) => ({
+                    id: i,
+                    angle: (i / 20) * 360 + Math.random() * 20,
+                    delay: Math.random() * 0.8
+                }));
+                setChargeParticles(particles);
+                setVibrate(true);
+
+                // Gradually increase whiteness, glow, and slow rotation (0-10deg)
                 let whiteProgress = 0;
                 intervalId = setInterval(() => {
-                    whiteProgress += 0.05;
+                    whiteProgress += 0.025; // Slower for more dramatic effect
                     setWhiteness(Math.min(whiteProgress, 1));
-                    setGlowIntensity(Math.min(whiteProgress * 50, 50));
+                    setGlowIntensity(Math.min(whiteProgress * 60, 60));
+                    setChargeRotate(whiteProgress * 10); // Slowly rotate 0-10 degrees
                     if (whiteProgress >= 1) {
                         if (intervalId) clearInterval(intervalId);
+                        setVibrate(false);
                         onPhaseChangeRef.current('FLIP');
                     }
-                }, 40);
+                }, 50);
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'FLIP':
-                // 180 degree rotation with ease-in-out
-                const flipDuration = 600; // ms
+                // Play syakin sound at start of flip
+                playSERef.current?.('syakin.mp3', 0.8);
+                // Clear charge particles
+                setChargeParticles([]);
+
+                // Phase 1: Rapid rotation from 10 to 170 degrees with scale increase
+                // Phase 2: Slow rotation from 170 to 180 degrees
                 const flipStartTime = Date.now();
+                const rapidDuration = 400; // Fast flip to 170
+                const slowDuration = 600; // Slow final 10 degrees
+
                 intervalId = setInterval(() => {
                     const elapsed = Date.now() - flipStartTime;
-                    const flipProgress = Math.min(elapsed / flipDuration, 1);
-                    // Ease-in-out cubic
-                    const eased = flipProgress < 0.5
-                        ? 4 * flipProgress * flipProgress * flipProgress
-                        : 1 - Math.pow(-2 * flipProgress + 2, 3) / 2;
-                    setRotateY(eased * 180);
-                    if (flipProgress >= 1) {
-                        if (intervalId) clearInterval(intervalId);
-                        onPhaseChangeRef.current('REVEAL');
+
+                    if (elapsed < rapidDuration) {
+                        // Rapid rotation phase (10 -> 170)
+                        const progress = elapsed / rapidDuration;
+                        // Ease-out for snappy feel
+                        const eased = 1 - Math.pow(1 - progress, 3);
+                        setRotateY(10 + eased * 160); // 10 to 170
+                        setScale(1.0 + eased * 0.3); // Scale up during flip
+                    } else {
+                        // Slow lingering phase (170 -> 180)
+                        const slowProgress = Math.min((elapsed - rapidDuration) / slowDuration, 1);
+                        // Ease-in-out for smooth finish
+                        const slowEased = slowProgress < 0.5
+                            ? 2 * slowProgress * slowProgress
+                            : 1 - Math.pow(-2 * slowProgress + 2, 2) / 2;
+                        setRotateY(170 + slowEased * 10); // 170 to 180
+
+                        // Create burst particles when hitting 180
+                        if (slowProgress > 0.5 && burstParticles.length === 0) {
+                            const burst = Array(25).fill(0).map((_, i) => ({
+                                id: i,
+                                angle: (i / 25) * 360,
+                                dist: 80 + Math.random() * 150,
+                                size: 6 + Math.random() * 12,
+                                delay: Math.random() * 0.15
+                            }));
+                            setBurstParticles(burst);
+                        }
+
+                        if (slowProgress >= 1) {
+                            if (intervalId) clearInterval(intervalId);
+                            onPhaseChangeRef.current('REVEAL');
+                        }
                     }
                 }, 16);
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'REVEAL':
-                // Fade out white effect
+                // Fade out white effect and scale back
                 let revealProgress = 0;
                 intervalId = setInterval(() => {
-                    revealProgress += 0.08;
+                    revealProgress += 0.06;
                     setWhiteness(Math.max(1 - revealProgress, 0));
-                    setGlowIntensity(Math.max(50 - revealProgress * 50, 0));
+                    setGlowIntensity(Math.max(60 - revealProgress * 60, 0));
+                    setScale(1.3 - revealProgress * 0.3); // Scale back to 1
                     if (revealProgress >= 1) {
                         if (intervalId) clearInterval(intervalId);
-                        // Small delay before zoom out
-                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 300);
+                        setBurstParticles([]);
+                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 200);
                     }
                 }, 40);
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'ZOOM_OUT':
-                // Return to original position - animate scale and position
-                // Board card size: 100x130, Animation card size: 180x240
-                // Scale ratio: 100/180 ≈ 0.55
+                // Return to original position quickly with momentum
                 console.log('[EvolutionAnimation] ZOOM_OUT: Returning to', startX, startY);
                 setPosition({ x: startX, y: startY });
-                setScale(0.55); // Return to board card size
-                // Wait for the transition to complete
+                setScale(0.25); // Return to board card size
                 timer = setTimeout(() => {
                     console.log('[EvolutionAnimation] ZOOM_OUT complete, transitioning to LAND');
                     onPhaseChangeRef.current('LAND');
-                }, 700); // Slightly longer than CSS transition (600ms)
+                }, 500);
                 return () => clearTimeout(timer);
 
             case 'LAND':
-                // Trigger shake and particles
                 console.log('[EvolutionAnimation] LAND phase');
                 onShakeRef.current();
                 setShowParticles(true);
@@ -430,44 +485,110 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             if (timer) clearTimeout(timer);
             if (intervalId) clearInterval(intervalId);
         };
-    }, [phase, startX, startY]);
+    }, [phase, startX, startY, burstParticles.length]);
 
     // Determine which image to show based on rotation
     const showEvolvedImage = rotateY > 90 && evolvedImageUrl;
     const imageUrl = showEvolvedImage ? evolvedImageUrl : card.imageUrl;
 
-    // Correct the rotation for back face (so evolved image appears correctly)
+    // Correct the rotation for back face
     const displayRotateY = showEvolvedImage ? rotateY - 180 : rotateY;
+    const totalRotateY = displayRotateY + chargeRotate;
+
+    // Vibration offset
+    const vibrateOffset = vibrate ? {
+        x: (Math.random() - 0.5) * 4,
+        y: (Math.random() - 0.5) * 4
+    } : { x: 0, y: 0 };
 
     return (
         <div style={{
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(0,0,0,0.75)',
             pointerEvents: 'none'
         }}>
+            {/* Charge Particles - Converging toward card */}
+            {chargeParticles.map(p => (
+                <div
+                    key={`charge-${p.id}`}
+                    style={{
+                        position: 'absolute',
+                        left: position.x,
+                        top: position.y,
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.6) 40%, transparent 70%)',
+                        boxShadow: '0 0 15px white, 0 0 30px rgba(255,255,255,0.8)',
+                        filter: 'blur(2px)',
+                        animation: `chargeParticleIn 1.5s ease-in ${p.delay}s forwards`,
+                        transform: `rotate(${p.angle}deg) translateX(300px)`
+                    }}
+                >
+                    <style>{`
+                        @keyframes chargeParticleIn {
+                            0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(300px) scale(1.5); }
+                            30% { opacity: 1; }
+                            100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.3); }
+                        }
+                    `}</style>
+                </div>
+            ))}
+
+            {/* Burst Particles - Exploding outward on evolve */}
+            {burstParticles.map(p => (
+                <div
+                    key={`burst-${p.id}`}
+                    style={{
+                        position: 'absolute',
+                        left: position.x,
+                        top: position.y,
+                        width: p.size,
+                        height: p.size,
+                        borderRadius: '50%',
+                        background: useSep
+                            ? `radial-gradient(circle, rgba(183, 148, 244, 1) 0%, rgba(159, 122, 234, 0.8) 50%, transparent 100%)`
+                            : `radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(251, 211, 141, 0.8) 50%, transparent 100%)`,
+                        boxShadow: useSep
+                            ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)'
+                            : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)',
+                        animation: `burstParticleOut 0.8s ease-out ${p.delay}s forwards`
+                    }}
+                >
+                    <style>{`
+                        @keyframes burstParticleOut {
+                            0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1); }
+                            100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.2); }
+                        }
+                    `}</style>
+                </div>
+            ))}
+
             {/* Card Container */}
             <div style={{
                 position: 'absolute',
-                left: position.x,
-                top: position.y,
-                transform: `translate(-50%, -50%) scale(${scale}) perspective(1000px) rotateY(${displayRotateY}deg)`,
-                transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT') ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+                left: position.x + vibrateOffset.x,
+                top: position.y + vibrateOffset.y,
+                transform: `translate(-50%, -50%) scale(${scale}) perspective(1200px) rotateY(${totalRotateY}deg)`,
+                transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT')
+                    ? 'left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                    : 'none',
                 transformStyle: 'preserve-3d'
             }}>
-                {/* Outer Background Glow - Yellow for normal evolve, Purple for super evolve */}
+                {/* Outer Background Glow */}
                 <div style={{
                     position: 'absolute',
                     left: '50%',
                     top: '50%',
                     transform: 'translate(-50%, -50%)',
-                    width: 300 + glowIntensity * 3,
-                    height: 400 + glowIntensity * 3,
+                    width: cardWidth + 150 + glowIntensity * 4,
+                    height: cardHeight + 200 + glowIntensity * 4,
                     background: useSep
-                        ? `radial-gradient(ellipse, rgba(159, 122, 234, ${glowIntensity / 80}) 0%, rgba(128, 90, 213, ${glowIntensity / 120}) 30%, transparent 70%)`
-                        : `radial-gradient(ellipse, rgba(251, 211, 141, ${glowIntensity / 80}) 0%, rgba(236, 201, 75, ${glowIntensity / 120}) 30%, transparent 70%)`,
-                    filter: `blur(${20 + glowIntensity / 3}px)`,
+                        ? `radial-gradient(ellipse, rgba(159, 122, 234, ${glowIntensity / 70}) 0%, rgba(128, 90, 213, ${glowIntensity / 100}) 30%, transparent 70%)`
+                        : `radial-gradient(ellipse, rgba(251, 211, 141, ${glowIntensity / 70}) 0%, rgba(236, 201, 75, ${glowIntensity / 100}) 30%, transparent 70%)`,
+                    filter: `blur(${25 + glowIntensity / 2}px)`,
                     pointerEvents: 'none',
                     opacity: glowIntensity > 10 ? 1 : 0,
                     transition: 'opacity 0.3s'
@@ -476,24 +597,24 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 {/* Inner Glow Effect */}
                 <div style={{
                     position: 'absolute',
-                    inset: -30,
+                    inset: -50,
                     background: useSep
-                        ? `radial-gradient(circle, rgba(183, 148, 244, ${glowIntensity / 60}) 0%, rgba(159, 122, 234, ${glowIntensity / 100}) 40%, transparent 70%)`
-                        : `radial-gradient(circle, rgba(255, 251, 235, ${glowIntensity / 60}) 0%, rgba(251, 211, 141, ${glowIntensity / 100}) 40%, transparent 70%)`,
-                    borderRadius: 30,
-                    filter: `blur(${glowIntensity / 2}px)`,
+                        ? `radial-gradient(circle, rgba(183, 148, 244, ${glowIntensity / 50}) 0%, rgba(159, 122, 234, ${glowIntensity / 80}) 40%, transparent 70%)`
+                        : `radial-gradient(circle, rgba(255, 251, 235, ${glowIntensity / 50}) 0%, rgba(251, 211, 141, ${glowIntensity / 80}) 40%, transparent 70%)`,
+                    borderRadius: 40,
+                    filter: `blur(${glowIntensity / 1.5}px)`,
                     pointerEvents: 'none'
                 }} />
 
                 {/* Card */}
                 <div style={{
-                    width: 180,
-                    height: 240,
-                    borderRadius: 12,
+                    width: cardWidth,
+                    height: cardHeight,
+                    borderRadius: 16,
                     overflow: 'hidden',
                     boxShadow: useSep
-                        ? `0 0 ${30 + glowIntensity}px rgba(159, 122, 234, 0.9), 0 0 ${50 + glowIntensity * 1.5}px rgba(128, 90, 213, 0.5)`
-                        : `0 0 ${30 + glowIntensity}px rgba(251, 211, 141, 0.9), 0 0 ${50 + glowIntensity * 1.5}px rgba(236, 201, 75, 0.5)`,
+                        ? `0 0 ${40 + glowIntensity}px rgba(159, 122, 234, 0.9), 0 0 ${70 + glowIntensity * 2}px rgba(128, 90, 213, 0.5)`
+                        : `0 0 ${40 + glowIntensity}px rgba(251, 211, 141, 0.9), 0 0 ${70 + glowIntensity * 2}px rgba(236, 201, 75, 0.5)`,
                     position: 'relative'
                 }}>
                     {/* Card Image */}
@@ -504,7 +625,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             width: '100%',
                             height: '100%',
                             objectFit: 'cover',
-                            filter: `brightness(${1 + whiteness}) contrast(${1 - whiteness * 0.3})`
+                            filter: `brightness(${1 + whiteness * 0.5}) contrast(${1 - whiteness * 0.2})`
                         }}
                     />
 
@@ -512,7 +633,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     <div style={{
                         position: 'absolute',
                         inset: 0,
-                        background: `rgba(255,255,255,${whiteness * 0.9})`,
+                        background: `rgba(255,255,255,${whiteness * 0.85})`,
                         pointerEvents: 'none'
                     }} />
                 </div>
@@ -526,10 +647,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     top: startY,
                     pointerEvents: 'none'
                 }}>
-                    {Array(15).fill(0).map((_, i) => {
-                        const angle = (i / 15) * 360;
-                        const dist = 30 + Math.random() * 80;
-                        const size = 4 + Math.random() * 8;
+                    {Array(20).fill(0).map((_, i) => {
+                        const angle = (i / 20) * 360;
+                        const dist = 40 + Math.random() * 100;
+                        const size = 5 + Math.random() * 10;
                         const delay = Math.random() * 0.2;
                         return (
                             <div
@@ -538,12 +659,11 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                                     position: 'absolute',
                                     width: size,
                                     height: size,
-                                    // Violet for SEP, Golden for normal EP
                                     background: useSep
                                         ? `hsl(${260 + Math.random() * 40}, 80%, ${70 + Math.random() * 20}%)`
                                         : `hsl(${50 + Math.random() * 20}, 100%, ${70 + Math.random() * 30}%)`,
                                     borderRadius: '50%',
-                                    boxShadow: useSep ? '0 0 6px rgba(159, 122, 234, 0.8)' : '0 0 6px rgba(255,215,0,0.8)',
+                                    boxShadow: useSep ? '0 0 8px rgba(159, 122, 234, 0.8)' : '0 0 8px rgba(255,215,0,0.8)',
                                     animation: `evolveParticle 0.8s ease-out ${delay}s forwards`
                                 }}
                             >
@@ -2608,9 +2728,57 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         pointerEvents: 'auto',
                                         zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                     }}>
+                                    {/* Evolve Target Marker */}
+                                    {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: 130,
+                                            height: 130,
+                                            pointerEvents: 'none',
+                                            zIndex: 100
+                                        }}>
+                                            <svg viewBox="0 0 100 100" style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                animation: 'evolveMarkerSpin 2s linear infinite'
+                                            }}>
+                                                <defs>
+                                                    <filter id={(dragState as any).useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-50%" y="-50%" width="200%" height="200%">
+                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                                                        <feMerge>
+                                                            <feMergeNode in="blur" />
+                                                            <feMergeNode in="SourceGraphic" />
+                                                        </feMerge>
+                                                    </filter>
+                                                </defs>
+                                                <circle cx="50" cy="50" r="45" fill="none"
+                                                    stroke={(dragState as any).useSep ? '#b794f4' : '#f6e05e'}
+                                                    strokeWidth="3"
+                                                    strokeDasharray="20 10"
+                                                    filter={`url(#${(dragState as any).useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
+                                                    opacity="0.9"
+                                                />
+                                                {/* Corner Arrows */}
+                                                <polygon points="50,5 45,15 55,15" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="95,50 85,45 85,55" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="50,95 55,85 45,85" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="5,50 15,55 15,45" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
+                                            </svg>
+                                            <style>{`
+                                                @keyframes evolveMarkerSpin {
+                                                    0% { transform: translate(-50%, -50%) rotate(0deg); }
+                                                    100% { transform: translate(-50%, -50%) rotate(360deg); }
+                                                }
+                                            `}</style>
+                                        </div>
+                                    )}
                                     {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                 </div>
                             );
+
                         })}
                     </div>
                 </div>
@@ -3163,10 +3331,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         phase={evolveAnimation.phase}
                         onPhaseChange={handleEvolvePhaseChange}
                         onShake={triggerShake}
-                        useSep={evolveAnimation.useSep} // Pass useSep
+                        useSep={evolveAnimation.useSep}
+                        playSE={playSE}
                     />
                 )
             }
+
 
             {/* --- Game Over Overlay --- */}
             {
