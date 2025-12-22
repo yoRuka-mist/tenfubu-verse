@@ -688,8 +688,11 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
 export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave }) => {
     const { adapter, connected } = useGameNetwork(gameMode, targetRoomId);
 
+    // CPU対戦時は相手クラスを自分と反対にする
+    const opponentClass: ClassType = playerClass === 'SENKA' ? 'AJA' : 'SENKA';
+
     const [gameState, dispatch] = useReducer(gameReducer, null, () =>
-        initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', 'AJA')
+        initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass)
     );
 
     const currentPlayerId = 'p1';

@@ -517,6 +517,69 @@ const MOCK_CARDS: Card[] = [
                 ]
             }
         ]
+    },
+    // --- ユウリ & 水氷龍 ---
+    {
+        id: 'c_yuri', name: 'ユウリ', cost: 5, type: 'FOLLOWER',
+        attack: 3, health: 3,
+        description: 'ファンファーレ：「水氷龍」を場に出す。進化時：相手のフォロワー1体に3ダメージ。',
+        imageUrl: '/cards/yuri.png',
+        evolvedImageUrl: '/cards/yuri_2.png',
+        attackEffectType: 'WATER',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'SUMMON_CARD', targetCardId: 'TOKEN_SUIHYORYU' }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'DAMAGE', value: 3, targetType: 'SELECT_FOLLOWER' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'TOKEN_SUIHYORYU', name: '水氷龍', cost: 5, type: 'FOLLOWER',
+        attack: 4, health: 4,
+        description: '[突進] [守護] 次の自分のターン開始時、このフォロワーは破壊される',
+        imageUrl: '/cards/suihyoryu.png',
+        evolvedImageUrl: '/cards/suihyoryu.png',
+        tags: ['Token'],
+        passiveAbilities: ['RUSH', 'WARD'],
+        attackEffectType: 'ICE',
+        triggers: [
+            {
+                trigger: 'START_OF_TURN',
+                effects: [
+                    { type: 'DESTROY_SELF' }
+                ]
+            }
+        ]
+    },
+    // --- 大和 ---
+    {
+        id: 'c_yamato', name: '大和', cost: 7, type: 'FOLLOWER',
+        attack: 5, health: 5,
+        description: 'ファンファーレ：ランダムな相手のフォロワー1体を破壊。進化時：ランダムな相手のフォロワー1体を破壊。',
+        imageUrl: '/cards/yamato.jpg',
+        attackEffectType: 'SLASH',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
+                ]
+            }
+        ]
     }
 ];
 
@@ -559,25 +622,78 @@ export function calculateStateHash(state: GameState): string {
     return components.join('|');
 }
 
+// --- 構築済みデッキ定義 ---
+const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+    { cardId: 'c_senka_knuckler', count: 3 },  // せんか
+    { cardId: 'c_yuki', count: 3 },             // ユキ
+    { cardId: 'c_white_tsubaki', count: 3 },    // 無敵の闘士　白ツバキ
+    { cardId: 'c_shieko', count: 3 },           // しゑこ
+    { cardId: 's_samurai_tea', count: 3 },      // 侍茶
+    { cardId: 'c_bucchi', count: 3 },           // ぶっちー
+    { cardId: 'c_potechi', count: 3 },          // ぽてち
+    { cardId: 's_tenfubu_yabe_hutari', count: 3 }, // てんふぶのヤベー2人
+    { cardId: 'c_yamato', count: 2 },           // 大和
+    { cardId: 'c_kyokune', count: 2 },          // 曲音
+    { cardId: 'c_mono', count: 3 },             // Mono
+    { cardId: 'c_ruiyu', count: 2 },            // ルイ・ユー
+    { cardId: 'c_y', count: 2 },                // Y
+    { cardId: 'c_sara', count: 1 },             // sara
+    { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
+    { cardId: 'c_blue_tsubaki', count: 3 },     // 青ツバキ
+];
+
+const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+    { cardId: 'c_azya', count: 3 },             // あじゃ
+    { cardId: 'c_ruiyu', count: 3 },            // ルイ・ユー
+    { cardId: 'c_y', count: 3 },                // Y
+    { cardId: 'c_sara', count: 3 },             // sara
+    { cardId: 'c_yunagi', count: 3 },           // ゆうなぎ
+    { cardId: 'c_tsubumaru', count: 3 },        // つぶまる
+    { cardId: 'c_nayuta', count: 3 },           // なゆた
+    { cardId: 'c_yuri', count: 2 },             // ユウリ
+    { cardId: 'c_urara', count: 3 },            // ウララ
+    { cardId: 'c_kasuga', count: 1 },           // かすが
+    { cardId: 'c_barura', count: 3 },           // バルラ
+    { cardId: 'c_valkyrie', count: 3 },         // ヴァルキリー
+    { cardId: 's_3cats', count: 3 },            // 茶トラ
+    { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
+    { cardId: 'c_amandava', count: 3 },         // amandava
+];
+
+// Helper to get card definition by ID
+export function getCardDefinition(cardId: string): Card | undefined {
+    return MOCK_CARDS.find(c => c.id === cardId);
+}
+
+// Build deck from template
+function buildDeckFromTemplate(template: { cardId: string, count: number }[], playerId: string): Card[] {
+    const deck: Card[] = [];
+    let cardIndex = 0;
+
+    template.forEach(entry => {
+        const cardDef = getCardDefinition(entry.cardId);
+        if (cardDef) {
+            for (let i = 0; i < entry.count; i++) {
+                deck.push({
+                    ...cardDef,
+                    id: `${playerId}_c${cardIndex}`,
+                    instanceId: `inst_${playerId}_c${cardIndex}`
+                } as Card);
+                cardIndex++;
+            }
+        } else {
+            console.warn(`Card definition not found: ${entry.cardId}`);
+        }
+    });
+
+    return deck;
+}
+
 export function createPlayer(id: string, name: string, cls: ClassType, rng: () => number): Player {
-    // Filter out tokens and special variants from the deck
-    const deckCards = MOCK_CARDS.filter(c =>
-        !c.id.startsWith('TOKEN') &&
-        !c.tags?.includes('Token') && // Exclude cards with 'Token' tag
-        c.id !== 'c_yunagi_ward' &&
-        c.id !== 'c_nayuta_ward' &&
-        // c.id !== 'c_tsubumaru' && // Enable Tsubumaru in deck
-        c.id !== 'c_sia'
-    );
-    // Tsubumaru (id: c_tsubumaru) is defined as a card in MOCK_CARDS (Line 86). 
-    // Azya summons it. Is it a token or a playable card? 
-    // Azya description: "Summon Tsubumaru...". Usually implies token.
-    // User request: "Yunagi and Nayuta having Ward from start".
-    // I will exclude the _ward variants. Tsubumaru might be a token too. I'll exclude it to be safe if it's meant to be a token.
+    // Select deck template based on class
+    const template = cls === 'SENKA' ? SENKA_DECK_TEMPLATE : AJA_DECK_TEMPLATE;
+    const rawDeck = buildDeckFromTemplate(template, id);
 
-    // Also ensuring Yunagi/Nayuta BASE cards are included. They are.
-
-    const rawDeck = Array(40).fill(null).map((_, i) => ({ ...deckCards[i % deckCards.length], id: `${id}_c${i}`, instanceId: `inst_${id}_c${i}` }));
     return {
         id,
         name,
@@ -1113,6 +1229,32 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const nextPlayerId = getOpponentId(activePlayerId);
             const nextPlayer = newState.players[nextPlayerId];
 
+            // Trigger START_OF_TURN effects for next player (before PP/draw)
+            nextPlayer.board.forEach((c, idx) => {
+                if (c && c.triggers) {
+                    c.triggers.filter(t => t.trigger === 'START_OF_TURN').forEach(t => {
+                        t.effects.forEach(e => {
+                            if (e.type === 'DESTROY_SELF') {
+                                // Immediate self-destruction
+                                if (c) {
+                                    newState.players[nextPlayerId].graveyard.push(c);
+                                    newState.players[nextPlayerId].board[idx] = null;
+                                    newState.logs.push(`${c.name} は破壊されました`);
+                                }
+                            } else {
+                                newPendingEffects.push({
+                                    sourceCard: c,
+                                    effect: e,
+                                    sourcePlayerId: nextPlayerId
+                                });
+                            }
+                        });
+                    });
+                }
+            });
+            // Clean up null slots from START_OF_TURN destructions
+            newState.players[nextPlayerId].board = newState.players[nextPlayerId].board.filter(Boolean) as (BoardCard | null)[];
+
             // PP Logic: Max 10. Increment by 1.
             nextPlayer.maxPp = Math.min(10, nextPlayer.maxPp + 1);
             nextPlayer.pp = nextPlayer.maxPp;
@@ -1554,7 +1696,4 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
     }
 };
 
-// Helper for UI to get card details by ID (for animations etc)
-export function getCardDefinition(id: string): Card | undefined {
-    return MOCK_CARDS.find(c => c.id === id);
-}
+// getCardDefinition is defined above (line 664)
