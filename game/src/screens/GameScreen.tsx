@@ -319,6 +319,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; delay: number; }[]>([]);
     const [burstParticles, setBurstParticles] = React.useState<{ id: number; angle: number; dist: number; size: number; delay: number; }[]>([]);
     const [vibrate, setVibrate] = React.useState(false);
+    const burstCreatedRef = React.useRef(false); // Track if burst particles have been created
+
 
     // Use refs to avoid stale closures
     const onPhaseChangeRef = React.useRef(onPhaseChange);
@@ -349,7 +351,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 timer = setTimeout(() => {
                     // Move to left-center of board area (slightly left of center)
                     const boardActualWidth = window.innerWidth - 340;
-                    const boardCenterX = 340 + (boardActualWidth * 0.42); // Slightly left of center
+                    const boardCenterX = 340 + (boardActualWidth * 0.35); // More left of center
                     setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
                     setScale(1.0); // Full size (2x original)
                 }, 50);
@@ -369,10 +371,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
             case 'WHITE_FADE':
                 // Create charge particles that will converge toward the card
-                const particles = Array(20).fill(0).map((_, i) => ({
+                const particles = Array(40).fill(0).map((_, i) => ({
                     id: i,
-                    angle: (i / 20) * 360 + Math.random() * 20,
-                    delay: Math.random() * 0.8
+                    angle: (i / 40) * 360 + Math.random() * 15,
+                    delay: Math.random() * 1.0
                 }));
                 setChargeParticles(particles);
                 setVibrate(true);
@@ -423,14 +425,15 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             : 1 - Math.pow(-2 * slowProgress + 2, 2) / 2;
                         setRotateY(170 + slowEased * 10); // 170 to 180
 
-                        // Create burst particles when hitting 180
-                        if (slowProgress > 0.5 && burstParticles.length === 0) {
-                            const burst = Array(25).fill(0).map((_, i) => ({
+                        // Create burst particles when hitting midway (using ref to prevent double creation)
+                        if (slowProgress > 0.5 && !burstCreatedRef.current) {
+                            burstCreatedRef.current = true;
+                            const burst = Array(50).fill(0).map((_, i) => ({
                                 id: i,
-                                angle: (i / 25) * 360,
-                                dist: 80 + Math.random() * 150,
-                                size: 6 + Math.random() * 12,
-                                delay: Math.random() * 0.15
+                                angle: (i / 50) * 360 + Math.random() * 10,
+                                dist: 100 + Math.random() * 200,
+                                size: 8 + Math.random() * 16,
+                                delay: Math.random() * 0.2
                             }));
                             setBurstParticles(burst);
                         }
@@ -485,7 +488,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             if (timer) clearTimeout(timer);
             if (intervalId) clearInterval(intervalId);
         };
-    }, [phase, startX, startY, burstParticles.length]);
+    }, [phase, startX, startY]);
 
     // Determine which image to show based on rotation
     const showEvolvedImage = rotateY > 90 && evolvedImageUrl;
@@ -834,7 +837,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         currentY: number;
         offsetX: number;
         offsetY: number;
-        isSuper?: boolean; // Add isSuper flag
+        useSep?: boolean; // SEP (Super Evolve Point) flag
     } | null>(null);
 
     const [hoveredTarget, setHoveredTarget] = React.useState<{
@@ -1298,7 +1301,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         currentY: number;
         offsetX: number;
         offsetY: number;
-        isSuper?: boolean;
+        useSep?: boolean;
     } | null>(null);
 
     // Card Play Animation State
@@ -1586,9 +1589,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving;
                     };
 
-                    // Wait until idle (with timeout to prevent infinite loop)
+                    // Wait until idle (with timeout to prevent infinite loop - increased for evolution animations)
                     let waitCount = 0;
-                    while (!checkIdle() && waitCount < 30) {
+                    while (!checkIdle() && waitCount < 60) { // 60 * 100ms = 6 seconds max wait
                         await new Promise(r => setTimeout(r, 100));
                         waitCount++;
                     }
@@ -1962,13 +1965,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // Evolve Drag
-    const handleEvolveMouseDown = (e: React.MouseEvent, isSuper: boolean = false) => {
+    const handleEvolveMouseDown = (e: React.MouseEvent, useSepFlag: boolean = false) => {
         if (gameState.activePlayerId !== currentPlayerId) return;
         e.stopPropagation();
 
         // Client-side visual check
         const isFirstPlayer = currentPlayerId === 'p1';
-        if (isSuper) {
+        if (useSepFlag) {
             if (player.sep <= 0) return;
         } else {
             if (!canEvolve(player, gameState.turnCount, isFirstPlayer)) return;
@@ -1983,7 +1986,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             currentY: e.clientY,
             offsetX: 0,
             offsetY: 0,
-            isSuper
+            useSep: useSepFlag
         };
         setDragState(newState);
         dragStateRef.current = newState;
@@ -2176,7 +2179,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
                         // Start evolution animation instead of direct dispatch
-                        handleEvolveWithAnimation(followerIndex, (currentDrag as any).isSuper);
+                        handleEvolveWithAnimation(followerIndex, (currentDrag as any).useSep);
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     }
@@ -2311,49 +2314,74 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const sidebarWidth = 340;
             const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
             const startY = window.innerHeight - 100;
-            // We can reuse play animation logic here or simplfy
+
+            // Use playerRef to ensure we have the latest state
+            const currentPlayer = playerRef.current;
+            const animCard = currentPlayer.hand[index];
+
+            if (!animCard) {
+                console.error('[handleTargetClick] Card not found at index:', index);
+                setTargetingState(null);
+                return;
+            }
+
+            // Create onComplete handler that captures necessary values
+            const onComplete = () => {
+                const isSpell = card.type === 'SPELL';
+                if (!isSpell) triggerShake();
+                dispatchAndSend({
+                    type: 'PLAY_CARD',
+                    playerId: currentPlayerId,
+                    payload: { cardIndex: index, targetId }
+                });
+
+                // --- Player amandava FANFARE Visuals ---
+                if (card.id === 'c_amandava') {
+                    const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                    opponentBoard.forEach((c, i) => {
+                        if (c) {
+                            setTimeout(() => {
+                                playEffect('SHOT', opponentPlayerId, i);
+                            }, 200);
+                        }
+                    });
+                }
+
+                // --- Player Azya FANFARE Visuals ---
+                if (card.id === 'c_azya') {
+                    // 1. Damage to Leader
+                    setTimeout(() => {
+                        playEffect('THUNDER', opponentPlayerId, -1);
+                    }, 200);
+
+                    // 2. Destroy Target
+                    setTimeout(() => {
+                        playEffect('THUNDER', targetPlayerId, targetIndex);
+                    }, 400);
+                }
+
+                setPlayingCardAnim(null);
+            };
+
             setPlayingCardAnim({
-                card: player.hand[index],
+                card: animCard,
                 startX, startY,
                 targetX: sidebarWidth + (window.innerWidth - sidebarWidth) / 2, // Center of Board
                 targetY: window.innerHeight / 2,
-                onComplete: () => {
-                    const isSpell = card.type === 'SPELL';
-                    if (!isSpell) triggerShake();
-                    dispatchAndSend({
-                        type: 'PLAY_CARD',
-                        playerId: currentPlayerId,
-                        payload: { cardIndex: index, targetId }
-                    });
-
-                    // --- Player amandava FANFARE Visuals ---
-                    if (card.id === 'c_amandava') {
-                        const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
-                        opponentBoard.forEach((c, i) => {
-                            if (c) {
-                                setTimeout(() => {
-                                    playEffect('SHOT', opponentPlayerId, i);
-                                }, 200);
-                            }
-                        });
-                    }
-
-                    // --- Player Azya FANFARE Visuals ---
-                    if (card.id === 'c_azya') {
-                        // 1. Damage to Leader
-                        setTimeout(() => {
-                            playEffect('THUNDER', opponentPlayerId, -1);
-                        }, 200);
-
-                        // 2. Destroy Target
-                        setTimeout(() => {
-                            playEffect('THUNDER', targetPlayerId, targetIndex);
-                        }, 400);
-                    }
-
-                    setPlayingCardAnim(null);
-                }
+                onComplete
             });
+
+            // Safety fallback (2s) - Same as handlePlayCard
+            setTimeout(() => {
+                setPlayingCardAnim(prev => {
+                    if (prev?.card.id === animCard.id) {
+                        // If still playing same card, force complete
+                        onComplete();
+                        return null;
+                    }
+                    return prev;
+                });
+            }, 2000);
         } else if (targetingState.type === 'EVOLVE') {
             // Start evolution animation with target
             handleEvolveWithAnimation(targetingState.sourceIndex, false, targetId);
@@ -2621,7 +2649,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
                     }}>
                         <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', border: '1px solid rgba(255,255,255,0.5)' }} />)}
+                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                         </div>
                     </div>
 
@@ -2632,7 +2660,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
                     }}>
                         <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', border: '1px solid rgba(255,255,255,0.5)' }} />)}
+                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                         </div>
                     </div>
                 </div>
@@ -2732,21 +2760,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
                                         <div style={{
                                             position: 'absolute',
-                                            top: '50%',
-                                            left: '50%',
+                                            top: 60, // Center of card height (120/2)
+                                            left: 45, // Center of card width (90/2)
                                             transform: 'translate(-50%, -50%)',
-                                            width: 130,
-                                            height: 130,
+                                            width: 120,
+                                            height: 120,
                                             pointerEvents: 'none',
                                             zIndex: 100
                                         }}>
                                             <svg viewBox="0 0 100 100" style={{
                                                 width: '100%',
                                                 height: '100%',
-                                                animation: 'evolveMarkerSpin 2s linear infinite'
+                                                animation: 'evolveMarkerSpin 1.5s linear infinite'
                                             }}>
                                                 <defs>
-                                                    <filter id={(dragState as any).useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-50%" y="-50%" width="200%" height="200%">
+                                                    <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-50%" y="-50%" width="200%" height="200%">
                                                         <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
                                                         <feMerge>
                                                             <feMergeNode in="blur" />
@@ -2755,17 +2783,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     </filter>
                                                 </defs>
                                                 <circle cx="50" cy="50" r="45" fill="none"
-                                                    stroke={(dragState as any).useSep ? '#b794f4' : '#f6e05e'}
-                                                    strokeWidth="3"
-                                                    strokeDasharray="20 10"
-                                                    filter={`url(#${(dragState as any).useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
-                                                    opacity="0.9"
+                                                    stroke={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                    strokeWidth="4"
+                                                    strokeDasharray="15 8"
+                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
+                                                    opacity="0.95"
                                                 />
                                                 {/* Corner Arrows */}
-                                                <polygon points="50,5 45,15 55,15" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="95,50 85,45 85,55" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="50,95 55,85 45,85" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="5,50 15,55 15,45" fill={(dragState as any).useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="50,5 45,15 55,15" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="95,50 85,45 85,55" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="50,95 55,85 45,85" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
+                                                <polygon points="5,50 15,55 15,45" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
                                             </svg>
                                             <style>{`
                                                 @keyframes evolveMarkerSpin {
