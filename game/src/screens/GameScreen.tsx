@@ -25,7 +25,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     const spriteConfig = React.useMemo(() => {
         let cols = 8;
         let rows = 8;
-        let fps = 60;
+        let fps = 100; // Faster sprites
         let size = 256;
 
         if (type === 'SHOT') {
@@ -40,7 +40,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE'].includes(type);
         const duration = isSprite
             ? (spriteConfig.cols * spriteConfig.rows) / spriteConfig.fps * 1000
-            : 800;
+            : (type === 'FIREBALL' ? 500 : 400); // Snappy for FLASH/BEAM/SLASH
 
         const timer = setTimeout(onComplete, duration);
         return () => clearTimeout(timer);
@@ -338,7 +338,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 setScale(0.55); // Match board card size initially
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
-                    setPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 - 50 });
+                    const boardActualWidth = window.innerWidth - 340; // Sidebar is 340px
+                    const boardCenterX = 340 + (boardActualWidth / 2);
+                    setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 50 });
                     setScale(1.5); // Zoom in to large size
                 }, 50);
                 // Transition to next phase after animation completes
@@ -443,9 +445,6 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             inset: 0,
             zIndex: 10000,
             background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
             pointerEvents: 'none'
         }}>
             {/* Card Container */}
@@ -839,6 +838,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
+    const handJustExpandedRef = React.useRef(false); // 手札を展開した直後かどうか
 
     // --- Board Stability Helper ---
     const [shake, setShake] = React.useState(false); // Screen Shake State
@@ -1739,14 +1739,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     setTimeout(() => {
                                         // Use defender's effect type, targeting the attacker (index i on opponent board)
                                         playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, i);
-                                    }, 400); // Overlap: Starts 400ms after Attacker starts
+                                    }, 200); // Shorter overlap
                                 }
                             }
 
                             actionTaken = true;
-
-
-
 
                             // Check for Counter to optimize wait
                             let hasCounter = false;
@@ -1755,7 +1752,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 if (defender && (defender.currentAttack || 0) > 0) hasCounter = true;
                             }
 
-                            await waitForIdle(hasCounter ? 500 : 300);
+                            await waitForIdle(hasCounter ? 350 : 250);
 
                             dispatch({
                                 type: 'ATTACK',
@@ -1763,7 +1760,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 payload: { attackerIndex: i, targetIndex, targetIsLeader }
                             });
 
-                            await waitForIdle(300); // Wait for damage text
+                            await waitForIdle(200); // Wait for damage text
                             break;
                         }
                         if (!actionTaken) continueAttacking = false;
@@ -1806,9 +1803,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         if (!isHandExpanded) {
             setIsHandExpanded(true);
             setSelectedCard({ card, owner: 'PLAYER' });
-            // Set Ignore for BG Click
-            ignoreClickRef.current = true;
-            setTimeout(() => { ignoreClickRef.current = false; }, 100);
+            // 展開した直後フラグを立てる（次のクリックまで折りたたまない）
+            handJustExpandedRef.current = true;
             return;
         }
 
@@ -2012,11 +2008,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         // Defender (Opponent) attacks Attacker (Player index sourceIndex)
                                         setTimeout(() => {
                                             playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, currentDrag.sourceIndex);
-                                        }, 400);
+                                        }, 200);
                                     }
                                 }
 
-                                // Delay Dispatch to match animation duration (approx 400-600ms)
+                                // Delay Dispatch to match animation impact point (approx 300-350ms)
                                 setTimeout(() => {
                                     dispatchAndSend({
                                         type: 'ATTACK',
@@ -2027,7 +2023,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             targetIsLeader: targetIsLeader
                                         }
                                     });
-                                }, 500); // Wait 500ms for animation impact
+                                }, 350); // Wait 350ms for animation impact (snappier)
                             }
                         }
                     } else {
@@ -2084,6 +2080,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
         // Only close hand if it's expanded AND we're clicking outside (not selecting a card)
         if (isHandExpanded) {
+            // 展開直後のクリックでは折りたたまない
+            if (handJustExpandedRef.current) {
+                handJustExpandedRef.current = false;
+                return;
+            }
             setIsHandExpanded(false);
             setSelectedCard(null);
         }
@@ -2319,46 +2320,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     対象を選択してください
                 </div>
             )}
-            {/* Play Card Animation Overlay */}
-            {playingCardAnim && (
-                <div style={{
-                    position: 'absolute', inset: 0, zIndex: 9999,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    pointerEvents: 'auto'
-                }}>
-                    <div
-                        onAnimationEnd={playingCardAnim.onComplete}
-                        style={{
-                            // Spells fade out with sparkles, Followers slam
-                            animation: playingCardAnim.card.type === 'SPELL'
-                                ? 'playSpellSequence 1s forwards'
-                                : 'playCardSequence 0.8s forwards'
-                        }}
-                    >
-                        <style>{`
-                            @keyframes playCardSequence {
-                                0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
-                                50% { transform: translate(0, 0) scale(0.8); opacity: 1; }
-                                70% { transform: translate(0, 0) scale(0.9); opacity: 1; }
-                                100% { transform: translate(0, 0) scale(1.0); opacity: 0; }
-                            }
-                            @keyframes playSpellSequence {
-                                0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
-                                40% { transform: translate(0, 0) scale(1.0); opacity: 1; filter: brightness(1); }
-                                80% { transform: translate(0, 0) scale(1.1); opacity: 1; filter: brightness(1.2); }
-                                100% { transform: translate(0, 0) scale(1.5); opacity: 0; filter: brightness(3); }
-                            }
-                        `}</style>
-                        <Card card={playingCardAnim.card} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
-                        {playingCardAnim.card.type === 'SPELL' && (
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <SparkleBurst x={0} y={0} />
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+
 
 
 
@@ -2607,7 +2569,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         cursor: targetingState ? 'crosshair' : 'pointer',
                                         pointerEvents: 'auto'
                                     }}>
-                                    {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation?.card.instanceId === c.instanceId) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                 </div>
                             );
                         })}
@@ -2644,7 +2606,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         pointerEvents: 'auto',
                                         zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                     }}>
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation?.card.instanceId === c.instanceId) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                 </div>
                             );
                         })}
@@ -3102,14 +3064,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             {
                 playingCardAnim && (
                     <div style={{
-                        position: 'fixed', inset: 0, zIndex: 9999,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        pointerEvents: 'auto'
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 9999,
+                        pointerEvents: 'auto',
+                        background: 'rgba(0,0,0,0.5)'
                     }}>
                         <div
                             onAnimationEnd={playingCardAnim.onComplete}
                             style={{
+                                position: 'absolute',
+                                left: playingCardAnim.targetX,
+                                top: playingCardAnim.targetY,
+                                transform: 'translate(-50%, -50%)',
                                 animation: playingCardAnim.card.type === 'SPELL'
                                     ? 'playSpellSequence 1s forwards'
                                     : 'playCardSequence 0.8s forwards'
@@ -3117,16 +3084,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         >
                             <style>{`
                                 @keyframes playCardSequence {
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
-                                    50% { transform: translate(0, 0) scale(0.8); opacity: 1; }
-                                    70% { transform: translate(0, 0) scale(0.9); opacity: 1; }
-                                    100% { transform: translate(0, 0) scale(1.0); opacity: 0; }
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
+                                    50% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
+                                    70% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
+                                    100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
                                 }
                                 @keyframes playSpellSequence {
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) scale(0.2); opacity: 1; }
-                                    40% { transform: translate(0, 0) scale(1.0); opacity: 1; filter: brightness(1); }
-                                    80% { transform: translate(0, 0) scale(1.1); opacity: 1; filter: brightness(1.2); }
-                                    100% { transform: translate(0, 0) scale(1.5); opacity: 0; filter: brightness(3); }
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
+                                    40% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; filter: brightness(1); }
+                                    80% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; filter: brightness(1.2); }
+                                    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
                             <Card card={playingCardAnim.card} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
@@ -3145,7 +3112,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 animatingCard && (
                     <div style={{
                         position: 'fixed',
-                        left: '50%',
+                        left: 'calc(50% + 170px)', // サイドバー（340px）の半分をオフセット
                         top: animatingCard.status === 'APPEAR' ? '50%' : '85%',
                         transform: animatingCard.status === 'APPEAR'
                             ? 'translate(-50%, -50%) scale(1.2)'

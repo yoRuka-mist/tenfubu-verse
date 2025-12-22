@@ -155,7 +155,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_yunagi', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
         description: 'ファンファーレ：「米」を手札に加える',
-        imageUrl: '/cards/yunagi.jpg',
+        imageUrl: '/cards/yunagi.png',
+        evolvedImageUrl: '/cards/yunagi_2.png',
         triggers: [{
             trigger: 'FANFARE',
             effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }]
@@ -177,7 +178,7 @@ const MOCK_CARDS: Card[] = [
     },
 
     // Ward Variants for Azya Summon
-    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護] ファンファーレ：「米」を手札に加える', imageUrl: '/cards/yunagi.jpg', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
+    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護] ファンファーレ：「米」を手札に加える', imageUrl: '/cards/yunagi.png', evolvedImageUrl: '/cards/yunagi_2.png', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
     {
         id: 'c_nayuta_ward', name: 'なゆた', cost: 5, type: 'FOLLOWER',
         attack: 3, health: 3,
@@ -259,16 +260,16 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] ファンファーレ：自分のリーダーを1回復。1枚ドロー。',
+        description: '[守護] 進化時：相手のフォロワー1体に2ダメージ。',
         imageUrl: '/cards/urara.jpg',
+        evolvedImageUrl: '/cards/urara.jpg',
         passiveAbilities: ['WARD'],
         attackEffectType: 'WATER',
         triggers: [
             {
-                trigger: 'FANFARE',
+                trigger: 'EVOLVE',
                 effects: [
-                    { type: 'HEAL_LEADER', value: 1, targetType: 'SELF' },
-                    { type: 'DRAW', value: 1 }
+                    { type: 'DAMAGE', value: 2, targetType: 'SELECT_FOLLOWER' }
                 ]
             }
         ]
@@ -561,25 +562,12 @@ const MOCK_CARDS: Card[] = [
     },
     // --- 大和 ---
     {
-        id: 'c_yamato', name: '大和', cost: 7, type: 'FOLLOWER',
-        attack: 5, health: 5,
-        description: 'ファンファーレ：ランダムな相手のフォロワー1体を破壊。進化時：ランダムな相手のフォロワー1体を破壊。',
+        id: 'c_yamato', name: '大和', cost: 5, type: 'FOLLOWER',
+        attack: 5, health: 1,
+        description: '[疾走]',
         imageUrl: '/cards/yamato.jpg',
-        attackEffectType: 'SLASH',
-        triggers: [
-            {
-                trigger: 'FANFARE',
-                effects: [
-                    { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
-                ]
-            },
-            {
-                trigger: 'EVOLVE',
-                effects: [
-                    { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
-                ]
-            }
-        ]
+        passiveAbilities: ['STORM'],
+        attackEffectType: 'SLASH'
     }
 ];
 
