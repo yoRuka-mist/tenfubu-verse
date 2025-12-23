@@ -525,7 +525,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     if (revealProgress >= 1) {
                         if (intervalId) clearInterval(intervalId);
                         setBurstParticles([]);
-                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 200);
+                        // Linger longer at center after reveal (Increased from 200ms to 600ms)
+                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 600);
                     }
                 }, 40);
                 return () => { if (intervalId) clearInterval(intervalId); };
@@ -534,9 +535,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Gradually return to original position, size, and rotation
                 setPosition({ x: startX, y: startY });
 
-                // Animate rotation and scale back to board card state
+                // Animate rotation and scale back to board card state (Much faster)
                 const zoomOutStart = Date.now();
-                const zoomOutDuration = 500; // 0.5 seconds
+                const zoomOutDuration = 250; // Quicker landing (Was 500ms)
 
                 const startScale = scale; // Current scale (should be ~1)
 
@@ -3571,22 +3572,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 @keyframes playCardSequence {
                                     ${playingCardAnim.finalX !== undefined ? `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    30% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    65% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    25% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+                                    85% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
                                     100% { 
                                         transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(0.65); 
                                         opacity: 1;
                                     }
                                     ` : `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    40% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    75% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    30% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    85% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
                                     100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
                                     `}
                                 }
-                                /* Add ease-in-out landing effect */
+                                /* Add stronger ease-in for snappy takeoff and cushioned landing */
                                 div[style*="playCardSequence"] {
-                                    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+                                    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); /* Faster exit from center */
                                 }
                                 @keyframes playSpellSequence {
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
