@@ -398,8 +398,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     const maxDuration = Math.max(0.3, 2.2 - delay); // Leave 0.2s buffer
                     const duration = Math.min(baseDuration, maxDuration);
 
-                    // Size: 8 to 24 pixels (larger and more varied)
-                    const size = 8 + Math.random() * 16;
+                    // Size: 24 to 72 pixels (Increased by 3x as requested)
+                    const size = 24 + Math.random() * 48;
 
                     return {
                         id: i,
@@ -463,8 +463,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             const burst = Array(120).fill(0).map((_, i) => {
                                 const baseAngle = (i / 120) * 360;
                                 const angleVariation = (Math.random() - 0.5) * 8;
-                                // Size increased by 3x
-                                const baseSize = 6 + Math.random() * 14;
+                                // Size increased by 3x (Total 9x from original base)
+                                const baseSize = 18 + Math.random() * 42;
                                 return {
                                     id: i,
                                     angle: baseAngle + angleVariation,
@@ -494,7 +494,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             const burst = Array(120).fill(0).map((_, i) => {
                                 const baseAngle = (i / 120) * 360;
                                 const angleVariation = (Math.random() - 0.5) * 8;
-                                const baseSize = 6 + Math.random() * 14;
+                                const baseSize = 18 + Math.random() * 42;
                                 return {
                                     id: i,
                                     angle: baseAngle + angleVariation,
@@ -642,10 +642,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute',
                         top: '50%', left: '50%',
                         width: 500, height: 500,
-                        border: '4px solid rgba(255, 255, 255, 0.4)',
+                        border: '8px solid rgba(255, 255, 255, 0.6)', // Thicker ring
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%) rotateX(75deg)',
-                        boxShadow: '0 0 20px rgba(255, 255, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.6)',
+                        boxShadow: '0 0 30px rgba(255, 255, 255, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.8)', // Stronger glow
                         animation: 'ringSpin 2s linear infinite'
                     }} />
                     {/* Ring 2 - Outer with different angle */}
@@ -653,10 +653,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute',
                         top: '50%', left: '50%',
                         width: 600, height: 600,
-                        border: '2px dashed rgba(100, 200, 255, 0.5)',
+                        border: '6px dashed rgba(100, 200, 255, 0.7)', // Thicker dashed ring
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%) rotateX(80deg) rotateY(10deg)',
-                        boxShadow: '0 0 30px rgba(100, 200, 255, 0.3)',
+                        boxShadow: '0 0 40px rgba(100, 200, 255, 0.5)', // Stronger glow
                         animation: 'ringSpinReverse 3s linear infinite'
                     }} />
                     <style>{`
@@ -1117,8 +1117,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- Effect Processing ---
     React.useEffect(() => {
+        if (isProcessingEffect) return;
+
         if (gameState.pendingEffects && gameState.pendingEffects.length > 0) {
             const current = gameState.pendingEffects[0];
+            setIsProcessingEffect(true);
 
             // Handle GENERATE_CARD with animation
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
@@ -1146,10 +1149,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setTimeout(() => {
                             setAnimatingCard(null);
                             dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
+                            // Wait for state to update
+                            setTimeout(() => setIsProcessingEffect(false), 300);
                         }, 600); // Fly duration
                     }, 1000); // Float duration
 
-                    return; // Don't set up the default timer
+                    return;
                 }
             }
 
@@ -1179,6 +1184,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const delay = isDamageEffect ? 1200 : 800; // Wait for animation to complete
             const timer = setTimeout(() => {
                 dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
+                // Add a small buffer after resolve to allow board re-layout to stabilize
+                setTimeout(() => setIsProcessingEffect(false), 400);
             }, delay);
             return () => clearTimeout(timer);
         }
@@ -1495,6 +1502,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // AI Logic State
     const aiProcessing = React.useRef(false);
     const lastProcessedTurn = React.useRef<string | null>(null);
+
+    // Generic Effect Processing Flag
+    const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
 
     // --- Drag State Ref for Smooth Performance ---
     const dragStateRef = React.useRef<{
@@ -2995,6 +3005,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                         border: (targetingState && c) ? '2px solid #f56565' : 'none', borderRadius: 8,
                                         cursor: targetingState ? 'crosshair' : 'pointer',
+                                        width: 90,
+                                        height: 120,
                                         pointerEvents: 'auto'
                                     }}>
                                     {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
@@ -3032,24 +3044,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                         cursor: 'pointer',
                                         pointerEvents: 'auto',
+                                        width: 90,
+                                        height: 120,
                                         zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                     }}>
                                     {/* Evolve Target Marker */}
                                     {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
                                         <div style={{
                                             position: 'absolute',
-                                            top: '50%', // Center vertically
-                                            left: '50%', // Center horizontally
+                                            top: '50%',
+                                            left: '50%',
+                                            width: '120%',
+                                            height: '120%',
                                             transform: 'translate(-50%, -50%)',
-                                            width: 120,
-                                            height: 120,
                                             pointerEvents: 'none',
-                                            zIndex: 100
+                                            border: '2px dashed rgba(255, 230, 100, 0.9)',
+                                            borderRadius: '50%',
+                                            boxShadow: '0 0 15px rgba(255, 200, 50, 0.8)',
+                                            animation: 'evolveMarkerSpin 1.5s linear infinite',
+                                            zIndex: 10
                                         }}>
                                             <svg viewBox="0 0 100 100" style={{
                                                 width: '100%',
                                                 height: '100%',
-                                                animation: 'evolveMarkerSpin 1.5s linear infinite',
                                                 filter: 'drop-shadow(0 0 8px currentColor)'
                                             }}>
                                                 <defs>
@@ -3488,7 +3505,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             {/* SVG Overlay for Dragging Arrow */}
-            <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 999 }}>
+            <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1000 }}>
                 {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
                     <>
                         <defs>
@@ -3499,29 +3516,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                 } />
                             </marker>
-                            <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
-                                <feFlood floodColor="#ffd700" floodOpacity="1" result="color1" />
-                                <feFlood floodColor="#ecc94b" floodOpacity="0.6" result="color2" />
-                                <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
-                                <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
+                            <filter id="yellowGlow" x="-200%" y="-200%" width="500%" height="500%">
+                                <feGaussianBlur stdDeviation="10" result="blur" />
+                                <feFlood floodColor="rgba(255, 255, 50, 0.9)" result="color" />
+                                <feComposite in="color" in2="blur" operator="in" result="glow" />
                                 <feMerge>
-                                    <feMergeNode in="glow2" />
-                                    <feMergeNode in="glow1" />
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
                             </filter>
-                            <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
-                                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
-                                <feFlood floodColor="#b794f4" floodOpacity="1" result="color1" />
-                                <feFlood floodColor="#9f7aea" floodOpacity="0.6" result="color2" />
-                                <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
-                                <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
+                            <filter id="purpleGlow" x="-200%" y="-200%" width="500%" height="500%">
+                                <feGaussianBlur stdDeviation="15" result="blur" />
+                                <feFlood floodColor="rgba(183, 148, 244, 0.9)" result="color" />
+                                <feComposite in="color" in2="blur" operator="in" result="glow" />
                                 <feMerge>
-                                    <feMergeNode in="glow2" />
-                                    <feMergeNode in="glow1" />
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="glow" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
                             </filter>
@@ -3596,7 +3609,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
-                            <Card card={playingCardAnim.card} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                            <Card card={playingCardAnim.card} isOnBoard={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
                             {playingCardAnim.card.type === 'SPELL' && (
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <SparkleBurst x={0} y={0} />
