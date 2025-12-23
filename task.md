@@ -20,3 +20,4 @@
 - [ ] 「amandava」カードを `MOCK_CARDS` に追加
 - [ ] エンジンに `RANDOM_SET_HP` 効果を実装
 - [ ] 「amandava」のビジュアルエフェクトを `GameScreen.tsx` に追加
+- [x] カードプレイ時の着地アニメーション改善 (正確な座標計算とイーズイン) <!-- id: 12 -->

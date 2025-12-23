@@ -1665,30 +1665,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         if (card.type === 'FOLLOWER') {
             const currentBoard = gameStateRef.current.players[currentPlayerId].board;
-            // Filter out nulls just in case, though engine should handle it. 
-            // Visual board logic handles gaps, but usually push appends.
             const validCards = currentBoard.filter(c => c !== null);
+            const newBoardSize = validCards.length + 1;
             const newIndex = validCards.length;
-            const totalCards = newIndex + 1;
 
-            const cardWidth = 90;
-            const gap = 16;
-            const totalWidth = totalCards * cardWidth + (totalCards - 1) * gap;
+            const spacing = 102; // Card width 90 + gap 12 (Align with render logic)
+            const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
-            const centerX = window.innerWidth / 2;
-            const startX_Board = centerX - totalWidth / 2;
-
-            finalX = startX_Board + newIndex * (cardWidth + gap) + cardWidth / 2;
-
-            // Estimate Y based on existing board or fallback
-            // Try to find a valid ref
-            const existingRef = playerBoardRefs.current.find(r => r !== null);
-            if (existingRef) {
-                const rect = existingRef.getBoundingClientRect();
-                finalY = rect.y + rect.height / 2;
+            // Calculate Board Center
+            let boardCenterX = window.innerWidth / 2;
+            if (boardRef.current) {
+                const rect = boardRef.current.getBoundingClientRect();
+                boardCenterX = rect.left + rect.width / 2;
             } else {
-                finalY = window.innerHeight * 0.6; // Approximate player board center
+                const sidebarWidth = 340;
+                boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
             }
+
+            finalX = boardCenterX + offsetX;
+
+            // Determine Y: Player slots are at top: 'calc(50% + 5px)' relative to boardArea
+            // Card center is window.innerHeight / 2 + 5 + 60
+            finalY = window.innerHeight / 2 + 65;
         }
 
         const onComplete = () => {
@@ -1872,10 +1870,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
                         const startY = 100;
 
+                        let finalX: number | undefined;
+                        let finalY: number | undefined;
+
+                        if (bestCard.type === 'FOLLOWER') {
+                            const currentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                            const validCards = currentBoard.filter(c => c !== null);
+                            const newBoardSize = validCards.length + 1;
+                            const newIndex = validCards.length;
+
+                            const spacing = 102;
+                            const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
+
+                            let boardCenterX = window.innerWidth / 2;
+                            if (boardRef.current) {
+                                const rect = boardRef.current.getBoundingClientRect();
+                                boardCenterX = rect.left + rect.width / 2;
+                            } else {
+                                const sidebarWidth = 340;
+                                boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                            }
+                            finalX = boardCenterX + offsetX;
+                            finalY = window.innerHeight / 2 - 65;
+                        }
+
                         setPlayingCardAnim({
                             card: bestCard,
                             startX, startY,
                             targetX: startX, targetY: window.innerHeight / 2, // Center of right side
+                            finalX,
+                            finalY,
                             onComplete: () => {
                                 triggerShake();
                                 dispatch({
@@ -2590,11 +2614,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 setPlayingCardAnim(null);
             };
 
+            let finalX: number | undefined;
+            let finalY: number | undefined;
+
+            if (animCard.type === 'FOLLOWER') {
+                const currentBoard = gameStateRef.current.players[currentPlayerId].board;
+                const validCards = currentBoard.filter(c => c !== null);
+                const newBoardSize = validCards.length + 1;
+                const newIndex = validCards.length;
+
+                const spacing = 102;
+                const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
+
+                let boardCenterX = window.innerWidth / 2;
+                if (boardRef.current) {
+                    const rect = boardRef.current.getBoundingClientRect();
+                    boardCenterX = rect.left + rect.width / 2;
+                } else {
+                    const sidebarWidth = 340;
+                    boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                }
+                finalX = boardCenterX + offsetX;
+                finalY = window.innerHeight / 2 + 65;
+            }
+
             setPlayingCardAnim({
                 card: animCard,
                 startX, startY,
                 targetX: sidebarWidth + (window.innerWidth - sidebarWidth) / 2, // Center of Board
                 targetY: window.innerHeight / 2,
+                finalX,
+                finalY,
                 onComplete
             });
 
@@ -3521,16 +3571,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 @keyframes playCardSequence {
                                     ${playingCardAnim.finalX !== undefined ? `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    20% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
-                                    60% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    85% { transform: translate(calc(-50% + ${(playingCardAnim.finalX - playingCardAnim.targetX) * 0.2}px), calc(-50% + ${(playingCardAnim.finalY! - playingCardAnim.targetY) * 0.2}px)) scale(1.6); opacity: 1; }
-                                    100% { transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${(playingCardAnim.finalY! - playingCardAnim.targetY)}px)) scale(0.65); opacity: 1; }
+                                    30% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    65% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    100% { 
+                                        transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(0.65); 
+                                        opacity: 1;
+                                    }
                                     ` : `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    50% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
-                                    70% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    100% { transform: translate(-50%, -50%) scale(2.0); opacity: 0; }
+                                    40% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    75% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
                                     `}
+                                }
+                                /* Add ease-in-out landing effect */
+                                div[style*="playCardSequence"] {
+                                    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
                                 }
                                 @keyframes playSpellSequence {
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
