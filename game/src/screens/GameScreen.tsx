@@ -316,8 +316,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     const [scale, setScale] = React.useState(1);
     const [position, setPosition] = React.useState({ x: startX, y: startY });
     const [showParticles, setShowParticles] = React.useState(false);
-    // Added dist and duration to charge particles
-    const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; dist: number; delay: number; duration: number }[]>([]);
+    // Added dist, duration, and size to charge particles
+    const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; dist: number; delay: number; duration: number; size: number }[]>([]);
     const [burstParticles, setBurstParticles] = React.useState<{ id: number; angle: number; dist: number; size: number; delay: number; }[]>([]);
     const [vibrate, setVibrate] = React.useState(false);
     const burstCreatedRef = React.useRef(false); // Track if burst particles have been created
@@ -372,14 +372,34 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
             case 'WHITE_FADE':
                 // Create charge particles that will converge toward the card
-                // Increased count and randomized start distances for "appearing from nowhere" feel
-                const particles = Array(80).fill(0).map((_, i) => ({
-                    id: i,
-                    angle: Math.random() * 360,
-                    dist: 250 + Math.random() * 200, // Random start distance
-                    delay: Math.random() * 1.5,
-                    duration: 1.0 + Math.random() * 1.0 // Random speed
-                }));
+                // 80 particles evenly distributed in 360 degrees, various distances
+                const particles = Array(80).fill(0).map((_, i) => {
+                    // Even distribution across 360 degrees with slight randomness
+                    const baseAngle = (i / 80) * 360;
+                    const angleVariation = (Math.random() - 0.5) * 10; // ±5 degrees variation
+                    const angle = baseAngle + angleVariation;
+
+                    // Distance: 200 to 800 pixels (wide range)
+                    const dist = 200 + Math.random() * 600;
+
+                    // Duration inversely proportional to distance (far = fast, near = slow)
+                    // Far particles (dist ~800): duration ~0.6s
+                    // Near particles (dist ~200): duration ~2.0s
+                    const normalizedDist = (dist - 200) / 600; // 0 to 1
+                    const duration = 2.0 - normalizedDist * 1.4; // 2.0s to 0.6s
+
+                    // Size: 4 to 16 pixels (varied)
+                    const size = 4 + Math.random() * 12;
+
+                    return {
+                        id: i,
+                        angle,
+                        dist,
+                        delay: Math.random() * 0.3, // Slight delay variation
+                        duration,
+                        size
+                    };
+                });
                 setChargeParticles(particles);
                 setVibrate(true);
 
@@ -520,19 +540,19 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute',
                         left: position.x,
                         top: position.y,
-                        width: 8 + Math.random() * 8, // Varied size
-                        height: 8 + Math.random() * 8,
+                        width: p.size,
+                        height: p.size,
                         borderRadius: '50%',
                         background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
                         boxShadow: '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
                         filter: 'blur(1px)',
-                        animation: `chargeParticleIn ${p.duration}s ease-in ${p.delay}s forwards`,
-                        transform: `rotate(${p.angle}deg) translateX(${p.dist}px)`, // Use dynamic dist
-                        opacity: 0 // Start invisible
+                        animation: `chargeParticleIn-${p.id} ${p.duration}s ease-in ${p.delay}s forwards`,
+                        transform: `rotate(${p.angle}deg) translateX(${p.dist}px)`,
+                        opacity: 0
                     }}
                 >
                     <style>{`
-                        @keyframes chargeParticleIn {
+                        @keyframes chargeParticleIn-${p.id} {
                             0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.5); }
                             20% { opacity: 0.8; transform: rotate(${p.angle}deg) translateX(${p.dist * 0.8}px) scale(1.2); }
                             100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); }
