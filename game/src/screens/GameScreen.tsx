@@ -382,11 +382,21 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     // Distance: 200 to 800 pixels (wide range)
                     const dist = 200 + Math.random() * 600;
 
+                    // Delay: 0 to 1.8 seconds (spread throughout WHITE_FADE phase)
+                    // This makes particles appear continuously
+                    const delay = Math.random() * 1.8;
+
                     // Duration inversely proportional to distance (far = fast, near = slow)
-                    // Far particles (dist ~800): duration ~0.6s
-                    // Near particles (dist ~200): duration ~2.0s
+                    // Adjusted so that even late-starting particles reach the card before FLIP
+                    // WHITE_FADE lasts ~2.4s, so delay + duration should be < 2.4s
+                    // Far particles (dist ~800): duration ~0.5s
+                    // Near particles (dist ~200): duration ~1.2s
                     const normalizedDist = (dist - 200) / 600; // 0 to 1
-                    const duration = 2.0 - normalizedDist * 1.4; // 2.0s to 0.6s
+                    const baseDuration = 1.2 - normalizedDist * 0.7; // 1.2s to 0.5s
+
+                    // Ensure particle reaches center before phase ends
+                    const maxDuration = Math.max(0.3, 2.2 - delay); // Leave 0.2s buffer
+                    const duration = Math.min(baseDuration, maxDuration);
 
                     // Size: 4 to 16 pixels (varied)
                     const size = 4 + Math.random() * 12;
@@ -395,7 +405,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         id: i,
                         angle,
                         dist,
-                        delay: Math.random() * 0.3, // Slight delay variation
+                        delay,
                         duration,
                         size
                     };
