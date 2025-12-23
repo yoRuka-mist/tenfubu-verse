@@ -438,7 +438,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Phase 2: Slow rotation from 170 to 180 degrees
                 const flipStartTime = Date.now();
                 const rapidDuration = 400; // Fast flip to 170
-                const slowDuration = 600; // Slow final 10 degrees
+                const slowDuration = 1200; // Linger longer while slowly rotating (Increased from 600ms)
 
                 intervalId = setInterval(() => {
                     const elapsed = Date.now() - flipStartTime;
@@ -515,18 +515,18 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'REVEAL':
-                // Fade out white effect and scale back (FAST)
+                // Fade out effects quickly without changing scale or adding delay
                 let revealProgress = 0;
                 intervalId = setInterval(() => {
-                    revealProgress += 0.2; // Much faster (was 0.06)
+                    revealProgress += 0.25;
                     setWhiteness(Math.max(1 - revealProgress, 0));
                     setGlowIntensity(Math.max(60 - revealProgress * 60, 0));
-                    setScale(1.3 - revealProgress * 0.3); // Scale back to 1
+                    // Keep scale at max (1.3)
                     if (revealProgress >= 1) {
                         if (intervalId) clearInterval(intervalId);
                         setBurstParticles([]);
-                        // Linger longer at center after reveal (Increased from 200ms to 600ms)
-                        setTimeout(() => onPhaseChangeRef.current('ZOOM_OUT'), 600);
+                        // Transition to ZOOM_OUT immediately to remove the static pause
+                        onPhaseChangeRef.current('ZOOM_OUT');
                     }
                 }, 40);
                 return () => { if (intervalId) clearInterval(intervalId); };
