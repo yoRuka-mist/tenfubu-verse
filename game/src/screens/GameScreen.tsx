@@ -448,8 +448,34 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         const progress = elapsed / rapidDuration;
                         // Ease-out for snappy feel
                         const eased = 1 - Math.pow(1 - progress, 3);
-                        setRotateY(10 + eased * 160); // 10 to 170
+                        const currentRotateY = 10 + eased * 160;
+
+                        setRotateY(currentRotateY); // 10 to 170
                         setScale(1.0 + eased * 0.3); // Scale up during flip
+
+                        // Fade out white light quickly as rotation starts
+                        setWhiteness(Math.max(1 - progress * 3, 0));
+
+                        // Burst at 90 degrees (approx halfway through rotation)
+                        if (currentRotateY > 90 && !burstCreatedRef.current) {
+                            burstCreatedRef.current = true;
+                            // 120 particles bursting out in all directions
+                            const burst = Array(120).fill(0).map((_, i) => {
+                                const baseAngle = (i / 120) * 360;
+                                const angleVariation = (Math.random() - 0.5) * 8;
+                                // Size increased by 3x
+                                const baseSize = 6 + Math.random() * 14;
+                                return {
+                                    id: i,
+                                    angle: baseAngle + angleVariation,
+                                    dist: 200 + Math.random() * 400,
+                                    size: baseSize * 3,
+                                    delay: Math.random() * 0.05
+                                };
+                            });
+                            setBurstParticles(burst);
+                        }
+
                     } else {
                         // Slow lingering phase (170 -> 180)
                         const slowProgress = Math.min((elapsed - rapidDuration) / slowDuration, 1);
@@ -459,19 +485,22 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             : 1 - Math.pow(-2 * slowProgress + 2, 2) / 2;
                         setRotateY(170 + slowEased * 10); // 170 to 180
 
-                        // Create burst particles when hitting midway (using ref to prevent double creation)
-                        if (slowProgress > 0.5 && !burstCreatedRef.current) {
+                        // Ensure whiteness is 0
+                        setWhiteness(0);
+
+                        // Safety check for burst (if frame skip caused miss)
+                        if (!burstCreatedRef.current) {
                             burstCreatedRef.current = true;
-                            // 120 particles bursting out in all directions
                             const burst = Array(120).fill(0).map((_, i) => {
                                 const baseAngle = (i / 120) * 360;
                                 const angleVariation = (Math.random() - 0.5) * 8;
+                                const baseSize = 6 + Math.random() * 14;
                                 return {
                                     id: i,
                                     angle: baseAngle + angleVariation,
-                                    dist: 150 + Math.random() * 300, // 150-450px range
-                                    size: 6 + Math.random() * 14, // 6-20px
-                                    delay: Math.random() * 0.15 // Slight stagger
+                                    dist: 200 + Math.random() * 400,
+                                    size: baseSize * 3,
+                                    delay: Math.random() * 0.05
                                 };
                             });
                             setBurstParticles(burst);
@@ -486,10 +515,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'REVEAL':
-                // Fade out white effect and scale back
+                // Fade out white effect and scale back (FAST)
                 let revealProgress = 0;
                 intervalId = setInterval(() => {
-                    revealProgress += 0.06;
+                    revealProgress += 0.2; // Much faster (was 0.06)
                     setWhiteness(Math.max(1 - revealProgress, 0));
                     setGlowIntensity(Math.max(60 - revealProgress * 60, 0));
                     setScale(1.3 - revealProgress * 0.3); // Scale back to 1
@@ -508,7 +537,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Animate rotation and scale back to board card state
                 const zoomOutStart = Date.now();
                 const zoomOutDuration = 500; // 0.5 seconds
-                const startRotation = rotateY; // Current rotation (should be ~180)
+
                 const startScale = scale; // Current scale (should be ~1)
 
                 intervalId = setInterval(() => {
@@ -518,15 +547,14 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     // Ease-out for smooth deceleration
                     const eased = 1 - Math.pow(1 - progress, 3);
 
-                    // Gradually reduce rotation to 0
-                    setRotateY(startRotation * (1 - eased));
-
                     // Gradually reduce scale to 0.25 (board card size)
                     setScale(startScale - (startScale - 0.25) * eased);
 
                     if (progress >= 1) {
                         if (intervalId) clearInterval(intervalId);
-                        setRotateY(0); // Ensure exact 0
+                        // Keep rotation at 180 (flipped state)
+                        setRotateY(180);
+                        setChargeRotate(0); // Reset charge rotation
                         setScale(0.25); // Ensure exact board size
                         onPhaseChangeRef.current('LAND');
                     }
@@ -662,13 +690,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         boxShadow: useSep
                             ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)'
                             : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)',
-                        animation: `burstParticleOut-${p.id} 0.8s ease-out ${p.delay}s forwards`
+                        animation: `burstParticleOut-${p.id} 0.4s ease-out ${p.delay}s forwards`
                     }}
                 >
                     <style>{`
                         @keyframes burstParticleOut-${p.id} {
-                            0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1); }
-                            100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.2); }
+                            0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1.5); }
+                            100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist * 1.5}px) scale(0); }
                         }
                     `}</style>
                 </div>
@@ -1008,7 +1036,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             key: Date.now() + Math.random()
         }]);
     };
-    const [animatingCard, setAnimatingCard] = React.useState<{ card: CardModel, status: 'APPEAR' | 'FLY' } | null>(null);
+
 
     // --- Draw Animation State ---
     const [drawAnimation, setDrawAnimation] = React.useState<{
@@ -1076,11 +1104,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Damage Tracking Logic ---
     const [damageNumbers, setDamageNumbers] = React.useState<{ id: number, value: string | number, x: number, y: number, color?: string }[]>([]);
 
-    // --- Effect Queue Processing (with Animation Support) ---
-    React.useEffect(() => {
-        // Skip if we're already animating a card
-        if (animatingCard) return;
+    // --- Effect Queue Processing ---
 
+    // Generic Card Animation (e.g. Draw, Generate)
+    const [animatingCard, setAnimatingCard] = React.useState<{
+        card: CardModel;
+        status: 'APPEAR' | 'FLY';
+        targetX?: number;
+        targetY?: number;
+    } | null>(null);
+
+    // --- Effect Processing ---
+    React.useEffect(() => {
         if (gameState.pendingEffects && gameState.pendingEffects.length > 0) {
             const current = gameState.pendingEffects[0];
 
@@ -1088,8 +1123,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
                 const cardDef = getCardDefinition(current.effect.targetCardId);
                 if (cardDef) {
+
+                    // Note: This logic assumes pendingEffects[0] is strictly managed and this effect runs only once per trigger
+                    // Ideally check against a processed ID set, but relying on RESOLVE_EFFECT removal for now.
+
+                    // Determine fly target based on who is getting the card
+                    // sourcePlayerId gets the card in GENERATE_CARD (usually self-cast or effect owner)
+                    const isPlayer = current.sourcePlayerId === currentPlayerId;
+                    const flyTargetX = window.innerWidth / 2;
+                    const flyTargetY = isPlayer ? window.innerHeight - 100 : 100; // Hand positions
+
                     // Start Animation: APPEAR at center
-                    setAnimatingCard({ card: cardDef, status: 'APPEAR' });
+                    setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
 
                     // Phase 1: Float at center
                     setTimeout(() => {
@@ -1470,6 +1515,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         startY: number;
         targetX: number;
         targetY: number;
+        finalX?: number; // Board destination X
+        finalY?: number; // Board destination Y
         onComplete: () => void;
     } | null>(null);
 
@@ -1608,10 +1655,41 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return;
         }
 
-        // Determine target position (Center of board area - right of sidebar)
-        const sidebarWidth = 340;
-        const targetX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+        // Determine target position (Center of screen - aligned with leader)
+        const targetX = window.innerWidth / 2; // Leader's center axis
         const targetY = window.innerHeight / 2;
+
+        // Calculate board position for landing (Followers only)
+        let finalX: number | undefined;
+        let finalY: number | undefined;
+
+        if (card.type === 'FOLLOWER') {
+            const currentBoard = gameStateRef.current.players[currentPlayerId].board;
+            // Filter out nulls just in case, though engine should handle it. 
+            // Visual board logic handles gaps, but usually push appends.
+            const validCards = currentBoard.filter(c => c !== null);
+            const newIndex = validCards.length;
+            const totalCards = newIndex + 1;
+
+            const cardWidth = 90;
+            const gap = 16;
+            const totalWidth = totalCards * cardWidth + (totalCards - 1) * gap;
+
+            const centerX = window.innerWidth / 2;
+            const startX_Board = centerX - totalWidth / 2;
+
+            finalX = startX_Board + newIndex * (cardWidth + gap) + cardWidth / 2;
+
+            // Estimate Y based on existing board or fallback
+            // Try to find a valid ref
+            const existingRef = playerBoardRefs.current.find(r => r !== null);
+            if (existingRef) {
+                const rect = existingRef.getBoundingClientRect();
+                finalY = rect.y + rect.height / 2;
+            } else {
+                finalY = window.innerHeight * 0.6; // Approximate player board center
+            }
+        }
 
         const onComplete = () => {
             if (card.type !== 'SPELL') {
@@ -1629,6 +1707,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             startY,
             targetX,
             targetY,
+            finalX,
+            finalY,
             onComplete
         });
 
@@ -3439,16 +3519,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         >
                             <style>{`
                                 @keyframes playCardSequence {
+                                    ${playingCardAnim.finalX !== undefined ? `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    50% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
-                                    70% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
-                                    100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
+                                    20% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+                                    60% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    85% { transform: translate(calc(-50% + ${(playingCardAnim.finalX - playingCardAnim.targetX) * 0.2}px), calc(-50% + ${(playingCardAnim.finalY! - playingCardAnim.targetY) * 0.2}px)) scale(1.6); opacity: 1; }
+                                    100% { transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${(playingCardAnim.finalY! - playingCardAnim.targetY)}px)) scale(0.65); opacity: 1; }
+                                    ` : `
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
+                                    50% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+                                    70% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
+                                    100% { transform: translate(-50%, -50%) scale(2.0); opacity: 0; }
+                                    `}
                                 }
                                 @keyframes playSpellSequence {
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    40% { transform: translate(-50%, -50%) scale(1.0); opacity: 1; filter: brightness(1); }
-                                    80% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; filter: brightness(1.2); }
-                                    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; filter: brightness(3); }
+                                    40% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; filter: brightness(1); }
+                                    80% { transform: translate(-50%, -50%) scale(2.2); opacity: 1; filter: brightness(1.2); }
+                                    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
                             <Card card={playingCardAnim.card} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
@@ -3467,16 +3555,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 animatingCard && (
                     <div style={{
                         position: 'fixed',
-                        left: 'calc(50% + 170px)', // サイドバー（340px）の半分をオフセット
-                        top: animatingCard.status === 'APPEAR' ? '50%' : '85%',
+                        left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : '50%',
+                        top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : '50%',
                         transform: animatingCard.status === 'APPEAR'
                             ? 'translate(-50%, -50%) scale(1.2)'
-                            : 'translate(-50%, 0) scale(0.6)',
+                            : 'translate(-50%, -50%) scale(0.2)', // Shrink to hand
                         zIndex: 7000,
                         pointerEvents: 'none',
                         transition: animatingCard.status === 'FLY'
                             ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
                             : 'none',
+                        opacity: animatingCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
                         animation: animatingCard.status === 'APPEAR' ? 'cardAppear 1s ease-out' : undefined
                     }}>
                         <Card card={animatingCard.card as any} />
