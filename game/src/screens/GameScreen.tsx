@@ -502,13 +502,36 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'ZOOM_OUT':
-                // Return to original position quickly with momentum
+                // Gradually return to original position, size, and rotation
                 setPosition({ x: startX, y: startY });
-                setScale(0.25); // Return to board card size
-                timer = setTimeout(() => {
-                    onPhaseChangeRef.current('LAND');
-                }, 500);
-                return () => clearTimeout(timer);
+
+                // Animate rotation and scale back to board card state
+                const zoomOutStart = Date.now();
+                const zoomOutDuration = 500; // 0.5 seconds
+                const startRotation = rotateY; // Current rotation (should be ~180)
+                const startScale = scale; // Current scale (should be ~1)
+
+                intervalId = setInterval(() => {
+                    const elapsed = Date.now() - zoomOutStart;
+                    const progress = Math.min(elapsed / zoomOutDuration, 1);
+
+                    // Ease-out for smooth deceleration
+                    const eased = 1 - Math.pow(1 - progress, 3);
+
+                    // Gradually reduce rotation to 0
+                    setRotateY(startRotation * (1 - eased));
+
+                    // Gradually reduce scale to 0.25 (board card size)
+                    setScale(startScale - (startScale - 0.25) * eased);
+
+                    if (progress >= 1) {
+                        if (intervalId) clearInterval(intervalId);
+                        setRotateY(0); // Ensure exact 0
+                        setScale(0.25); // Ensure exact board size
+                        onPhaseChangeRef.current('LAND');
+                    }
+                }, 16);
+                return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'LAND':
                 onShakeRef.current();
@@ -2869,12 +2892,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             <svg viewBox="0 0 100 100" style={{
                                                 width: '100%',
                                                 height: '100%',
-                                                animation: 'evolveMarkerSpin 1.5s linear infinite'
+                                                animation: 'evolveMarkerSpin 1.5s linear infinite',
+                                                filter: 'drop-shadow(0 0 8px currentColor)'
                                             }}>
                                                 <defs>
                                                     <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-50%" y="-50%" width="200%" height="200%">
-                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
                                                         <feMerge>
+                                                            <feMergeNode in="blur" />
                                                             <feMergeNode in="blur" />
                                                             <feMergeNode in="SourceGraphic" />
                                                         </feMerge>
@@ -2887,11 +2912,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
                                                     opacity="0.95"
                                                 />
-                                                {/* Corner Arrows */}
-                                                <polygon points="50,5 45,15 55,15" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="95,50 85,45 85,55" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="50,95 55,85 45,85" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
-                                                <polygon points="5,50 15,55 15,45" fill={dragState.useSep ? '#b794f4' : '#f6e05e'} />
+                                                {/* Corner Arrows with glow */}
+                                                <polygon points="50,5 45,15 55,15"
+                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                <polygon points="95,50 85,45 85,55"
+                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                <polygon points="50,95 55,85 45,85"
+                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                <polygon points="5,50 15,55 15,45"
+                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
                                             </svg>
                                             <style>{`
                                                 @keyframes evolveMarkerSpin {
