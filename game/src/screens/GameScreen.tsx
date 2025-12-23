@@ -398,8 +398,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     const maxDuration = Math.max(0.3, 2.2 - delay); // Leave 0.2s buffer
                     const duration = Math.min(baseDuration, maxDuration);
 
-                    // Size: 4 to 16 pixels (varied)
-                    const size = 4 + Math.random() * 12;
+                    // Size: 8 to 24 pixels (larger and more varied)
+                    const size = 8 + Math.random() * 16;
 
                     return {
                         id: i,
@@ -462,13 +462,18 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         // Create burst particles when hitting midway (using ref to prevent double creation)
                         if (slowProgress > 0.5 && !burstCreatedRef.current) {
                             burstCreatedRef.current = true;
-                            const burst = Array(50).fill(0).map((_, i) => ({
-                                id: i,
-                                angle: (i / 50) * 360 + Math.random() * 10,
-                                dist: 100 + Math.random() * 200,
-                                size: 8 + Math.random() * 16,
-                                delay: Math.random() * 0.2
-                            }));
+                            // 120 particles bursting out in all directions
+                            const burst = Array(120).fill(0).map((_, i) => {
+                                const baseAngle = (i / 120) * 360;
+                                const angleVariation = (Math.random() - 0.5) * 8;
+                                return {
+                                    id: i,
+                                    angle: baseAngle + angleVariation,
+                                    dist: 150 + Math.random() * 300, // 150-450px range
+                                    size: 6 + Math.random() * 14, // 6-20px
+                                    delay: Math.random() * 0.15 // Slight stagger
+                                };
+                            });
                             setBurstParticles(burst);
                         }
 
@@ -2853,8 +2858,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
                                         <div style={{
                                             position: 'absolute',
-                                            top: 60, // Center of card height (120/2)
-                                            left: 45, // Center of card width (90/2)
+                                            top: '50%', // Center vertically
+                                            left: '50%', // Center horizontally
                                             transform: 'translate(-50%, -50%)',
                                             width: 120,
                                             height: 120,
