@@ -205,16 +205,17 @@ const DamageText = ({ value, x, y, color, onComplete }: { value: string | number
     );
 };
 
-// --- Sparkle Particle System for Spells ---
+// --- Sparkle Particle System for Spells (CSS based) ---
 const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
     // Generate constant particles for this render
     const particles = React.useMemo(() => {
-        return Array(12).fill(0).map((_, i) => ({
+        return Array(16).fill(0).map((_, i) => ({
             id: i,
             angle: Math.random() * 360,
-            dist: 50 + Math.random() * 100,
-            size: 10 + Math.random() * 20,
-            delay: Math.random() * 0.2
+            dist: 60 + Math.random() * 120,
+            size: 4 + Math.random() * 8,
+            delay: Math.random() * 0.3,
+            color: Math.random() > 0.5 ? '#f6e05e' : '#ffffff' // Gold and White
         }));
     }, []);
 
@@ -224,14 +225,16 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
                 <div key={p.id} style={{
                     position: 'absolute', left: 0, top: 0,
                     width: p.size, height: p.size,
+                    background: p.color,
+                    borderRadius: '50%',
+                    boxShadow: `0 0 10px ${p.color}, 0 0 20px ${p.color}`,
                     transform: `rotate(${p.angle}deg)`,
                     animation: `sparkleMove 0.8s ease-out ${p.delay}s forwards`
                 }}>
-                    <img src="/effects/sparkle.png" style={{ width: '100%', height: '100%' }} />
                     <style>{`
                         @keyframes sparkleMove {
                             0% { transform: rotate(${p.angle}deg) translate(0, 0) scale(0); opacity: 0; }
-                            20% { opacity: 1; transform: rotate(${p.angle}deg) translate(${p.dist * 0.2}px, 0) scale(1); }
+                            20% { opacity: 1; transform: rotate(${p.angle}deg) translate(${p.dist * 0.2}px, 0) scale(1.5); }
                             100% { transform: rotate(${p.angle}deg) translate(${p.dist}px, 0) scale(0); opacity: 0; }
                         }
                     `}</style>
@@ -942,9 +945,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
 
-    // Visual Boards (Delayed Removal)
     const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || []);
     const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || []);
+
+    // Effect Processing State
+    const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
+    const processingHandledRef = React.useRef<any>(null);
+
+    // Generic Card Animation (e.g. Draw, Generate)
+    const [animatingCard, setAnimatingCard] = React.useState<{
+        card: CardModel;
+        status: 'APPEAR' | 'FLY';
+        targetX?: number;
+        targetY?: number;
+    } | null>(null);
 
     // Interaction State
     const [dragState, setDragState] = React.useState<{
@@ -1106,60 +1120,75 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [damageNumbers, setDamageNumbers] = React.useState<{ id: number, value: string | number, x: number, y: number, color?: string }[]>([]);
 
     // --- Effect Queue Processing ---
+    const effectTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Generic Card Animation (e.g. Draw, Generate)
-    const [animatingCard, setAnimatingCard] = React.useState<{
-        card: CardModel;
-        status: 'APPEAR' | 'FLY';
-        targetX?: number;
-        targetY?: number;
-    } | null>(null);
+    // BGM Selection with Non-Repeating Logic
+    const lastBgmKey = 'lastPlayedBgm';
+    const selectBgm = React.useCallback((className: string) => {
+        const bgmPools: Record<string, string[]> = {
+            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3'],
+            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3']
+        };
+        const currentPool = bgmPools[className] || bgmPools['SENKA'];
+        const lastPlayed = sessionStorage.getItem(lastBgmKey);
 
-    // --- Effect Processing ---
+        // Filter out the last played BGM if pool size allows
+        const availablePool = currentPool.length > 1
+            ? currentPool.filter(path => path !== lastPlayed)
+            : currentPool;
+
+        const selected = availablePool[Math.floor(Math.random() * availablePool.length)];
+        sessionStorage.setItem(lastBgmKey, selected);
+
+        // Ensure path spaces are encoded for new Audio()
+        return encodeURI(selected);
+    }, []);
+
+    const [bgmLoadedForClass, setBgmLoadedForClass] = React.useState<string | null>(null);
+
     React.useEffect(() => {
+        // If we're already busy with an animation, wait for the timeout/callback to clear it
         if (isProcessingEffect) return;
 
         if (gameState.pendingEffects && gameState.pendingEffects.length > 0) {
             const current = gameState.pendingEffects[0];
+
+            // Prevent re-processing the exact same effect object.
+            // This happens when setIsProcessingEffect(false) is called but the RESOLVE_EFFECT state update hasn't arrived yet.
+            if (processingHandledRef.current === current) return;
+            processingHandledRef.current = current;
+
             setIsProcessingEffect(true);
 
-            // Handle GENERATE_CARD with animation
+            // case A: GENERATE_CARD with animation
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
                 const cardDef = getCardDefinition(current.effect.targetCardId);
                 if (cardDef) {
-
-                    // Note: This logic assumes pendingEffects[0] is strictly managed and this effect runs only once per trigger
-                    // Ideally check against a processed ID set, but relying on RESOLVE_EFFECT removal for now.
-
-                    // Determine fly target based on who is getting the card
-                    // sourcePlayerId gets the card in GENERATE_CARD (usually self-cast or effect owner)
                     const isPlayer = current.sourcePlayerId === currentPlayerId;
                     const flyTargetX = window.innerWidth / 2;
-                    const flyTargetY = isPlayer ? window.innerHeight - 100 : 100; // Hand positions
+                    const flyTargetY = isPlayer ? window.innerHeight - 100 : 100;
 
-                    // Start Animation: APPEAR at center
                     setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
 
-                    // Phase 1: Float at center
-                    setTimeout(() => {
-                        // Phase 2: Fly to hand
+                    if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
+                    effectTimeoutRef.current = setTimeout(() => {
                         setAnimatingCard(prev => prev ? { ...prev, status: 'FLY' } : null);
-
-                        // Phase 3: Complete and resolve
-                        setTimeout(() => {
+                        effectTimeoutRef.current = setTimeout(() => {
                             setAnimatingCard(null);
+                            setIsProcessingEffect(false);
                             dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
-                            // Wait for state to update
-                            setTimeout(() => setIsProcessingEffect(false), 300);
-                        }, 600); // Fly duration
-                    }, 1000); // Float duration
-
+                            effectTimeoutRef.current = null;
+                        }, 600);
+                    }, 1000);
                     return;
                 }
             }
 
-            // Trigger Visual Animation for DAMAGE/AOE
-            if (current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE') {
+            // case B: Visual Effects (Damage, etc.) or snappy logic buffs
+            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE';
+            const delay = isDamageEffect ? 1200 : 50; // Buffs and card draws are snappy
+
+            if (isDamageEffect) {
                 const effectType = current.sourceCard.attackEffectType || 'SLASH';
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
                 const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
@@ -1178,60 +1207,54 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             }
 
-            // Default: Resolve after animation completes
-            // Damage/AOE effects use sprite animation (1066ms), so wait longer for them
-            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE';
-            const delay = isDamageEffect ? 1200 : 800; // Wait for animation to complete
-            const timer = setTimeout(() => {
+            if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
+            effectTimeoutRef.current = setTimeout(() => {
+                setIsProcessingEffect(false);
                 dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
-                // Add a small buffer after resolve to allow board re-layout to stabilize
-                setTimeout(() => setIsProcessingEffect(false), 400);
+                effectTimeoutRef.current = null;
             }, delay);
-            return () => clearTimeout(timer);
+        } else {
+            // No more effects to process
+            processingHandledRef.current = null;
+            if (effectTimeoutRef.current) {
+                clearTimeout(effectTimeoutRef.current);
+                effectTimeoutRef.current = null;
+            }
         }
-    }, [gameState.pendingEffects, currentPlayerId, opponentPlayerId, animatingCard, visualPlayerBoard, visualOpponentBoard]);
+    }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId, visualPlayerBoard, visualOpponentBoard, animatingCard]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
     // Detect Special Summons (cards appearing on board not from hand)
     React.useEffect(() => {
         const prevPlayers = prevPlayersRef.current;
-        const currentPlayer = gameState.players[currentPlayerId];
-        const prevPlayer = prevPlayers[currentPlayerId];
-
-        if (!prevPlayer) return; // First render
-
-        const prevBoard = prevPlayer.board || [];
-        const currBoard = currentPlayer.board || [];
-        const prevHand = prevPlayer.hand || [];
-
-        const prevBoardIds = new Set(prevBoard.filter(c => c).map(c => (c as any).instanceId));
-        const prevHandIds = new Set(prevHand.filter(c => c).map(c => (c as any).instanceId));
         const newSummonIds = new Set<string>();
 
-        // Find cards that are new on board AND were not in previous hand
-        currBoard.forEach(card => {
-            if (!card) return;
-            const instanceId = (card as any).instanceId;
+        Object.keys(gameState.players).forEach(pid => {
+            const currPlayer = gameState.players[pid];
+            const prevPlayer = prevPlayers[pid];
+            if (!prevPlayer) return;
 
-            // Card is new on board (not in prev board)
-            if (!prevBoardIds.has(instanceId)) {
-                // Check if it was in hand (normal play) or not (special summon)
-                if (!prevHandIds.has(instanceId)) {
+            const prevBoardIds = new Set(prevPlayer.board.filter(c => c).map(c => (c as any).instanceId));
+            const prevHandIds = new Set(prevPlayer.hand.filter(c => c).map(c => (c as any).instanceId));
+
+            currPlayer.board.forEach(card => {
+                if (!card) return;
+                const instanceId = (card as any).instanceId;
+                if (!prevBoardIds.has(instanceId) && !prevHandIds.has(instanceId)) {
                     newSummonIds.add(instanceId);
                 }
-            }
+            });
         });
 
         if (newSummonIds.size > 0) {
             setSummonedCardIds(newSummonIds);
-            // Clear after animation completes (1 second)
             const timer = setTimeout(() => {
                 setSummonedCardIds(new Set());
             }, 1000);
             return () => clearTimeout(timer);
         }
-    }, [gameState.players, currentPlayerId]);
+    }, [gameState.players]);
 
     React.useEffect(() => {
         const prevPlayers = prevPlayersRef.current;
@@ -1320,13 +1343,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // Prioritize showing damage for AoE.
                     let damage = 0;
                     if (inGraveyard) {
-                        const finalHP = (inGraveyard as any).currentHealth;
-                        // If finalHP <= 0, it died from damage. Show full damage (prevHP).
-                        // If finalHP > 0, it died from Effect (Destroy). detected by engine.ts logic.
-                        // However, engine.ts doesn't change HP on destroy. So finalHP should be > 0.
+                        const finalHP = (inGraveyard as any).currentHealth || 0;
+                        // User Request: Show overkill damage (prevHP - finalHP)
                         if (finalHP <= 0) {
-                            damage = prevCard.currentHealth; // Or prevCard.currentHealth - finalHP? Since finalHP is <= 0.
-                            // Better: prevCard.currentHealth is what was lost.
+                            damage = prevCard.currentHealth - finalHP;
                         } else {
                             damage = 0; // Destroy effect, no red damage text
                         }
@@ -1440,36 +1460,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [gameState.phase, coinTossPhase, gameMode, playSE]);
 
 
-    // BGM Auto-Play - Initialize once based on player class
-    const bgmInitializedRef = React.useRef(false);
+    // BGM Auto-Play - Initialize based on player class and game start
     React.useEffect(() => {
-        if (bgmInitializedRef.current) return;
-        bgmInitializedRef.current = true;
+        // Only load if the BGM isn't already set up for this session/rematch
+        if (bgmLoadedForClass === player.class) return;
 
-        // Use selected background music based on leader
-        const selectedBgm = player.class === 'AJA' ? '/bgm/Green Misty Mountains.mp3' : '/bgm/ouka.mp3';
-        const bgm = new Audio(selectedBgm);
+        const selectedBgmPath = selectBgm(player.class);
+        console.log(`[BGM] Initializing track: ${selectedBgmPath} for class: ${player.class}`);
+
+        // Cleanup previous BGM if exists
+        if (bgmRef.current) {
+            bgmRef.current.pause();
+            bgmRef.current = null;
+        }
+
+        const bgm = new Audio(selectedBgmPath);
         bgm.loop = true;
         bgm.volume = audioSettings.bgm;
         bgmRef.current = bgm;
+        setBgmLoadedForClass(player.class);
 
-        // Try to play on first user interaction
+        // Interaction helper to overcome autoplay policies
         const tryPlay = () => {
             if (bgmRef.current && bgmRef.current.paused && audioSettings.enabled) {
-                bgmRef.current.play().catch(e => console.warn("BGM play prevented:", e));
+                console.log("[BGM] Attempting play on interaction...");
+                bgmRef.current.play()
+                    .then(() => console.log("[BGM] Play success"))
+                    .catch(e => console.warn("[BGM] Play failed on interaction:", e));
             }
-            document.removeEventListener('click', tryPlay);
-            document.removeEventListener('keydown', tryPlay);
+            // Keep listener active if play failed, or remove if succeeded?
+            // Usually, once played, we are good.
+            if (bgmRef.current && !bgmRef.current.paused) {
+                document.removeEventListener('click', tryPlay);
+                document.removeEventListener('keydown', tryPlay);
+                document.removeEventListener('touchstart', tryPlay);
+            }
         };
 
         document.addEventListener('click', tryPlay);
         document.addEventListener('keydown', tryPlay);
+        document.addEventListener('touchstart', tryPlay);
 
-        // Also try immediate play
+        // Immediate attempt
         if (audioSettings.enabled) {
-            bgm.play().catch(() => {
-                // Autoplay blocked, waiting for user interaction
-            });
+            bgm.play()
+                .then(() => console.log("[BGM] Immediate play success"))
+                .catch(() => console.log("[BGM] Immediate play blocked, waiting for interaction"));
         }
 
         return () => {
@@ -1477,8 +1513,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             bgm.currentTime = 0;
             document.removeEventListener('click', tryPlay);
             document.removeEventListener('keydown', tryPlay);
+            document.removeEventListener('touchstart', tryPlay);
         };
-    }, [player.class]); // Only depends on player.class
+    }, [player.class, bgmLoadedForClass, selectBgm, audioSettings.enabled]);
     useEffect(() => {
         if (!adapter) return;
         adapter.onMessage((msg) => {
@@ -1503,8 +1540,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const aiProcessing = React.useRef(false);
     const lastProcessedTurn = React.useRef<string | null>(null);
 
-    // Generic Effect Processing Flag
-    const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
+    // Generic Effect Processing Flag - MOVED UP
 
     // --- Drag State Ref for Smooth Performance ---
     const dragStateRef = React.useRef<{
@@ -3009,7 +3045,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         height: 120,
                                         pointerEvents: 'auto'
                                     }}>
-                                    {c ? <Card card={c} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                 </div>
                             );
                         })}
@@ -3048,7 +3084,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         height: 120,
                                         zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                     }}>
-                                    {/* Evolve Target Marker */}
+                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+
+                                    {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
                                     {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
                                         <div style={{
                                             position: 'absolute',
@@ -3062,7 +3100,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             borderRadius: '50%',
                                             boxShadow: '0 0 15px rgba(255, 200, 50, 0.8)',
                                             animation: 'evolveMarkerSpin 1.5s linear infinite',
-                                            zIndex: 10
+                                            zIndex: 20 // Higher than card's hover z-index (10)
                                         }}>
                                             <svg viewBox="0 0 100 100" style={{
                                                 width: '100%',
@@ -3108,7 +3146,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             `}</style>
                                         </div>
                                     )}
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                 </div>
                             );
 
@@ -3689,7 +3726,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         winnerId={gameState.winnerId}
                         playerId={currentPlayerId}
                         onRematch={() => {
-                            window.location.reload();
+                            // 1. Reset visual and logic artifacts IMMEDIATELY
+                            setDamageNumbers([]);
+                            setActiveEffects([]);
+                            setAnimatingCard(null);
+                            setPlayingCardAnim(null);
+                            setEvolveAnimation(null);
+                            setDrawAnimation(null);
+                            setSummonedCardIds(new Set());
+                            aiProcessing.current = false;
+                            lastProcessedTurn.current = null;
+
+                            // 2. Suppress immediate diff detection by clearing and then resetting the Ref
+                            const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+                            prevPlayersRef.current = freshState.players;
+                            prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
+
+                            // 3. Force BGM re-roll and restart
+                            setBgmLoadedForClass(null);
+
+                            // 4. Update Game State
+                            setCoinTossPhase('IDLE');
+                            setCoinTossResult(null);
+                            setIsGameStartAnim(false);
+                            dispatch({ type: 'SYNC_STATE', payload: freshState });
                         }}
                         onLeave={onLeave}
                     />
