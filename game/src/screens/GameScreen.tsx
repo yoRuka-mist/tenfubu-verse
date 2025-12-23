@@ -1346,6 +1346,32 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 setCoinTossResult(isFirst ? 'FIRST' : 'SECOND');
                 setCoinTossPhase('RESULT');
 
+                // If going second, swap turn order
+                if (!isFirst) {
+                    // Directly update game state to swap active player and PP
+                    const newState = {
+                        ...gameState,
+                        activePlayerId: 'p2',
+                        players: {
+                            p1: {
+                                ...gameState.players.p1,
+                                maxPp: 0,
+                                pp: 0
+                            },
+                            p2: {
+                                ...gameState.players.p2,
+                                maxPp: 1,
+                                pp: 1
+                            }
+                        },
+                        logs: [`ターン 1 - ${gameState.players.p2.name} のターン`]
+                    };
+                    // Force update via a special action or direct state manipulation
+                    // Since we're using useReducer, we need to dispatch an action
+                    // For now, we'll use a workaround by re-initializing
+                    dispatch({ type: 'SYNC_STATE', payload: newState });
+                }
+
                 // After showing result, show GAME START
                 setTimeout(() => {
                     setCoinTossPhase('DONE');

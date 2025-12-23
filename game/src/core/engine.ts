@@ -700,7 +700,7 @@ export function createPlayer(id: string, name: string, cls: ClassType, rng: () =
     };
 }
 
-export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: string, p2Class: ClassType, seed?: number): GameState {
+export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: string, p2Class: ClassType, seed?: number, p1GoingFirst: boolean = true): GameState {
     const rngSeed = seed || Math.floor(Math.random() * 1000000);
     const rng = createRNG(rngSeed);
 
@@ -711,18 +711,36 @@ export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: strin
     p1.hand = p1.deck.splice(0, 4);
     p2.hand = p2.deck.splice(0, 4);
 
-    // Player 1 starts with 1 PP
-    p1.maxPp = 1;
-    p1.pp = 1;
+    // Determine who goes first and set initial PP
+    let activePlayerId: string;
+    let firstPlayerName: string;
+
+    if (p1GoingFirst) {
+        // P1 goes first
+        activePlayerId = 'p1';
+        firstPlayerName = p1Name;
+        p1.maxPp = 1;
+        p1.pp = 1;
+        p2.maxPp = 0;
+        p2.pp = 0;
+    } else {
+        // P2 goes first (P1 is going second)
+        activePlayerId = 'p2';
+        firstPlayerName = p2Name;
+        p1.maxPp = 0;
+        p1.pp = 0;
+        p2.maxPp = 1;
+        p2.pp = 1;
+    }
 
     return {
         phase: 'INIT',
         rngSeed: Math.floor(rng() * 1000000),
-        activePlayerId: 'p1',
+        activePlayerId: activePlayerId,
         players: { p1, p2 },
         turnCount: 1,
         pendingEffects: [],
-        logs: [`ターン 1 - ${p1Name} のターン`],
+        logs: [`ターン 1 - ${firstPlayerName} のターン`],
         winnerId: undefined
     };
 }
