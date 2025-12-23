@@ -996,7 +996,9 @@ function processSingleEffect(
             const template = MOCK_CARDS.find(c => c.id === targetCardId);
             if (template) {
                 const player = newState.players[sourcePlayerId];
-                if (player.board.length < 5) { // MAX_BOARD_SIZE
+                // Count non-null cards on board (exclude destroyed cards that are still in array as null)
+                const actualBoardCount = player.board.filter(c => c !== null).length;
+                if (actualBoardCount < 5) { // MAX_BOARD_SIZE
                     const newCard: BoardCard = {
                         ...template,
                         instanceId: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
@@ -1341,7 +1343,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             newState.logs.push(`${player.name} は ${card.name} をプレイしました${targetName}`);
 
             if (player.pp < card.cost) return newState;
-            if (card.type === 'FOLLOWER' && player.board.length >= 5) return newState;
+            // Count non-null cards on board (exclude destroyed cards that are still in array as null)
+            const actualBoardCount = player.board.filter(c => c !== null).length;
+            if (card.type === 'FOLLOWER' && actualBoardCount >= 5) return newState;
 
             // Pay Cost
             player.pp -= card.cost;

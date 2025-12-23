@@ -313,7 +313,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
     const [whiteness, setWhiteness] = React.useState(0);
     const [glowIntensity, setGlowIntensity] = React.useState(0);
-    const [scale, setScale] = React.useState(1);
+    const [scale, setScale] = React.useState(0.25); // Start at board card size
     const [position, setPosition] = React.useState({ x: startX, y: startY });
     const [showParticles, setShowParticles] = React.useState(false);
     // Added dist, duration, and size to charge particles
@@ -639,11 +639,11 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         boxShadow: useSep
                             ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)'
                             : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)',
-                        animation: `burstParticleOut 0.8s ease-out ${p.delay}s forwards`
+                        animation: `burstParticleOut-${p.id} 0.8s ease-out ${p.delay}s forwards`
                     }}
                 >
                     <style>{`
-                        @keyframes burstParticleOut {
+                        @keyframes burstParticleOut-${p.id} {
                             0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1); }
                             100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.2); }
                         }
