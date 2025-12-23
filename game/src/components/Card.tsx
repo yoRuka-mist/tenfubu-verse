@@ -11,17 +11,29 @@ interface CardProps {
     variant?: 'normal' | 'art-only';
     canAttack?: boolean; // For manual override if needed
     isOnBoard?: boolean; // New prop to distinguish Board vs Hand context
+    isSpecialSummoning?: boolean; // Special summon animation trigger
     turnCount?: number; // Current game turn count from engine
     className?: string; // For custom animations
 }
 
-export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, className }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className }) => {
     // Determine stats to show
     const attack = 'currentAttack' in card ? (card as any).currentAttack : card.attack;
     const health = 'currentHealth' in card ? (card as any).currentHealth : card.health;
     const maxHealth = 'maxHealth' in card ? (card as any).maxHealth : card.health;
     const isReady = 'canAttack' in card ? (card as any).canAttack : false;
     const turnPlayed = 'turnPlayed' in card ? (card as any).turnPlayed : undefined;
+
+    // Special Summon Animation State
+    const [playSummonAnim, setPlaySummonAnim] = React.useState(false);
+
+    React.useEffect(() => {
+        if (isSpecialSummoning && isOnBoard) {
+            setPlaySummonAnim(true);
+            const timer = setTimeout(() => setPlaySummonAnim(false), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isSpecialSummoning, isOnBoard]);
 
     // Check if stats are buffed
     const baseAttack = 'baseAttack' in card ? (card as any).baseAttack : undefined;
@@ -120,30 +132,33 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 transition: 'transform 0.2s, box-shadow 0.2s',
                 display: 'flex', flexDirection: 'column',
                 background: '#1a202c', // Fallback bg
-                overflow: 'visible' // Allow effects to render outside card bounds
+                overflow: 'visible', // Allow effects to render outside card bounds
+                animation: playSummonAnim ? 'cardSummonAppear 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards' : style?.animation
             }}
             onClick={onClick}
         >
-            {/* 1. Name Bar (Top, Thin) */}
-            <div style={{
-                height: 20,
-                background: 'rgba(0,0,0,0.8)',
-                color: '#e2e8f0',
-                fontSize: card.name.length > 10 ? '0.6rem' : '0.7rem',
-                fontWeight: 'bold',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                borderBottom: '1px solid rgba(255,255,255,0.2)',
-                zIndex: 2,
-                transform: card.name.length > 15 ? 'scaleX(0.9)' : 'none',
-            }}>
-                {card.name}
-            </div>
+            {/* 1. Name Bar (Top, Thin) - Valid only when NOT on Board */}
+            {!isOnBoard && (
+                <div style={{
+                    height: 20,
+                    background: 'rgba(0,0,0,0.8)',
+                    color: '#e2e8f0',
+                    fontSize: card.name.length > 10 ? '0.6rem' : '0.7rem',
+                    fontWeight: 'bold',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    borderBottom: '1px solid rgba(255,255,255,0.2)',
+                    zIndex: 2,
+                    transform: card.name.length > 15 ? 'scaleX(0.9)' : 'none',
+                }}>
+                    {card.name}
+                </div>
+            )}
 
             {/* 2. Content Area (Contains image, cost, stats, and effects) */}
-            <div style={{ flex: 1, position: 'relative', width: '100%', background: '#2d3748', borderRadius: '0 0 8px 8px', minHeight: 0 }}>
+            <div style={{ flex: 1, position: 'relative', width: '100%', background: '#2d3748', borderRadius: isOnBoard ? '8px' : '0 0 8px 8px', minHeight: 0 }}>
                 {/* 2a. Visual Content (Clipped) */}
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', borderRadius: '0 0 8px 8px', zIndex: 1 }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', borderRadius: isOnBoard ? '8px' : '0 0 8px 8px', zIndex: 1 }}>
                     {displayImageUrl ? (
                         <img
                             src={displayImageUrl}
@@ -164,18 +179,20 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 40, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)', pointerEvents: 'none', zIndex: 3 }} />
                 </div>
 
-                {/* 2b. Overlaid Cost (Not Clipped) */}
-                <div style={{
-                    position: 'absolute', top: 2, left: 2,
-                    width: 24, height: 24, borderRadius: '50%',
-                    background: '#48bb78', border: '2px solid #fff',
-                    color: 'white', fontSize: '0.9rem', fontWeight: 900,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.3)',
-                    zIndex: 10
-                }}>
-                    {card.cost}
-                </div>
+                {/* 2b. Overlaid Cost (Not Clipped) - Valid only when NOT on Board */}
+                {!isOnBoard && (
+                    <div style={{
+                        position: 'absolute', top: 2, left: 2,
+                        width: 24, height: 24, borderRadius: '50%',
+                        background: '#48bb78', border: '2px solid #fff',
+                        color: 'white', fontSize: '0.9rem', fontWeight: 900,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.3)',
+                        zIndex: 10
+                    }}>
+                        {card.cost}
+                    </div>
+                )}
 
                 {/* 2c. Stats (Bottom Corners, Not Clipped) */}
                 {card.type === 'FOLLOWER' && (
@@ -361,7 +378,28 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
             </div>
 
+            {/* Special Summon Overlay */}
+            {playSummonAnim && (
+                <div style={{
+                    position: 'absolute', inset: 0,
+                    borderRadius: 8,
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%)',
+                    mixBlendMode: 'overlay',
+                    animation: 'cardSummonFlash 0.8s ease-out forwards',
+                    pointerEvents: 'none',
+                    zIndex: 100
+                }} />
+            )}
+
             <style>{`
+                @keyframes cardSummonAppear {
+                    0% { opacity: 0; transform: scale(1.5); filter: brightness(2) blur(4px); }
+                    100% { opacity: 1; transform: scale(1); filter: brightness(1) blur(0px); }
+                }
+                @keyframes cardSummonFlash {
+                    0% { opacity: 0.8; transform: scale(1.2); }
+                    100% { opacity: 0; transform: scale(1); }
+                }
                 @keyframes wardPulseLoop {
                     0% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
                     50% { transform: scale(1.08); opacity: 0.5; filter: blur(3px) drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)); }

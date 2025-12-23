@@ -316,7 +316,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     const [scale, setScale] = React.useState(1);
     const [position, setPosition] = React.useState({ x: startX, y: startY });
     const [showParticles, setShowParticles] = React.useState(false);
-    const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; delay: number; }[]>([]);
+    // Added dist and duration to charge particles
+    const [chargeParticles, setChargeParticles] = React.useState<{ id: number; angle: number; dist: number; delay: number; duration: number }[]>([]);
     const [burstParticles, setBurstParticles] = React.useState<{ id: number; angle: number; dist: number; size: number; delay: number; }[]>([]);
     const [vibrate, setVibrate] = React.useState(false);
     const burstCreatedRef = React.useRef(false); // Track if burst particles have been created
@@ -371,10 +372,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
             case 'WHITE_FADE':
                 // Create charge particles that will converge toward the card
-                const particles = Array(40).fill(0).map((_, i) => ({
+                // Increased count and randomized start distances for "appearing from nowhere" feel
+                const particles = Array(80).fill(0).map((_, i) => ({
                     id: i,
-                    angle: (i / 40) * 360 + Math.random() * 15,
-                    delay: Math.random() * 1.0
+                    angle: Math.random() * 360,
+                    dist: 250 + Math.random() * 200, // Random start distance
+                    delay: Math.random() * 1.5,
+                    duration: 1.0 + Math.random() * 1.0 // Random speed
                 }));
                 setChargeParticles(particles);
                 setVibrate(true);
@@ -382,16 +386,16 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Gradually increase whiteness, glow, and slow rotation (0-10deg)
                 let whiteProgress = 0;
                 intervalId = setInterval(() => {
-                    whiteProgress += 0.025; // Slower for more dramatic effect
+                    whiteProgress += 0.02; // Slightly slower
                     setWhiteness(Math.min(whiteProgress, 1));
-                    setGlowIntensity(Math.min(whiteProgress * 60, 60));
-                    setChargeRotate(whiteProgress * 10); // Slowly rotate 0-10 degrees
-                    if (whiteProgress >= 1) {
+                    setGlowIntensity(Math.min(whiteProgress * 80, 80)); // Stronger glow
+                    setChargeRotate(whiteProgress * 15); // Rotate more
+                    if (whiteProgress >= 1.2) { // Allow overflow for effect duration
                         if (intervalId) clearInterval(intervalId);
                         setVibrate(false);
                         onPhaseChangeRef.current('FLIP');
                     }
-                }, 50);
+                }, 40);
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'FLIP':
@@ -464,21 +468,17 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
             case 'ZOOM_OUT':
                 // Return to original position quickly with momentum
-                console.log('[EvolutionAnimation] ZOOM_OUT: Returning to', startX, startY);
                 setPosition({ x: startX, y: startY });
                 setScale(0.25); // Return to board card size
                 timer = setTimeout(() => {
-                    console.log('[EvolutionAnimation] ZOOM_OUT complete, transitioning to LAND');
                     onPhaseChangeRef.current('LAND');
                 }, 500);
                 return () => clearTimeout(timer);
 
             case 'LAND':
-                console.log('[EvolutionAnimation] LAND phase');
                 onShakeRef.current();
                 setShowParticles(true);
                 timer = setTimeout(() => {
-                    console.log('[EvolutionAnimation] LAND complete, transitioning to DONE');
                     onPhaseChangeRef.current('DONE');
                 }, 600);
                 return () => clearTimeout(timer);
@@ -520,25 +520,72 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute',
                         left: position.x,
                         top: position.y,
-                        width: 12,
-                        height: 12,
+                        width: 8 + Math.random() * 8, // Varied size
+                        height: 8 + Math.random() * 8,
                         borderRadius: '50%',
-                        background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.6) 40%, transparent 70%)',
-                        boxShadow: '0 0 15px white, 0 0 30px rgba(255,255,255,0.8)',
-                        filter: 'blur(2px)',
-                        animation: `chargeParticleIn 1.5s ease-in ${p.delay}s forwards`,
-                        transform: `rotate(${p.angle}deg) translateX(300px)`
+                        background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
+                        boxShadow: '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
+                        filter: 'blur(1px)',
+                        animation: `chargeParticleIn ${p.duration}s ease-in ${p.delay}s forwards`,
+                        transform: `rotate(${p.angle}deg) translateX(${p.dist}px)`, // Use dynamic dist
+                        opacity: 0 // Start invisible
                     }}
                 >
                     <style>{`
                         @keyframes chargeParticleIn {
-                            0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(300px) scale(1.5); }
-                            30% { opacity: 1; }
-                            100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.3); }
+                            0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.5); }
+                            20% { opacity: 0.8; transform: rotate(${p.angle}deg) translateX(${p.dist * 0.8}px) scale(1.2); }
+                            100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); }
                         }
                     `}</style>
                 </div>
             ))}
+
+            {/* Energy Rings (Hula Hoop Effect) - Visible during WHITE_FADE */}
+            {phase === 'WHITE_FADE' && (
+                <div style={{
+                    position: 'absolute',
+                    left: position.x + vibrateOffset.x,
+                    top: position.y + vibrateOffset.y,
+                    width: 0, height: 0,
+                    transformStyle: 'preserve-3d'
+                }}>
+                    {/* Ring 1 - Inner */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%', left: '50%',
+                        width: 500, height: 500,
+                        border: '4px solid rgba(255, 255, 255, 0.4)',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%) rotateX(75deg)',
+                        boxShadow: '0 0 20px rgba(255, 255, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.6)',
+                        animation: 'ringSpin 2s linear infinite'
+                    }} />
+                    {/* Ring 2 - Outer with different angle */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%', left: '50%',
+                        width: 600, height: 600,
+                        border: '2px dashed rgba(100, 200, 255, 0.5)',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%) rotateX(80deg) rotateY(10deg)',
+                        boxShadow: '0 0 30px rgba(100, 200, 255, 0.3)',
+                        animation: 'ringSpinReverse 3s linear infinite'
+                    }} />
+                    <style>{`
+                        @keyframes ringSpin {
+                            0% { transform: translate(-50%, -50%) rotateX(75deg) rotate(0deg); opacity: 0; scale: 0.5; }
+                            20% { opacity: 1; scale: 1; }
+                            100% { transform: translate(-50%, -50%) rotateX(75deg) rotate(360deg); opacity: 1; scale: 1; }
+                        }
+                        @keyframes ringSpinReverse {
+                            0% { transform: translate(-50%, -50%) rotateX(80deg) rotateY(10deg) rotate(0deg); opacity: 0; scale: 0.6; }
+                            20% { opacity: 0.8; scale: 1; }
+                            100% { transform: translate(-50%, -50%) rotateX(80deg) rotateY(10deg) rotate(-360deg); opacity: 0.8; scale: 1; }
+                        }
+                    `}</style>
+                </div>
+            )}
 
             {/* Burst Particles - Exploding outward on evolve */}
             {burstParticles.map(p => (
@@ -653,33 +700,17 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     {Array(20).fill(0).map((_, i) => {
                         const angle = (i / 20) * 360;
                         const dist = 40 + Math.random() * 100;
-                        const size = 5 + Math.random() * 10;
-                        const delay = Math.random() * 0.2;
                         return (
-                            <div
-                                key={i}
-                                style={{
-                                    position: 'absolute',
-                                    width: size,
-                                    height: size,
-                                    background: useSep
-                                        ? `hsl(${260 + Math.random() * 40}, 80%, ${70 + Math.random() * 20}%)`
-                                        : `hsl(${50 + Math.random() * 20}, 100%, ${70 + Math.random() * 30}%)`,
-                                    borderRadius: '50%',
-                                    boxShadow: useSep ? '0 0 8px rgba(159, 122, 234, 0.8)' : '0 0 8px rgba(255,215,0,0.8)',
-                                    animation: `evolveParticle 0.8s ease-out ${delay}s forwards`
-                                }}
-                            >
+                            <div key={`land-${i}`} style={{
+                                position: 'absolute', left: 0, top: 0,
+                                width: 8, height: 8, borderRadius: '50%',
+                                background: 'white',
+                                animation: `landParticle${i} 0.5s ease-out forwards`
+                            }}>
                                 <style>{`
-                                    @keyframes evolveParticle {
-                                        0% {
-                                            transform: translate(-50%, -50%) rotate(${angle}deg) translateX(0) scale(1);
-                                            opacity: 1;
-                                        }
-                                        100% {
-                                            transform: translate(-50%, -50%) rotate(${angle}deg) translateX(${dist}px) scale(0);
-                                            opacity: 0;
-                                        }
+                                    @keyframes landParticle${i} {
+                                        0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                                        100% { opacity: 0; transform: translate(-50%, -50%) rotate(${angle}deg) translateX(${dist}px) scale(0); }
                                     }
                                 `}</style>
                             </div>
@@ -690,6 +721,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
         </div>
     );
 };
+
 
 
 
@@ -845,6 +877,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         index?: number;
         playerId: string;
     } | null>(null);
+
+    // Special Summon Tracking (for cards appearing not from hand)
+    const [summonedCardIds, setSummonedCardIds] = React.useState<Set<string>>(new Set());
 
     const [selectedCard, setSelectedCard] = React.useState<{
         card: any;
@@ -1046,6 +1081,46 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [gameState.pendingEffects, currentPlayerId, opponentPlayerId, animatingCard, visualPlayerBoard, visualOpponentBoard]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
+
+    // Detect Special Summons (cards appearing on board not from hand)
+    React.useEffect(() => {
+        const prevPlayers = prevPlayersRef.current;
+        const currentPlayer = gameState.players[currentPlayerId];
+        const prevPlayer = prevPlayers[currentPlayerId];
+
+        if (!prevPlayer) return; // First render
+
+        const prevBoard = prevPlayer.board || [];
+        const currBoard = currentPlayer.board || [];
+        const prevHand = prevPlayer.hand || [];
+
+        const prevBoardIds = new Set(prevBoard.filter(c => c).map(c => (c as any).instanceId));
+        const prevHandIds = new Set(prevHand.filter(c => c).map(c => (c as any).instanceId));
+        const newSummonIds = new Set<string>();
+
+        // Find cards that are new on board AND were not in previous hand
+        currBoard.forEach(card => {
+            if (!card) return;
+            const instanceId = (card as any).instanceId;
+
+            // Card is new on board (not in prev board)
+            if (!prevBoardIds.has(instanceId)) {
+                // Check if it was in hand (normal play) or not (special summon)
+                if (!prevHandIds.has(instanceId)) {
+                    newSummonIds.add(instanceId);
+                }
+            }
+        });
+
+        if (newSummonIds.size > 0) {
+            setSummonedCardIds(newSummonIds);
+            // Clear after animation completes (1 second)
+            const timer = setTimeout(() => {
+                setSummonedCardIds(new Set());
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [gameState.players, currentPlayerId]);
 
     React.useEffect(() => {
         const prevPlayers = prevPlayersRef.current;
@@ -2791,7 +2866,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             `}</style>
                                         </div>
                                     )}
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                 </div>
                             );
 
