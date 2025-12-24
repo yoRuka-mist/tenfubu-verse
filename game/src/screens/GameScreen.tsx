@@ -715,7 +715,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             if (timer) clearTimeout(timer);
             if (intervalId) clearInterval(intervalId);
         };
-    }, [phase, startX, startY, currentScale, scale]); // Added scale to dependencies
+    }, [phase]); // Only depend on phase to avoid reset loops on state updates
 
     // Total rotation is just pure Y rotation + charge wobble
     // 3D CSS will handle the face visibility
