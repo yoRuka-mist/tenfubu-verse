@@ -2059,7 +2059,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             finalX = boardCenterX + offsetX;
 
             // Determine Y: Player slots are at bottom of board area
-            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (80 * scale); // Adjusted to 80 for correct gap
+            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (70 * scale); // Adjusted to 70
             finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
         }
 
@@ -2266,7 +2266,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             finalX = boardCenterX + offsetX;
 
                             // Opponent slots are at top of board area
-                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (80 * scale); // Adjusted to 80
+                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (70 * scale); // Adjusted to 70
                             finalY = opponentBoardAreaBottom - (CARD_HEIGHT * scale / 2);
                         }
 
@@ -3017,7 +3017,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 finalX = boardCenterX + offsetX;
 
-                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (80 * scale); // Consistent with 80
+                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (70 * scale); // Consistent with 70
                 finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
             }
 
@@ -3376,7 +3376,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Opponent Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${80 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top margin to 80
+                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${70 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top margin to 70
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3414,7 +3414,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Player Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${80 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom margin to 80
+                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${70 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom margin to 70
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3761,7 +3761,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 }
 
                                 offsetX = (i - (handSize - 1) / 2) * spacing;
-                                translateY = selectedHandIndex === i ? -30 * scale : 0;
+                                translateY = selectedHandIndex === i ? -15 * scale : 0; // Half lift (-15)
                                 rotate = 0;
                             }
 
