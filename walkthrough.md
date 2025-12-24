@@ -1,29 +1,31 @@
-# 修正内容の確認 (Walkthrough)
+# Walkthrough - Card Animation & Effect Refining
 
-## 実装済み機能
-1. **BGM再生ロジックの修正**
-   - ブラウザのリロード後にBGMが再生されない問題を解決しました。
-   - `audioSettings.enabled` の変更に合わせてイベントリスナーを登録/解除するようにし、ユーザーの初動（クリックなど）で確実に再生が開始されるように修正しました。
-   - `GameScreen.tsx` 内の `useEffect` の依存関係と早期リターンを見直し、安定性を向上させました。
+## Changes
 
-2. **破壊・回復効果のビジュアル演出強化**
-   - 破壊効果（`DESTROY`, `RANDOM_DESTROY`）に対して、より力強い `IMPACT` エフェクトとスクリーンシェイクを追加しました。
-   - リーダーの回復効果（`HEAL_LEADER`）に対して、サウンド（`water.mp3`）と適切なアニメーション遅延を追加し、効果を実感しやすくしました。
+### 1. `game/src/screens/GameScreen.tsx`
 
-3. **新カードおよび効果の実装**
-   - **ルイ・ユー**: ファンファーレで `cyoriena` を場に出すように再調整しました。
-   - **cyoriena**: [守護] および「ターン終了時にリーダーを2回復する」トークンフォロワー。コストを2に設定しました。
-   - **演出タイミングの最適化**: ダメージ発生時のアニメーションと数値反映のラグを最小化（約0.1秒）し、判定後の余韻を約1秒設けることで、視認性と爽快感を向上させました。
-   - **翼 (Tsubasa)**: 自分のフォロワーに[疾走]を付与するスペルとして実装。
-   - **Amandava**: `RANDOM_SET_HP` 特殊効果をエンジンに実装し、AOEダメージと組み合わせて強力な盤面干渉能力を持たせました。
+#### Use of `instanceId` in `PLAY_CARD`
+- Updated `handlePlayCard` and `handleTargetClick` to include `instanceId` in the `PLAY_CARD` action payload.
+- This ensures that the engine reuses the existing ID from the hand card instead of generating a new one.
+- **Effect**: The `isSpecialSummoning` logic correctly identifies played cards as "from hand" (existing ID) vs "special summon" (new ID), preventing the unwanted fade-in animation for played cards.
 
-4. **エンジン(engine.ts)の強化**
-   - `GRANT_PASSIVE` 効果で `STORM`（疾走）や `RUSH`（突進）を付与した際、即座に攻撃可能（`canAttack = true`）になるように修正しました。
-   - `SUMMON_CARD` や `RANDOM_SET_HP` などの新しい効果タイプを完全に実装しました。
+#### Removal of Destruction `IMPACT` Effect
+- Commented out the `useEffect` block that triggered `playEffect('IMPACT')` when a card enters `isDying` state.
+- **Effect**: Cards now only use the `card-dying` CSS animation (glowing fade-out) when destroyed, as requested.
 
-## 確認事項
-- [ ] ブラウザリロード後、画面のどこかをクリックするとBGMが流れ始めるか。
-- [ ] 「ルイ・ユー」をプレイした際、隣に「cyoriena」が召喚されるか。
-- [ ] 「翼」を使用してフォロワーに疾走を付与し、そのターンに攻撃できるか。
-- [ ] 「かすが」などの破壊効果で `IMPACT` エフェクトが表示されるか。
-- [ ] 回復時に音が鳴り、UIにラグ（タメ）が発生するか。
+#### Evolution Animation Timing
+- In `EvolutionAnimation` component (`WHITE_FADE` phase):
+    - Changed progress increment from `0.035` to `0.025`.
+    - Changed threshold from `1.2` to `1.2`.
+    - **Effect**: The energy charge phase now lasts longer (~1.9s), addressing the user's feedback that it was too short.
+
+### 2. `game/src/core/types.ts`
+
+#### `Card` Interface Update
+- Added `instanceId?: string;` to the `Card` interface.
+- **Reason**: To solve TypeScript errors when accessing `instanceId` on card objects from `player.hand`. While `BoardCard` defines it, `Card` did not, but runtime objects in hand do possess it.
+
+## Verification
+- **Card Play**: Playing a Follower from hand should visually transition from the "flying" animation directly to the board slot without a secondary fade-in/flash. Special summons (e.g., from effects) should still fade in.
+- **Destruction**: Destroyed cards should glow and fade out smoothly without an "explosion" sprite overlay.
+- **Evolution**: The white charging phase of evolution should feel weightier and last approx. 0.5s longer than the previous fast version.

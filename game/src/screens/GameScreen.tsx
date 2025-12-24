@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useReducer } from 'react';
+﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback } from 'react';
 import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
@@ -8,6 +8,38 @@ import { canEvolve } from '../core/abilities';
 // Leader Images
 const azyaLeaderImg = '/leaders/azya_leader.png';
 const senkaLeaderImg = '/leaders/senka_leader.png';
+
+// --- Scale Factor Hook for 4K/Multi-resolution Support ---
+// Base resolution: 1920x1080 (Full HD)
+const BASE_WIDTH = 1920;
+const BASE_HEIGHT = 1080;
+
+const useScaleFactor = () => {
+    const [scale, setScale] = useState(1);
+
+    const calculateScale = useCallback(() => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Calculate scale based on both dimensions, use the smaller one to ensure everything fits
+        const scaleX = width / BASE_WIDTH;
+        const scaleY = height / BASE_HEIGHT;
+
+        // Use the smaller scale to maintain aspect ratio and ensure all elements fit
+        // Also ensure minimum scale of 0.5 for very small screens
+        const newScale = Math.max(0.5, Math.min(scaleX, scaleY));
+
+        setScale(newScale);
+    }, []);
+
+    useEffect(() => {
+        calculateScale();
+        window.addEventListener('resize', calculateScale);
+        return () => window.removeEventListener('resize', calculateScale);
+    }, [calculateScale]);
+
+    return scale;
+};
 
 interface GameScreenProps {
     playerClass: ClassType;
@@ -37,7 +69,7 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
     }, []);
 
     return (
-        <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
+        <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
             <style>{`
                 @keyframes healGlowFade {
                     0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; filter: blur(10px); }
@@ -109,7 +141,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
     // SE Trigger Logic
     React.useEffect(() => {
-        if (!audioSettings || !audioSettings.enabled) return;
+        if (!audioSettings || !audioSettings.seEnabled) return;
 
         const playSE = (file: string, volume: number = 0.5, delay: number = 0) => {
             setTimeout(() => {
@@ -151,7 +183,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     }
 
     const style: React.CSSProperties = {
-        position: 'fixed', left: x, top: y, transform: 'translate(-50%, -50%)',
+        position: 'absolute', left: x, top: y, transform: 'translate(-50%, -50%)',
         width: 150, height: 150, pointerEvents: 'none', zIndex: 5000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
@@ -259,7 +291,7 @@ const DamageText = ({ value, x, y, color, onComplete }: { value: string | number
 
     return (
         <div style={{
-            position: 'fixed', left: x, top: y,
+            position: 'absolute', left: x, top: y,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none', zIndex: 6000,
             fontSize: '4rem',
@@ -468,23 +500,15 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     // Distance: 200 to 800 pixels (wide range)
                     const dist = 200 + Math.random() * 600;
 
-                    // Delay: 0 to 1.0 seconds (shortened for faster charge phase)
-                    // This makes particles appear continuously
-                    const delay = Math.random() * 1.0;
+                    // Delay: 0 to 1.8 seconds (Cover full 1.9s duration)
+                    const delay = Math.random() * 1.8;
 
-                    // Duration inversely proportional to distance (far = fast, near = slow)
-                    // Adjusted so that even late-starting particles reach the card before FLIP
-                    // WHITE_FADE lasts ~1.4s, so delay + duration should be < 1.4s
-                    // Far particles (dist ~800): duration ~0.3s
-                    // Near particles (dist ~200): duration ~0.8s
-                    const normalizedDist = (dist - 200) / 600; // 0 to 1
-                    const baseDuration = 0.8 - normalizedDist * 0.5; // 0.8s to 0.3s
+                    // Duration: Fixed range for consistent speed
+                    // We want them to reach center.
+                    const normalizedDist = (dist - 200) / 600;
+                    const duration = 0.5 + normalizedDist * 0.5; // 0.5s to 1.0s
 
-                    // Ensure particle reaches center before phase ends
-                    const maxDuration = Math.max(0.2, 1.2 - delay); // Leave 0.2s buffer
-                    const duration = Math.min(baseDuration, maxDuration);
-
-                    // Size: 24 to 72 pixels (Increased by 3x as requested)
+                    // Size: 24 to 72 pixels
                     const size = 24 + Math.random() * 48;
 
                     return {
@@ -503,11 +527,11 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Shortened from 2.4s to ~1.4s (1 second faster)
                 let whiteProgress = 0;
                 intervalId = setInterval(() => {
-                    whiteProgress += 0.035; // Faster charge (was 0.02)
+                    whiteProgress += 0.025; // Adjusted for ~1.9s duration
                     setWhiteness(Math.min(whiteProgress, 1));
                     setGlowIntensity(Math.min(whiteProgress * 80, 80)); // Stronger glow
                     setChargeRotate(whiteProgress * 15); // Rotate more
-                    if (whiteProgress >= 1.2) { // Allow overflow for effect duration
+                    if (whiteProgress >= 1.2) { // Adjusted threshold for duration (~1.9s)
                         if (intervalId) clearInterval(intervalId);
                         setVibrate(false);
                         onPhaseChangeRef.current('FLIP');
@@ -664,13 +688,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
         };
     }, [phase, startX, startY]);
 
-    // Determine which image to show based on rotation
-    const showEvolvedImage = rotateY > 90 && evolvedImageUrl;
-    const imageUrl = showEvolvedImage ? evolvedImageUrl : card.imageUrl;
-
-    // Correct the rotation for back face
-    const displayRotateY = showEvolvedImage ? rotateY - 180 : rotateY;
-    const totalRotateY = displayRotateY + chargeRotate;
+    // Total rotation is just pure Y rotation + charge wobble
+    // 3D CSS will handle the face visibility
+    const totalRotateY = rotateY + chargeRotate;
 
     // Vibration offset
     const vibrateOffset = vibrate ? {
@@ -692,7 +712,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     @keyframes chargeParticleIn-${p.id} {
                         0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.5); }
                         20% { opacity: 0.8; transform: rotate(${p.angle}deg) translateX(${p.dist * 0.8}px) scale(1.2); }
-                        100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); }
+                        100% { opacity: 1; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); } /* Keep visible at end */
                     }
                 `).join('')}
                 ${burstParticles.map(p => `
@@ -831,27 +851,57 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     boxShadow: useSep
                         ? `0 0 40px rgba(159, 122, 234, 0.7)`
                         : `0 0 40px rgba(251, 211, 141, 0.7)`,
-                    position: 'relative'
+                    position: 'relative',
+                    transformStyle: 'preserve-3d' // Required for backface-visibility to work
                 }}>
-                    {/* Card Image */}
-                    <img
-                        src={imageUrl}
-                        alt={card.name}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            filter: `brightness(${1 + whiteness * 0.5}) contrast(${1 - whiteness * 0.2})`
-                        }}
-                    />
-
-                    {/* White Overlay */}
+                    {/* --- FRONT FACE (Original) --- */}
                     <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: `rgba(255,255,255,${whiteness * 0.85})`,
-                        pointerEvents: 'none'
-                    }} />
+                        position: 'absolute', inset: 0,
+                        backfaceVisibility: 'hidden',
+                        borderRadius: 16, overflow: 'hidden',
+                        background: '#1a202c' // Fallback bg
+                    }}>
+                        <img
+                            src={card.imageUrl}
+                            alt={card.name}
+                            style={{
+                                width: '100%', height: '100%', objectFit: 'cover',
+                                filter: `brightness(${1 + whiteness * 0.5}) contrast(${1 - whiteness * 0.2})`
+                            }}
+                        />
+                        {/* White Overlay Front */}
+                        <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'white',
+                            opacity: whiteness,
+                            pointerEvents: 'none'
+                        }} />
+                    </div>
+
+                    {/* --- BACK FACE (Evolved) --- */}
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        backfaceVisibility: 'hidden',
+                        transform: 'rotateY(180deg)',
+                        borderRadius: 16, overflow: 'hidden',
+                        background: '#1a202c'
+                    }}>
+                        <img
+                            src={evolvedImageUrl || card.imageUrl}
+                            alt={`${card.name} Evolved`}
+                            style={{
+                                width: '100%', height: '100%', objectFit: 'cover',
+                                filter: `brightness(${1 + whiteness * 0.5}) contrast(${1 - whiteness * 0.2})`
+                            }}
+                        />
+                        {/* White Overlay Back */}
+                        <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'white',
+                            opacity: whiteness,
+                            pointerEvents: 'none'
+                        }} />
+                    </div>
                 </div>
             </div>
 
@@ -1009,6 +1059,23 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
 export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave }) => {
     const { adapter, connected } = useGameNetwork(gameMode, targetRoomId);
 
+    // 4K/Multi-resolution scaling
+    const scale = useScaleFactor();
+
+    // Helper to convert screen coordinates to scaled container coordinates
+    // The game-screen div is scaled, so we need to convert screen coords to base coords
+    const screenToGameCoords = useCallback((screenX: number, screenY: number): { x: number, y: number } => {
+        // Calculate the offset of the centered game container
+        const offsetX = (window.innerWidth - BASE_WIDTH * scale) / 2;
+        const offsetY = (window.innerHeight - BASE_HEIGHT * scale) / 2;
+
+        // Convert screen coords to game container coords
+        const x = (screenX - offsetX) / scale;
+        const y = (screenY - offsetY) / scale;
+
+        return { x, y };
+    }, [scale]);
+
     // CPU対戦時は相手クラスを自分と反対にする
     const opponentClass: ClassType = playerClass === 'SENKA' ? 'AJA' : 'SENKA';
 
@@ -1080,16 +1147,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // User request: "When using Spells, do not use vibration."
         // We need to know if the SOURCE was a spell or if the effect itself implies it.
         // Or simple hack: If effectType is generic default for spells? But spells use FIREBALL etc.
-        // Let's rely on caller. 
+        // Let's rely on caller.
         // Caller `handlePlayCard` logic triggers a shake: `triggerShake(); // Trigger Shake on Land`
         // We should modify `handlePlayCard` to check Card Type.
-        // Here in `playEffect`, it's just visual. 
+        // Here in `playEffect`, it's just visual.
         // We will remove the shake trigger from Spell Play completion in `handlePlayCard`.
 
+        // Use BASE_WIDTH for scaled layout calculations
         const sidebarWidth = 340;
-        const boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+        const boardCenterX = sidebarWidth + (BASE_WIDTH - sidebarWidth) / 2;
         let x = boardCenterX;
-        let y = window.innerHeight / 2;
+        let y = BASE_HEIGHT / 2;
 
         const isOpponentTarget = targetPlayerId === opponentPlayerId;
         const isLeader = targetIndex === undefined || targetIndex === -1;
@@ -1098,26 +1166,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const ref = isOpponentTarget ? opponentLeaderRef : playerLeaderRef;
             if (ref.current) {
                 const rect = ref.current.getBoundingClientRect();
-                x = rect.left + rect.width / 2;
-                y = rect.top + rect.height / 2;
-                // Correct vertical center visually for effects
-                // Leader image might have offset, but ref is bounding box.
-                // Assuming bounding box is correct. No extra offset needed if CSS handles it.
+                // Convert screen coordinates to game container coordinates
+                const gameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                x = gameCoords.x;
+                y = gameCoords.y;
             } else {
-                y = isOpponentTarget ? 150 : window.innerHeight - 250;
+                y = isOpponentTarget ? 150 : BASE_HEIGHT - 250;
             }
         } else if (targetIndex !== undefined && targetIndex >= 0) {
             const refs = isOpponentTarget ? opponentBoardRefs : playerBoardRefs;
             const el = refs.current[targetIndex];
             if (el) {
                 const rect = el.getBoundingClientRect();
-                x = rect.left + rect.width / 2;
-                y = rect.top + rect.height / 2;
-                // Vertical Adjustment for cards:
-                // Cards are 100x130 (or similar). The effect centers on this.
-                // If user reports shifted, it's likely the effect origin.
-                // AttackEffect renders translate(-50%, -50%).
-                // If anything, we can hardcode a small offset if needed, but rect center is safest.
+                // Convert screen coordinates to game container coordinates
+                const gameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                x = gameCoords.x;
+                y = gameCoords.y;
             }
         }
 
@@ -1141,14 +1205,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [audioSettings, setAudioSettings] = React.useState(() => {
         try {
             const saved = localStorage.getItem('audioSettings');
-            return saved ? JSON.parse(saved) : { bgm: 0.3, se: 0.5, voice: 0.5, enabled: true };
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Migration: if 'enabled' exists, use it for both bgmEnabled and seEnabled
+                if (parsed.enabled !== undefined) {
+                    const { enabled, ...rest } = parsed;
+                    return { ...rest, bgmEnabled: enabled, seEnabled: enabled };
+                }
+                return parsed;
+            }
+            return { bgm: 0.3, se: 0.5, voice: 0.5, bgmEnabled: true, seEnabled: true };
         } catch (e) {
-            return { bgm: 0.3, se: 0.5, voice: 0.5, enabled: true };
+            return { bgm: 0.3, se: 0.5, voice: 0.5, bgmEnabled: true, seEnabled: true };
         }
     });
 
     const playSE = React.useCallback((file: string, volume: number = 0.5) => {
-        if (!audioSettings.enabled) return;
+        if (!audioSettings.seEnabled) return;
         const audio = new Audio(`/se/${file}`);
         audio.volume = audioSettings.se * volume;
         audio.play().catch(e => console.warn("SE Play prevented", e));
@@ -1161,8 +1234,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     React.useEffect(() => {
         localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
         if (bgmRef.current) {
-            bgmRef.current.volume = audioSettings.enabled ? audioSettings.bgm : 0;
-            if (!audioSettings.enabled) {
+            bgmRef.current.volume = audioSettings.bgmEnabled ? audioSettings.bgm : 0;
+            if (!audioSettings.bgmEnabled) {
                 bgmRef.current.pause();
             } else if (bgmRef.current.paused) {
                 bgmRef.current.play().catch(e => console.warn("Auto-play prevented", e));
@@ -1203,8 +1276,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const lastBgmKey = 'lastPlayedBgm';
     const selectBgm = React.useCallback((className: string) => {
         const bgmPools: Record<string, string[]> = {
-            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3'],
-            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3']
+            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3'],
+            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3']
         };
         const currentPool = bgmPools[className] || bgmPools['SENKA'];
         const lastPlayed = sessionStorage.getItem(lastBgmKey);
@@ -1392,6 +1465,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currentPlayers = gameState.players;
         let newDamages: { id: number, value: number | string, x: number, y: number, color?: string }[] = [];
 
+        // Helper to get game coordinates from element
+        const getGameCoordsFromElement = (el: HTMLElement) => {
+            const rect = el.getBoundingClientRect();
+            return screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        };
+
         Object.keys(currentPlayers).forEach(pid => {
             const curr = currentPlayers[pid];
             const prev = prevPlayers[pid];
@@ -1403,12 +1482,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const ref = isMe ? playerLeaderRef.current : opponentLeaderRef.current;
 
                 if (ref) {
-                    const rect = ref.getBoundingClientRect();
+                    const coords = getGameCoordsFromElement(ref);
                     newDamages.push({
                         id: Date.now() + Math.random(),
                         value: diff,
-                        x: rect.left + rect.width / 2,
-                        y: rect.top + rect.height / 2,
+                        x: coords.x,
+                        y: coords.y,
                         color: '#e53e3e' // Red for Damage
                     });
                 }
@@ -1417,12 +1496,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const isMe = pid === currentPlayerId;
                 const ref = isMe ? playerLeaderRef.current : opponentLeaderRef.current;
                 if (ref) {
-                    const rect = ref.getBoundingClientRect();
+                    const coords = getGameCoordsFromElement(ref);
                     newDamages.push({
                         id: Date.now() + Math.random(),
                         value: '+' + diff,
-                        x: rect.left + rect.width / 2,
-                        y: rect.top + rect.height / 2,
+                        x: coords.x,
+                        y: coords.y,
                         color: '#48bb78' // Green for Heal
                     });
                 }
@@ -1445,8 +1524,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                         const el = refs[currIdx];
                         if (el) {
-                            const rect = el.getBoundingClientRect();
-                            newDamages.push({ id: Date.now() + Math.random(), value: damage, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#e53e3e' });
+                            const coords = getGameCoordsFromElement(el);
+                            newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
                         }
                     } else if (currCard.currentHealth > prevCard.currentHealth) {
                         // Heal - but skip if this is from evolution (hasEvolved changed to true)
@@ -1458,8 +1537,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                             const el = refs[currIdx];
                             if (el) {
-                                const rect = el.getBoundingClientRect();
-                                newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: '#48bb78' });
+                                const coords = getGameCoordsFromElement(el);
+                                newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: coords.x, y: coords.y, color: '#48bb78' });
                             }
                         }
                     }
@@ -1501,10 +1580,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                         const el = refs[idx]; // idx matches prevCard index if no shift... wait.
                         if (el) {
-                            const rect = el.getBoundingClientRect();
+                            const coords = getGameCoordsFromElement(el);
                             // Update the damage item pushed above
-                            newDamages[newDamages.length - 1].x = rect.left + rect.width / 2;
-                            newDamages[newDamages.length - 1].y = rect.top + rect.height / 2;
+                            newDamages[newDamages.length - 1].x = coords.x;
+                            newDamages[newDamages.length - 1].y = coords.y;
                         }
                     }
                 }
@@ -1520,9 +1599,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         prevPlayersRef.current = currentPlayers;
-    }, [gameState.players, currentPlayerId, opponentPlayerId]);
+    }, [gameState.players, currentPlayerId, opponentPlayerId, screenToGameCoords]);
 
     // --- Destruction Effect (IMPACT on death) ---
+    // REMOVED: Replaced by CSS animation 'cardDie' (glowing fade out)
+    /*
     const prevDyingIdsRef = React.useRef<Set<string>>(new Set());
     React.useEffect(() => {
         const currentDyingIds = new Set<string>();
@@ -1568,6 +1649,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         prevDyingIdsRef.current = currentDyingIds;
     }, [visualPlayerBoard, visualOpponentBoard]);
+    */
 
     // --- Visual Effect Helpers ---
 
@@ -1636,7 +1718,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setIsGameStartAnim(false);
                     }, 1200);
                 }, 1500);
-            }, 1800);
+            }, 800);
         }
     }, [gameState.phase, coinTossPhase, gameMode, playSE]);
 
@@ -1721,10 +1803,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const targetIdx = payload.targetIsLeader ? -1 : payload.targetIndex;
                     const targetPid = playerId === 'p1' ? 'p2' : 'p1';
                     playEffect(attackerCard?.attackEffectType, targetPid, targetIdx);
+                } else if (msg.payload.type === 'PLAY_CARD') {
+                    // Play sound for opponent's card play
+                    const { playerId, payload } = msg.payload;
+                    const player = gameState.players[playerId];
+                    // Card is in hand at payload.cardIndex
+                    const card = player.hand[payload.cardIndex];
+                    if (card && card.type !== 'SPELL') {
+                        playSE('gan.mp3', 0.6);
+                    }
                 }
             }
         });
-    }, [adapter, connected]);  // Removed gameState from dependencies
+    }, [adapter, connected, gameState, playSE, playEffect]);  // Added dependencies
 
     // AI Logic State
     const aiProcessing = React.useRef(false);
@@ -1932,7 +2023,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 triggerShake(); // Trigger Shake on Land ONLY if not Spell
             }
             // Dispatch only once
-            dispatchAndSend({ type: 'PLAY_CARD', playerId: currentPlayerId, payload: { cardIndex: index } });
+            dispatchAndSend({ type: 'PLAY_CARD', playerId: currentPlayerId, payload: { cardIndex: index, instanceId: card.instanceId } });
             setPlayingCardAnim(null);
         };
 
@@ -2638,16 +2729,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     }
                                 }
 
+                                // Capture attack parameters before state reset
+                                const attackParams = {
+                                    attackerIndex: currentDrag.sourceIndex,
+                                    targetIndex: targetIsLeader ? -1 : targetIndex,
+                                    targetIsLeader: targetIsLeader
+                                };
+
                                 // Delay Dispatch to match animation impact point (approx 300-350ms)
                                 setTimeout(() => {
                                     dispatchAndSend({
                                         type: 'ATTACK',
                                         playerId: currentPlayerId,
-                                        payload: {
-                                            attackerIndex: currentDrag.sourceIndex,
-                                            targetIndex: targetIsLeader ? -1 : targetIndex, // Use calculated index
-                                            targetIsLeader: targetIsLeader
-                                        }
+                                        payload: attackParams
                                     });
                                 }, 1000);
                             }
@@ -2821,7 +2915,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 dispatchAndSend({
                     type: 'PLAY_CARD',
                     playerId: currentPlayerId,
-                    payload: { cardIndex: index, targetId }
+                    payload: { cardIndex: index, targetId, instanceId: animCard.instanceId }
                 });
 
                 // --- Player amandava FANFARE Visuals ---
@@ -2946,477 +3040,508 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         window.scrollTo(0, 0);
     });
 
+    // Scale-adjusted base dimensions for 4K support
+    // At base resolution (1920x1080), scale = 1
+    // At 4K (3840x2160), scale = 2
+
     return (
-        <div className="game-screen"
+        <div className="game-screen-wrapper"
             style={{
-                width: '100%', height: '100%', display: 'flex', overflow: 'hidden',
-                background: 'radial-gradient(circle at center, #1a202c 0%, #000 100%)',
-                fontFamily: "'Helvetica Neue', sans-serif", userSelect: 'none', color: '#fff'
+                width: '100vw',
+                height: '100vh',
+                overflow: 'hidden',
+                background: '#000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
             }}
-            // REMOVED local onMouseMove/Up listeners to avoid conflict/lag
-            onClick={handleBackgroundClick} // Close hand on bg click
         >
-            <style>{`
-                html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
-                * { box-sizing: border-box; }
-                .shake-target { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; }
-                @keyframes shake {
-                    10%, 90% { transform: translate3d(-1px, 0, 0); }
-                    20%, 80% { transform: translate3d(2px, 0, 0); }
-                    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-                    40%, 60% { transform: translate3d(4px, 0, 0); }
-                }
-                @keyframes cardDie {
-                    0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 white); opacity: 1; }
-                    40% { transform: scale(1.15); filter: brightness(3) drop-shadow(0 0 20px white); opacity: 0.9; }
-                    100% { transform: scale(0.4) rotate(8deg); filter: brightness(5) drop-shadow(0 0 40px white); opacity: 0; }
-                }
-                .card-dying { animation: cardDie 0.7s forwards; }
-             `}</style>
+            <div className="game-screen"
+                style={{
+                    width: `${BASE_WIDTH}px`,
+                    height: `${BASE_HEIGHT}px`,
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'center center',
+                    display: 'flex',
+                    overflow: 'hidden',
+                    background: 'radial-gradient(circle at center, #1a202c 0%, #000 100%)',
+                    fontFamily: "'Helvetica Neue', sans-serif",
+                    userSelect: 'none',
+                    color: '#fff',
+                    position: 'relative'
+                }}
+                // REMOVED local onMouseMove/Up listeners to avoid conflict/lag
+                onClick={handleBackgroundClick} // Close hand on bg click
+            >
+                <style>{`
+                    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+                    * { box-sizing: border-box; }
+                    .shake-target { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+                    @keyframes shake {
+                        10%, 90% { transform: translate3d(-1px, 0, 0); }
+                        20%, 80% { transform: translate3d(2px, 0, 0); }
+                        30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+                        40%, 60% { transform: translate3d(4px, 0, 0); }
+                    }
+                    @keyframes cardDie {
+                        0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 white); opacity: 1; }
+                        40% { transform: scale(1.15); filter: brightness(3) drop-shadow(0 0 20px white); opacity: 0.9; }
+                        100% { transform: scale(0.4) rotate(8deg); filter: brightness(5) drop-shadow(0 0 40px white); opacity: 0; }
+                    }
+                    .card-dying { animation: cardDie 0.7s forwards; }
+                `}</style>
 
-            {/* <BattleLog logs={gameState.logs || []} /> */}
+                {/* <BattleLog logs={gameState.logs || []} /> */}
 
-            {/* Target Selection Overlay Message */}
-            {targetingState && (
-                <div style={{
-                    position: 'absolute', top: '15%', left: '50%', transform: 'translate(-50%, -50%)',
-                    background: 'rgba(0, 0, 0, 0.7)', color: '#fff', padding: '10px 20px', borderRadius: 20,
-                    pointerEvents: 'none', zIndex: 1000, fontWeight: 'bold'
-                }}>
-                    対象を選択してください
-                </div>
-            )}
-
-
-
-
-
-            {/* --- Menu Overlay --- */}
-            {showMenu && (
-                <div style={{
-                    position: 'absolute', inset: 0, zIndex: 4000,
-                    background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }} onClick={() => setShowMenu(false)}>
-                    <div style={{ background: '#2d3748', padding: 40, borderRadius: 16, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 300, border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
-                        <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 10, color: '#fff' }}>メニュー</h2>
-
-                        {!showSettings ? (
-                            <>
-                                <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
-                                <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
-                                <button onClick={onLeave} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参して終了</button>
-                            </>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-                                <h3 style={{ margin: 0, color: '#cbd5e0' }}>音声設定</h3>
-                                {/* BGM Toggle */}
-                                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
-                                    BGM再生
-                                    <input type="checkbox" checked={audioSettings.enabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, enabled: e.target.checked }))}
-                                        style={{ width: 20, height: 20 }}
-                                    />
-                                </label>
-
-                                {/* BGM Volume */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                        <span>BGM</span>
-                                        <span>{Math.round(audioSettings.bgm * 100)}%</span>
-                                    </div>
-                                    <input
-                                        type="range" min="0" max="1" step="0.01"
-                                        value={audioSettings.bgm}
-                                        onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
-                                        style={{ width: '100%' }}
-                                    />
-                                </div>
-
-                                {/* SE Volume */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                        <span>SE</span>
-                                        <span>{Math.round(audioSettings.se * 100)}%</span>
-                                    </div>
-                                    <input
-                                        type="range" min="0" max="1" step="0.01"
-                                        value={audioSettings.se}
-                                        onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
-                                        style={{ width: '100%' }}
-                                    />
-                                </div>
-
-                                {/* Voice Volume */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                        <span>ボイス</span>
-                                        <span>{Math.round(audioSettings.voice * 100)}%</span>
-                                    </div>
-                                    <input
-                                        type="range" min="0" max="1" step="0.01"
-                                        value={audioSettings.voice}
-                                        onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
-                                        style={{ width: '100%' }}
-                                    />
-                                </div>
-
-                                <button onClick={() => setShowSettings(false)} style={{ padding: 10, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', marginTop: 10 }}>戻る</button>
-                            </div>
-                        )}
-
+                {/* Target Selection Overlay Message */}
+                {targetingState && (
+                    <div style={{
+                        position: 'absolute', top: '15%', left: '50%', transform: 'translate(-50%, -50%)',
+                        background: 'rgba(0, 0, 0, 0.7)', color: '#fff', padding: '10px 20px', borderRadius: 20,
+                        pointerEvents: 'none', zIndex: 1000, fontWeight: 'bold'
+                    }}>
+                        対象を選択してください
                     </div>
-                </div>
-            )}
-
-
-
-            {/* --- Left Sidebar: Card Info & Menu (20%) --- */}
-            <div className={shake ? 'shake-target' : ''} style={{ width: '20%', minWidth: 250, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: '50px 20px 20px 20px', display: 'flex', flexDirection: 'column', zIndex: 20 }} onClick={e => e.stopPropagation()}>
-                {/* Menu Button */}
-                <div style={{ marginBottom: 30 }}>
-                    <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 5 }}>
-                        <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
-                        <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
-                        <div style={{ width: 30, height: 3, background: '#cbd5e0' }}></div>
-                    </button>
-                </div>
-
-                <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 10, marginTop: 0 }}>カード情報</h3>
-                {selectedCard ? (
-                    <div style={{ marginTop: 20 }}>
-                        {/* Art Only */}
-                        <div style={{
-                            width: '100%', aspectRatio: '1/1', marginBottom: 20,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            <Card card={selectedCard.card} style={{ width: '100%', height: '100%' }} variant="art-only" />
-                        </div>
-
-                        {/* Name */}
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>{selectedCard.card.name}</div>
-
-                        {/* Stats with Icons */}
-                        {selectedCard.card.type === 'FOLLOWER' && (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20 }}>
-                                {/* Attack Spade */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                        <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
-                                    </svg>
-                                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4299e1' }}>
-                                        {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
-                                    </span>
-                                </div>
-                                {/* Health Heart */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#f56565">
-                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                                    </svg>
-                                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f56565' }}>
-                                        {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-
-
-
-                        <div style={{ fontSize: '0.9rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
-                            {selectedCard.card.description}
-                        </div>
-                    </div>
-                ) : (
-                    <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic' }}>カードを選択して詳細を表示</div>
                 )}
-            </div>
 
-            {/* --- Right Main Area (80%) --- */}
-            <div ref={boardRef} className={shake ? 'shake-target' : ''} style={{ flex: 1, height: '100%', position: 'relative', background: 'rgba(0,0,0,0.1)', overflow: 'hidden' }}>
 
-                {/* ========================================== */}
-                {/* OPPONENT LEADER - Fixed at top center */}
-                {/* Size: 240px, UI mirrored from player (EP/SEP at bottom, HP left of EP) */}
-                {/* ========================================== */}
-                <div ref={opponentLeaderRef}
-                    onMouseEnter={() => setHoveredTarget({ type: 'LEADER', playerId: opponentPlayerId })}
-                    onMouseLeave={() => setHoveredTarget(null)}
-                    onClick={() => targetingState && handleTargetClick('LEADER', -1, opponentPlayerId)}
-                    style={{
-                        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-                        width: 240, height: 240, borderRadius: '50%',
-                        background: `url(${opponent.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg}) center/cover`,
-                        border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
-                        boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
-                        cursor: targetingState ? 'crosshair' : 'default',
-                        transition: 'all 0.3s'
-                    }}>
-                    {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
+
+
+
+                {/* --- Menu Overlay --- */}
+                {showMenu && (
                     <div style={{
-                        position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
-                        width: 50, height: 50, background: 'radial-gradient(circle, #feb2b2, #c53030)', borderRadius: '50%',
-                        border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '1.4rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10
-                    }}>{opponent.hp}</div>
+                        position: 'absolute', inset: 0, zIndex: 4000,
+                        background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }} onClick={() => setShowMenu(false)}>
+                        <div style={{ background: '#2d3748', padding: 40, borderRadius: 16, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 300, border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 10, color: '#fff' }}>メニュー</h2>
 
-                    {/* Opponent EP - Circular Frame */}
-                    <div style={{
-                        position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
-                        width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                        background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
-                    }}>
-                        <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
-                        </div>
-                    </div>
+                            {!showSettings ? (
+                                <>
+                                    <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
+                                    <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
+                                    <button onClick={onLeave} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参して終了</button>
+                                </>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                                    <h3 style={{ margin: 0, color: '#cbd5e0' }}>音声設定</h3>
+                                    {/* BGM Toggle */}
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
+                                        BGM再生
+                                        <input type="checkbox" checked={audioSettings.bgmEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgmEnabled: e.target.checked }))}
+                                            style={{ width: 20, height: 20 }}
+                                        />
+                                    </label>
 
-                    {/* Opponent SEP - Circular Frame */}
-                    <div style={{
-                        position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
-                        width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                        background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
-                    }}>
-                        <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
-                        </div>
-                    </div>
-                </div>
+                                    {/* SE Toggle */}
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
+                                        SE再生
+                                        <input type="checkbox" checked={audioSettings.seEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, seEnabled: e.target.checked }))}
+                                            style={{ width: 20, height: 20 }}
+                                        />
+                                    </label>
 
-                {/* Opponent Deck - Top Left */}
-                <div style={{ position: 'absolute', top: 10, left: 20, width: 60, height: 85, zIndex: 50 }}>
-                    {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
-                        <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
-                    ))}
-                    <div style={{ position: 'absolute', bottom: -20, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
-                </div>
+                                    {/* BGM Volume */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
+                                            <span>BGM</span>
+                                            <span>{Math.round(audioSettings.bgm * 100)}%</span>
+                                        </div>
+                                        <input
+                                            type="range" min="0" max="1" step="0.01"
+                                            value={audioSettings.bgm}
+                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
 
-                {/* Opponent Hand - Top Right */}
-                <div style={{ position: 'absolute', top: 10, right: 20, display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right', zIndex: 50 }}>
-                    {opponent.hand.map((_, i) => (
-                        <div key={i} style={{
-                            width: 80, height: 110,
-                            background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
-                            border: '1px solid #742a3a', borderRadius: 6,
-                            marginLeft: i > 0 ? -50 : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
-                        }}></div>
-                    ))}
-                </div>
+                                    {/* SE Volume */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
+                                            <span>SE</span>
+                                            <span>{Math.round(audioSettings.se * 100)}%</span>
+                                        </div>
+                                        <input
+                                            type="range" min="0" max="1" step="0.01"
+                                            value={audioSettings.se}
+                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
 
-                {/* ========================================== */}
-                {/* BATTLE FIELD - Fixed Areas with smooth sliding cards */}
-                {/* ========================================== */}
+                                    {/* Voice Volume */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
+                                            <span>ボイス</span>
+                                            <span>{Math.round(audioSettings.voice * 100)}%</span>
+                                        </div>
+                                        <input
+                                            type="range" min="0" max="1" step="0.01"
+                                            value={audioSettings.voice}
+                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
 
-                {/* Opponent Slots - Fixed Y (Gap center at 50%) */}
-                <div style={{
-                    position: 'absolute', top: 'calc(50% - 125px)', left: '0', width: '100%', height: 120,
-                    pointerEvents: 'none', zIndex: 10
-                }}>
-                    <div style={{
-                        position: 'relative', width: '100%', height: '100%',
-                        display: 'flex', justifyContent: 'center'
-                    }}>
-                        {visualOpponentBoard.map((c: any, i: number) => {
-                            const boardSize = visualOpponentBoard.length;
-                            const spacing = 102; // Card width 90 + gap 12
-                            const offsetX = (i - (boardSize - 1) / 2) * spacing;
-
-                            return (
-                                <div key={c?.instanceId || `empty-opp-${i}`}
-                                    ref={el => opponentBoardRefs.current[i] = el}
-                                    onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId })}
-                                    onMouseLeave={() => setHoveredTarget(null)}
-                                    onClick={() => { if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
-                                    style={{
-                                        position: 'absolute',
-                                        left: '50%',
-                                        top: 0,
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) ${(hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i) ? 'scale(1.05)' : 'scale(1)'}`,
-                                        transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
-                                        border: (targetingState && c) ? '2px solid #f56565' : 'none', borderRadius: 8,
-                                        cursor: targetingState ? 'crosshair' : 'pointer',
-                                        width: 90,
-                                        height: 120,
-                                        pointerEvents: 'auto'
-                                    }}>
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                    <button onClick={() => setShowSettings(false)} style={{ padding: 10, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', marginTop: 10 }}>戻る</button>
                                 </div>
-                            );
-                        })}
+                            )}
+
+                        </div>
                     </div>
+                )}
+
+
+
+                {/* --- Left Sidebar: Card Info & Menu (Fixed 340px for base resolution) --- */}
+                <div className={shake ? 'shake-target' : ''} style={{ width: 340, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: '50px 20px 20px 20px', display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    {/* Menu Button */}
+                    <div style={{ marginBottom: 30 }}>
+                        <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 5 }}>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0' }}></div>
+                        </button>
+                    </div>
+
+                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 10, marginTop: 0 }}>カード情報</h3>
+                    {selectedCard ? (
+                        <div style={{ marginTop: 20 }}>
+                            {/* Art Only */}
+                            <div style={{
+                                width: '100%', aspectRatio: '1/1', marginBottom: 20,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                <Card card={selectedCard.card} style={{ width: '100%', height: '100%' }} variant="art-only" />
+                            </div>
+
+                            {/* Name */}
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>{selectedCard.card.name}</div>
+
+                            {/* Stats with Icons */}
+                            {selectedCard.card.type === 'FOLLOWER' && (
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20 }}>
+                                    {/* Attack Spade */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                            <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
+                                        </svg>
+                                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4299e1' }}>
+                                            {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
+                                        </span>
+                                    </div>
+                                    {/* Health Heart */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#f56565">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                        </svg>
+                                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f56565' }}>
+                                            {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+
+
+                            <div style={{ fontSize: '0.9rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
+                                {selectedCard.card.description}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic' }}>カードを選択して詳細を表示</div>
+                    )}
                 </div>
 
-                {/* Player Slots - Fixed Y (Gap center at 50%) */}
-                <div style={{
-                    position: 'absolute', top: 'calc(50% + 5px)', left: '0', width: '100%', height: 120,
-                    pointerEvents: 'none', zIndex: 10
-                }}>
+                {/* --- Right Main Area (80%) --- */}
+                <div ref={boardRef} className={shake ? 'shake-target' : ''} style={{ flex: 1, height: '100%', position: 'relative', background: 'rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+
+                    {/* ========================================== */}
+                    {/* OPPONENT LEADER - Fixed at top center */}
+                    {/* Size: 240px, UI mirrored from player (EP/SEP at bottom, HP left of EP) */}
+                    {/* ========================================== */}
+                    <div ref={opponentLeaderRef}
+                        onMouseEnter={() => setHoveredTarget({ type: 'LEADER', playerId: opponentPlayerId })}
+                        onMouseLeave={() => setHoveredTarget(null)}
+                        onClick={() => targetingState && handleTargetClick('LEADER', -1, opponentPlayerId)}
+                        style={{
+                            position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                            width: 240, height: 240, borderRadius: '50%',
+                            background: `url(${opponent.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg}) center/cover`,
+                            border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
+                            boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
+                            cursor: targetingState ? 'crosshair' : 'default',
+                            transition: 'all 0.3s'
+                        }}>
+                        {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
+                        <div style={{
+                            position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
+                            width: 50, height: 50, background: 'radial-gradient(circle, #feb2b2, #c53030)', borderRadius: '50%',
+                            border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '1.4rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10
+                        }}>{opponent.hp}</div>
+
+                        {/* Opponent EP - Circular Frame */}
+                        <div style={{
+                            position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
+                        }}>
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            </div>
+                        </div>
+
+                        {/* Opponent SEP - Circular Frame */}
+                        <div style={{
+                            position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
+                        }}>
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Opponent Deck - Top Left */}
+                    <div style={{ position: 'absolute', top: 10, left: 20, width: 60, height: 85, zIndex: 50 }}>
+                        {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
+                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
+                        ))}
+                        <div style={{ position: 'absolute', bottom: -20, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
+                    </div>
+
+                    {/* Opponent Hand - Top Right */}
+                    <div style={{ position: 'absolute', top: 10, right: 20, display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right', zIndex: 50 }}>
+                        {opponent.hand.map((_, i) => (
+                            <div key={i} style={{
+                                width: 80, height: 110,
+                                background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
+                                border: '1px solid #742a3a', borderRadius: 6,
+                                marginLeft: i > 0 ? -50 : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
+                            }}></div>
+                        ))}
+                    </div>
+
+                    {/* ========================================== */}
+                    {/* BATTLE FIELD - Fixed Areas with smooth sliding cards */}
+                    {/* ========================================== */}
+
+                    {/* Opponent Slots - Fixed Y (Gap center at 50%) */}
                     <div style={{
-                        position: 'relative', width: '100%', height: '100%',
-                        display: 'flex', justifyContent: 'center'
+                        position: 'absolute', top: 'calc(50% - 125px)', left: '0', width: '100%', height: 120,
+                        pointerEvents: 'none', zIndex: 10
                     }}>
-                        {visualPlayerBoard.map((c: any, i: number) => {
-                            const boardSize = visualPlayerBoard.length;
-                            const spacing = 102; // Card width 90 + gap 12
-                            const offsetX = (i - (boardSize - 1) / 2) * spacing;
+                        <div style={{
+                            position: 'relative', width: '100%', height: '100%',
+                            display: 'flex', justifyContent: 'center'
+                        }}>
+                            {visualOpponentBoard.map((c: any, i: number) => {
+                                const boardSize = visualOpponentBoard.length;
+                                const spacing = 102; // Card width 90 + gap 12
+                                const offsetX = (i - (boardSize - 1) / 2) * spacing;
 
-                            return (
-                                <div key={c?.instanceId || `empty-plr-${i}`}
-                                    ref={el => playerBoardRefs.current[i] = el}
-                                    onMouseDown={(e) => handleBoardMouseDown(e, i)}
-                                    onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId })}
-                                    onMouseLeave={() => setHoveredTarget(null)}
-                                    style={{
-                                        position: 'absolute',
-                                        left: '50%',
-                                        top: 0,
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
-                                        transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
-                                        cursor: 'pointer',
-                                        pointerEvents: 'auto',
-                                        width: 90,
-                                        height: 120,
-                                        zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
-                                    }}>
-                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined, pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
-
-                                    {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
-                                    {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
-                                        <div style={{
+                                return (
+                                    <div key={c?.instanceId || `empty-opp-${i}`}
+                                        ref={el => opponentBoardRefs.current[i] = el}
+                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId })}
+                                        onMouseLeave={() => setHoveredTarget(null)}
+                                        onClick={() => { if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
+                                        style={{
                                             position: 'absolute',
-                                            top: '50%',
                                             left: '50%',
-                                            width: '120%',
-                                            height: '120%',
-                                            transform: 'translate(-50%, -50%)',
-                                            pointerEvents: 'none',
-                                            border: '2px dashed rgba(255, 230, 100, 0.9)',
-                                            borderRadius: '50%',
-                                            boxShadow: '0 0 15px rgba(255, 200, 50, 0.8)',
-                                            animation: 'evolveMarkerSpin 1.5s linear infinite',
-                                            zIndex: 20 // Higher than card's hover z-index (10)
+                                            top: 0,
+                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${(hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i) ? 'scale(1.05)' : 'scale(1)'}`,
+                                            transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
+                                            border: (targetingState && c) ? '2px solid #f56565' : 'none', borderRadius: 8,
+                                            cursor: targetingState ? 'crosshair' : 'pointer',
+                                            width: 90,
+                                            height: 120,
+                                            pointerEvents: 'auto'
                                         }}>
-                                            <svg viewBox="0 0 100 100" style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                filter: 'drop-shadow(0 0 8px currentColor)'
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Player Slots - Fixed Y (Gap center at 50%) */}
+                    <div style={{
+                        position: 'absolute', top: 'calc(50% + 5px)', left: '0', width: '100%', height: 120,
+                        pointerEvents: 'none', zIndex: 10
+                    }}>
+                        <div style={{
+                            position: 'relative', width: '100%', height: '100%',
+                            display: 'flex', justifyContent: 'center'
+                        }}>
+                            {visualPlayerBoard.map((c: any, i: number) => {
+                                const boardSize = visualPlayerBoard.length;
+                                const spacing = 102; // Card width 90 + gap 12
+                                const offsetX = (i - (boardSize - 1) / 2) * spacing;
+
+                                return (
+                                    <div key={c?.instanceId || `empty-plr-${i}`}
+                                        ref={el => playerBoardRefs.current[i] = el}
+                                        onMouseDown={(e) => handleBoardMouseDown(e, i)}
+                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId })}
+                                        onMouseLeave={() => setHoveredTarget(null)}
+                                        style={{
+                                            position: 'absolute',
+                                            left: '50%',
+                                            top: 0,
+                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
+                                            transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
+                                            cursor: 'pointer',
+                                            pointerEvents: 'auto',
+                                            width: 90,
+                                            height: 120,
+                                            zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
+                                        }}>
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: 90, height: 120, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: 90, height: 120, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+
+                                        {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
+                                        {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '50%',
+                                                left: '50%',
+                                                width: '120%',
+                                                height: '120%',
+                                                transform: 'translate(-50%, -50%)',
+                                                pointerEvents: 'none',
+                                                border: '2px dashed rgba(255, 230, 100, 0.9)',
+                                                borderRadius: '50%',
+                                                boxShadow: '0 0 15px rgba(255, 200, 50, 0.8)',
+                                                animation: 'evolveMarkerSpin 1.5s linear infinite',
+                                                zIndex: 20 // Higher than card's hover z-index (10)
                                             }}>
-                                                <defs>
-                                                    <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-30%" y="-30%" width="160%" height="160%">
-                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-                                                        <feMerge>
-                                                            <feMergeNode in="blur" />
-                                                            <feMergeNode in="SourceGraphic" />
-                                                        </feMerge>
-                                                    </filter>
-                                                </defs>
-                                                <circle cx="50" cy="50" r="45" fill="none"
-                                                    stroke={dragState.useSep ? '#b794f4' : '#f6e05e'}
-                                                    strokeWidth="4"
-                                                    strokeDasharray="15 8"
-                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
-                                                    opacity="0.95"
-                                                />
-                                                {/* Corner Arrows with glow */}
-                                                <polygon points="50,5 45,15 55,15"
-                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
-                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
-                                                <polygon points="95,50 85,45 85,55"
-                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
-                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
-                                                <polygon points="50,95 55,85 45,85"
-                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
-                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
-                                                <polygon points="5,50 15,55 15,45"
-                                                    fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
-                                                    filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
-                                            </svg>
-                                            <style>{`
+                                                <svg viewBox="0 0 100 100" style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    filter: 'drop-shadow(0 0 8px currentColor)'
+                                                }}>
+                                                    <defs>
+                                                        <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-30%" y="-30%" width="160%" height="160%">
+                                                            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                                                            <feMerge>
+                                                                <feMergeNode in="blur" />
+                                                                <feMergeNode in="SourceGraphic" />
+                                                            </feMerge>
+                                                        </filter>
+                                                    </defs>
+                                                    <circle cx="50" cy="50" r="45" fill="none"
+                                                        stroke={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                        strokeWidth="4"
+                                                        strokeDasharray="15 8"
+                                                        filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`}
+                                                        opacity="0.95"
+                                                    />
+                                                    {/* Corner Arrows with glow */}
+                                                    <polygon points="50,5 45,15 55,15"
+                                                        fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                        filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                    <polygon points="95,50 85,45 85,55"
+                                                        fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                        filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                    <polygon points="50,95 55,85 45,85"
+                                                        fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                        filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                    <polygon points="5,50 15,55 15,45"
+                                                        fill={dragState.useSep ? '#b794f4' : '#f6e05e'}
+                                                        filter={`url(#${dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'})`} />
+                                                </svg>
+                                                <style>{`
                                                 @keyframes evolveMarkerSpin {
                                                     0% { transform: translate(-50%, -50%) rotate(0deg); }
                                                     100% { transform: translate(-50%, -50%) rotate(360deg); }
                                                 }
                                             `}</style>
-                                        </div>
-                                    )}
-                                </div>
-                            );
+                                            </div>
+                                        )}
+                                    </div>
+                                );
 
-                        })}
-                    </div>
-                </div>
-
-                {/* ========================================== */}
-                {/* RIGHT SIDE CONTROLS - Centered vertically (UPSIZED 2X) */}
-                {/* ========================================== */}
-                <div style={{ position: 'absolute', right: 30, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30, zIndex: 50 }}>
-                    {/* Opponent PP */}
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f6e05e' }}>{opponent.pp}/{opponent.maxPp}</div>
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
-                    </div>
-                    {/* End Turn Button */}
-                    <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160, height: 160, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
-                    {/* Player PP */}
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>{player.pp}/{player.maxPp}</div>
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(10).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.pp ? '#f6e05e' : (i < player.maxPp ? '#744210' : '#2d3748') }} />)}</div>
-                    </div>
-                </div>
-
-                {/* ========================================== */}
-                {/* BATTLE LOG & GAME START - Centered */}
-                {/* ========================================== */}
-                <BattleLog logs={gameState.logs || []} />
-
-                {/* Coin Toss Overlay */}
-                {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (
-                    <div style={{
-                        position: 'absolute', inset: 0, zIndex: 4000,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: 'rgba(0,0,0,0.85)',
-                        pointerEvents: 'none'
-                    }}>
-                        <div style={{ textAlign: 'center' }}>
-                            {/* Coin */}
-                            <div style={{
-                                width: 120, height: 120, margin: '0 auto 30px',
-                                borderRadius: '50%',
-                                background: coinTossPhase === 'RESULT'
-                                    ? (coinTossResult === 'FIRST' ? 'linear-gradient(135deg, #ffd700, #ff8c00)' : 'linear-gradient(135deg, #c0c0c0, #808080)')
-                                    : 'linear-gradient(135deg, #ffd700, #ff8c00)',
-                                boxShadow: coinTossPhase === 'RESULT'
-                                    ? `0 0 40px ${coinTossResult === 'FIRST' ? '#ffd700' : '#c0c0c0'}, 0 0 80px ${coinTossResult === 'FIRST' ? 'rgba(255,215,0,0.5)' : 'rgba(192,192,192,0.5)'}`
-                                    : '0 0 30px #ffd700',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '3rem', fontWeight: 900, color: '#1a202c',
-                                animation: coinTossPhase === 'TOSSING' ? 'coinFlip 0.3s ease-in-out infinite' : 'coinLand 0.5s ease-out',
-                                border: '4px solid rgba(255,255,255,0.3)'
-                            }}>
-                                {coinTossPhase === 'RESULT' ? (coinTossResult === 'FIRST' ? '先' : '後') : '?'}
-                            </div>
-
-                            {/* Text */}
-                            <div style={{
-                                fontSize: coinTossPhase === 'RESULT' ? '2.5rem' : '1.8rem',
-                                fontWeight: 900,
-                                color: coinTossResult === 'FIRST' ? '#ffd700' : (coinTossResult === 'SECOND' ? '#c0c0c0' : 'white'),
-                                textShadow: '0 0 20px currentColor, 0 2px 4px black',
-                                animation: coinTossPhase === 'RESULT' ? 'textPop 0.5s ease-out' : 'none'
-                            }}>
-                                {coinTossPhase === 'TOSSING' && 'コイントス中...'}
-                                {coinTossPhase === 'RESULT' && (coinTossResult === 'FIRST' ? '先攻' : '後攻')}
-                            </div>
-
-                            {coinTossPhase === 'RESULT' && (
-                                <div style={{
-                                    fontSize: '1rem', color: '#a0aec0', marginTop: 10,
-                                    animation: 'fadeIn 0.5s ease-out 0.3s both'
-                                }}>
-                                    {coinTossResult === 'FIRST' ? 'あなたの先攻です' : '相手の先攻です'}
-                                </div>
-                            )}
+                            })}
                         </div>
+                    </div>
 
-                        <style>{`
+                    {/* ========================================== */}
+                    {/* RIGHT SIDE CONTROLS - Centered vertically (UPSIZED 2X) */}
+                    {/* ========================================== */}
+                    <div style={{ position: 'absolute', right: 30, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30, zIndex: 50 }}>
+                        {/* Opponent PP */}
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f6e05e' }}>{opponent.pp}/{opponent.maxPp}</div>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
+                        </div>
+                        {/* End Turn Button */}
+                        <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160, height: 160, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
+                        {/* Player PP */}
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>{player.pp}/{player.maxPp}</div>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(10).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.pp ? '#f6e05e' : (i < player.maxPp ? '#744210' : '#2d3748') }} />)}</div>
+                        </div>
+                    </div>
+
+                    {/* ========================================== */}
+                    {/* BATTLE LOG & GAME START - Centered */}
+                    {/* ========================================== */}
+                    <BattleLog logs={gameState.logs || []} />
+
+                    {/* Coin Toss Overlay */}
+                    {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (
+                        <div style={{
+                            position: 'absolute', inset: 0, zIndex: 4000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.85)',
+                            pointerEvents: 'none'
+                        }}>
+                            <div style={{ textAlign: 'center' }}>
+                                {/* Coin */}
+                                <div style={{
+                                    width: 120, height: 120, margin: '0 auto 30px',
+                                    borderRadius: '50%',
+                                    background: coinTossPhase === 'RESULT'
+                                        ? (coinTossResult === 'FIRST' ? 'linear-gradient(135deg, #ffd700, #ff8c00)' : 'linear-gradient(135deg, #c0c0c0, #808080)')
+                                        : 'linear-gradient(135deg, #ffd700, #ff8c00)',
+                                    boxShadow: coinTossPhase === 'RESULT'
+                                        ? `0 0 40px ${coinTossResult === 'FIRST' ? '#ffd700' : '#c0c0c0'}, 0 0 80px ${coinTossResult === 'FIRST' ? 'rgba(255,215,0,0.5)' : 'rgba(192,192,192,0.5)'}`
+                                        : '0 0 30px #ffd700',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '3rem', fontWeight: 900, color: '#1a202c',
+                                    animation: coinTossPhase === 'TOSSING' ? 'coinFlip 0.3s ease-in-out infinite' : 'coinLand 0.5s ease-out',
+                                    border: '4px solid rgba(255,255,255,0.3)'
+                                }}>
+                                    {coinTossPhase === 'RESULT' ? (coinTossResult === 'FIRST' ? '先' : '後') : '?'}
+                                </div>
+
+                                {/* Text */}
+                                <div style={{
+                                    fontSize: coinTossPhase === 'RESULT' ? '2.5rem' : '1.8rem',
+                                    fontWeight: 900,
+                                    color: coinTossResult === 'FIRST' ? '#ffd700' : (coinTossResult === 'SECOND' ? '#c0c0c0' : 'white'),
+                                    textShadow: '0 0 20px currentColor, 0 2px 4px black',
+                                    animation: coinTossPhase === 'RESULT' ? 'textPop 0.5s ease-out' : 'none'
+                                }}>
+                                    {coinTossPhase === 'TOSSING' && 'コイントス中...'}
+                                    {coinTossPhase === 'RESULT' && (coinTossResult === 'FIRST' ? '先攻' : '後攻')}
+                                </div>
+
+                                {coinTossPhase === 'RESULT' && (
+                                    <div style={{
+                                        fontSize: '1rem', color: '#a0aec0', marginTop: 10,
+                                        animation: 'fadeIn 0.5s ease-out 0.3s both'
+                                    }}>
+                                        {coinTossResult === 'FIRST' ? 'あなたの先攻です' : '相手の先攻です'}
+                                    </div>
+                                )}
+                            </div>
+
+                            <style>{`
                             @keyframes coinFlip {
                                 0%, 100% { transform: rotateY(0deg) scale(1); }
                                 50% { transform: rotateY(180deg) scale(1.1); }
@@ -3432,32 +3557,32 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 100% { transform: scale(1); opacity: 1; }
                             }
                         `}</style>
-                    </div>
-                )}
-
-                {/* GAME START overlay - Rich Animation */}
-                {isGameStartAnim && (
-                    <div style={{
-                        position: 'absolute', inset: 0, zIndex: 3000,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: 'rgba(0,0,0,0.7)',
-                        pointerEvents: 'none',
-                        animation: 'fadeIn 0.2s ease-out'
-                    }}>
-                        <div style={{
-                            fontSize: '5rem', fontWeight: 900,
-                            background: 'linear-gradient(135deg, #ffd700, #ff6b6b, #ffd700)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            textShadow: 'none',
-                            filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.8)) drop-shadow(0 0 40px rgba(255,107,107,0.5))',
-                            animation: 'gameStartPop 0.8s ease-out',
-                            letterSpacing: '0.2em'
-                        }}>
-                            GAME START
                         </div>
+                    )}
 
-                        <style>{`
+                    {/* GAME START overlay - Rich Animation */}
+                    {isGameStartAnim && (
+                        <div style={{
+                            position: 'absolute', inset: 0, zIndex: 3000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.7)',
+                            pointerEvents: 'none',
+                            animation: 'fadeIn 0.2s ease-out'
+                        }}>
+                            <div style={{
+                                fontSize: '5rem', fontWeight: 900,
+                                background: 'linear-gradient(135deg, #ffd700, #ff6b6b, #ffd700)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                textShadow: 'none',
+                                filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.8)) drop-shadow(0 0 40px rgba(255,107,107,0.5))',
+                                animation: 'gameStartPop 0.8s ease-out',
+                                letterSpacing: '0.2em'
+                            }}>
+                                GAME START
+                            </div>
+
+                            <style>{`
                             @keyframes gameStartPop {
                                 0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
                                 50% { transform: scale(1.2) rotate(5deg); opacity: 1; }
@@ -3465,157 +3590,158 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 100% { transform: scale(1) rotate(0deg); opacity: 1; }
                             }
                         `}</style>
-                    </div>
-                )}
-
-                {/* ========================================== */}
-                {/* PLAYER LEADER - Fixed at bottom center */}
-                {/* Size: 240px, EP/SEP at top, HP left of EP */}
-                {/* ========================================== */}
-                <div ref={playerLeaderRef} style={{
-                    position: 'absolute', bottom: -40, left: '50%', transform: 'translateX(-50%)',
-                    width: 240, height: 240, borderRadius: '50%',
-                    zIndex: 200
-                }}>
-                    <div style={{
-                        width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                        border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c'
-                    }}>
-                        <img src={player.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-
-                    {/* Player HP - Top Left (Center - 140px) */}
-                    <div style={{
-                        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
-                        width: 55, height: 55, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
-                        border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10
-                    }}>{player.hp}</div>
-
-                    {/* Player EP - Circular Frame */}
-                    <div onMouseDown={(e) => handleEvolveMouseDown(e, false)} style={{
-                        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
-                        width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                        background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10
-                    }}>
-                        <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < remainingEvolves ? '#ecc94b' : '#2d3748', boxShadow: i < remainingEvolves ? (canEvolveUI ? '0 0 10px #ecc94b, 0 0 20px #ecc94b' : '0 0 5px #ecc94b') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                         </div>
-                    </div>
+                    )}
 
-                    {/* Player SEP - Circular Frame */}
-                    <div onMouseDown={(e) => handleEvolveMouseDown(e, true)} style={{
-                        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
-                        width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                        background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 10, cursor: player.sep > 0 ? 'grab' : 'default'
+                    {/* ========================================== */}
+                    {/* PLAYER LEADER - Fixed at bottom center */}
+                    {/* Size: 240px, EP/SEP at top, HP left of EP */}
+                    {/* ========================================== */}
+                    <div ref={playerLeaderRef} style={{
+                        position: 'absolute', bottom: -40, left: '50%', transform: 'translateX(-50%)',
+                        width: 240, height: 240, borderRadius: '50%',
+                        zIndex: 200
                     }}>
-                        <div style={{ display: 'flex', gap: 3 }}>
-                            {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? '0 0 10px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                        <div style={{
+                            width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                            border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c'
+                        }}>
+                            <img src={player.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
-                    </div>
-                </div>
 
-                {/* Player Deck - Bottom Right */}
-                <div style={{ position: 'absolute', bottom: 10, right: 15, width: 60, height: 85, zIndex: 50 }}>
-                    {[...Array(Math.min(5, Math.ceil(player.deck.length / 5)))].map((_, i) => (
-                        <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096', boxShadow: '1px 1px 3px rgba(0,0,0,0.5)' }} />
-                    ))}
-                    <div style={{ position: 'absolute', top: -20, width: '100%', textAlign: 'center', color: '#a0aec0', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 1px 2px black' }}>{player.deck.length}</div>
-                </div>
+                        {/* Player HP - Top Left (Center - 140px) */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
+                            width: 55, height: 55, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
+                            border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10
+                        }}>{player.hp}</div>
 
-                {/* ========================================== */}
-                {/* PLAYER HAND - Cards slide from right to center */}
-                {/* Collapsed: midpoint between center and right edge */}
-                {/* Expanded: centered on board center (leader axis) */}
-                {/* ========================================== */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    width: '100%', // Full width, fixed - prevents layout shift
-                    height: 200,
-                    display: 'flex',
-                    justifyContent: 'center', // Center alignment for positioning reference
-                    alignItems: 'flex-end',
-                    pointerEvents: 'none',
-                    zIndex: 500
-                }}>
-                    {player.hand.map((c, i) => {
-                        const handSize = player.hand.length;
-                        let offsetX = 0;
-                        let translateY = 0;
-                        let rotate = 0;
-
-                        if (!isHandExpanded) {
-                            // Collapsed: positioned at midpoint between center (50%) and right edge (100%)
-                            // Midpoint = 75% from left = 25% from right
-                            // In pixels from center: +25% of board width
-                            const boardWidth = typeof window !== 'undefined' ? window.innerWidth * 0.8 : 1000;
-                            const rightQuadrantCenter = boardWidth * 0.25; // 25% right of center
-
-                            const spacing = Math.min(45, 300 / handSize);
-                            offsetX = rightQuadrantCenter + (i - (handSize - 1) / 2) * spacing;
-                            translateY = 0; // User requested 0 for collapsed too
-                            rotate = (i - (handSize - 1) / 2) * 3;
-                        } else {
-                            // Expanded: centered on board center (leader's center axis)
-                            const spacing = Math.min(115, 600 / handSize);
-                            offsetX = (i - (handSize - 1) / 2) * spacing;
-                            translateY = 0; // NO Y offset - cards at bottom
-                            rotate = 0;
-                        }
-
-                        // Selected card rises ONLY when expanded
-                        if (isHandExpanded && selectedCard?.card === c) {
-                            translateY = -10;
-                        }
-
-                        return (
-                            <div key={c.id + i}
-                                style={{
-                                    position: 'absolute',
-                                    bottom: 0, // Absolutely at bottom - no gap
-                                    left: '50%', // Start from center
-                                    transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg)`,
-                                    transformOrigin: 'bottom center',
-                                    zIndex: i,
-                                    transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                                    cursor: 'pointer',
-                                    pointerEvents: 'auto'
-                                }}
-                                onMouseDown={(e) => handleHandMouseDown(e, i)}
-                                onClick={(e) => e.stopPropagation()} // Prevent background click from firing
-                            >
-                                <Card card={c} style={{ width: 100, height: 140, boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }} isSelected={selectedCard?.card === c} isPlayable={player.pp >= c.cost && gameState.activePlayerId === currentPlayerId} />
+                        {/* Player EP - Circular Frame */}
+                        <div onMouseDown={(e) => handleEvolveMouseDown(e, false)} style={{
+                            position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10
+                        }}>
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < remainingEvolves ? '#ecc94b' : '#2d3748', boxShadow: i < remainingEvolves ? (canEvolveUI ? '0 0 10px #ecc94b, 0 0 20px #ecc94b' : '0 0 5px #ecc94b') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
-                        );
-                    })}
-                </div>
+                        </div>
 
-                {/* Play Button - Bottom Left (Moved above hand count) */}
-                {selectedCard && selectedCard.owner === 'PLAYER' && isHandExpanded && (
-                    <div style={{ position: 'absolute', left: 15, bottom: 100, zIndex: 600, pointerEvents: 'auto' }}>
-                        <button
-                            disabled={player.pp < selectedCard.card.cost}
-                            onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
-                            className={player.pp >= selectedCard.card.cost ? 'play-button-active' : ''}
-                            style={{
-                                background: player.pp >= selectedCard.card.cost ? 'linear-gradient(to bottom, #48bb78, #38a169)' : '#718096',
-                                color: 'white', border: '2px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: 20,
-                                fontSize: '1rem', fontWeight: 'bold', cursor: player.pp >= selectedCard.card.cost ? 'pointer' : 'not-allowed',
-                                boxShadow: player.pp >= selectedCard.card.cost ? '0 0 20px rgba(72, 187, 120, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
-                                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                                transition: 'all 0.3s ease'
-                            }}
-                            onMouseDown={e => e.stopPropagation()}
-                        >
-                            プレイ
-                            <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 2 }}>pp {selectedCard.card.cost}</div>
-                        </button>
-                        <style>{`
+                        {/* Player SEP - Circular Frame */}
+                        <div onMouseDown={(e) => handleEvolveMouseDown(e, true)} style={{
+                            position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 10, cursor: player.sep > 0 ? 'grab' : 'default'
+                        }}>
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? '0 0 10px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Player Deck - Bottom Right */}
+                    <div style={{ position: 'absolute', bottom: 10, right: 15, width: 60, height: 85, zIndex: 50 }}>
+                        {[...Array(Math.min(5, Math.ceil(player.deck.length / 5)))].map((_, i) => (
+                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096', boxShadow: '1px 1px 3px rgba(0,0,0,0.5)' }} />
+                        ))}
+                        <div style={{ position: 'absolute', top: -20, width: '100%', textAlign: 'center', color: '#a0aec0', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 1px 2px black' }}>{player.deck.length}</div>
+                    </div>
+
+                    {/* ========================================== */}
+                    {/* PLAYER HAND - Cards slide from right to center */}
+                    {/* Collapsed: midpoint between center and right edge */}
+                    {/* Expanded: centered on board center (leader axis) */}
+                    {/* ========================================== */}
+                    <div style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        width: '100%', // Full width, fixed - prevents layout shift
+                        height: 200,
+                        display: 'flex',
+                        justifyContent: 'center', // Center alignment for positioning reference
+                        alignItems: 'flex-end',
+                        pointerEvents: 'none',
+                        zIndex: 500
+                    }}>
+                        {player.hand.map((c, i) => {
+                            const handSize = player.hand.length;
+                            let offsetX = 0;
+                            let translateY = 0;
+                            let rotate = 0;
+
+                            if (!isHandExpanded) {
+                                // Collapsed: positioned at midpoint between center (50%) and right edge (100%)
+                                // Midpoint = 75% from left = 25% from right
+                                // In pixels from center: +25% of board width
+                                // Use BASE_WIDTH for scaled layout
+                                const boardWidth = BASE_WIDTH * 0.8; // 80% of base width (right side minus sidebar)
+                                const rightQuadrantCenter = boardWidth * 0.25; // 25% right of center
+
+                                const spacing = Math.min(45, 300 / handSize);
+                                offsetX = rightQuadrantCenter + (i - (handSize - 1) / 2) * spacing;
+                                translateY = 0; // User requested 0 for collapsed too
+                                rotate = (i - (handSize - 1) / 2) * 3;
+                            } else {
+                                // Expanded: centered on board center (leader's center axis)
+                                const spacing = Math.min(115, 600 / handSize);
+                                offsetX = (i - (handSize - 1) / 2) * spacing;
+                                translateY = 0; // NO Y offset - cards at bottom
+                                rotate = 0;
+                            }
+
+                            // Selected card rises ONLY when expanded
+                            if (isHandExpanded && selectedCard?.card === c) {
+                                translateY = -10;
+                            }
+
+                            return (
+                                <div key={c.id + i}
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: 0, // Absolutely at bottom - no gap
+                                        left: '50%', // Start from center
+                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg)`,
+                                        transformOrigin: 'bottom center',
+                                        zIndex: i,
+                                        transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                                        cursor: 'pointer',
+                                        pointerEvents: 'auto'
+                                    }}
+                                    onMouseDown={(e) => handleHandMouseDown(e, i)}
+                                    onClick={(e) => e.stopPropagation()} // Prevent background click from firing
+                                >
+                                    <Card card={c} style={{ width: 100, height: 140, boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }} isSelected={selectedCard?.card === c} isPlayable={player.pp >= c.cost && gameState.activePlayerId === currentPlayerId} />
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Play Button - Bottom Left (Moved above hand count) */}
+                    {selectedCard && selectedCard.owner === 'PLAYER' && isHandExpanded && (
+                        <div style={{ position: 'absolute', left: 15, bottom: 100, zIndex: 600, pointerEvents: 'auto' }}>
+                            <button
+                                disabled={player.pp < selectedCard.card.cost}
+                                onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
+                                className={player.pp >= selectedCard.card.cost ? 'play-button-active' : ''}
+                                style={{
+                                    background: player.pp >= selectedCard.card.cost ? 'linear-gradient(to bottom, #48bb78, #38a169)' : '#718096',
+                                    color: 'white', border: '2px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: 20,
+                                    fontSize: '1rem', fontWeight: 'bold', cursor: player.pp >= selectedCard.card.cost ? 'pointer' : 'not-allowed',
+                                    boxShadow: player.pp >= selectedCard.card.cost ? '0 0 20px rgba(72, 187, 120, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                            >
+                                プレイ
+                                <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 2 }}>pp {selectedCard.card.cost}</div>
+                            </button>
+                            <style>{`
                             @keyframes playGlowPulse {
                                 0% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.4); }
                                 50% { box-shadow: 0 0 25px rgba(72, 187, 120, 0.8); }
@@ -3625,44 +3751,44 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 animation: playGlowPulse 2s infinite ease-in-out;
                             }
                         `}</style>
-                    </div>
-                )}
+                        </div>
+                    )}
 
-                {/* Hand Count Badge & Card Icon - Far Left near boundary */}
-                <div style={{ position: 'absolute', bottom: 30, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
-                    {/* Hand Icon - Stacked Cards */}
-                    <div style={{ position: 'relative', width: 40, height: 50 }}>
-                        <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
-                        <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
-                        <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
+                    {/* Hand Count Badge & Card Icon - Far Left near boundary */}
+                    <div style={{ position: 'absolute', bottom: 30, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
+                        {/* Hand Icon - Stacked Cards */}
+                        <div style={{ position: 'relative', width: 40, height: 50 }}>
+                            <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
+                        </div>
+                        <div style={{ background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
+                            手札 {player.hand.length}
+                        </div>
                     </div>
-                    <div style={{ background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
-                        手札 {player.hand.length}
-                    </div>
-                </div>
 
-                {/* Draw Animation Overlay */}
-                {
-                    drawAnimation && (
-                        <div style={{
-                            position: 'absolute',
-                            left: drawAnimation.isPlayer ? 'calc(100% - 90px)' : 90,
-                            top: drawAnimation.isPlayer ? 'calc(100% - 105px)' : 105,
-                            width: 80, height: 110,
-                            background: '#4a5568',
-                            borderRadius: 8,
-                            border: '2px solid white',
-                            // Use CSS Animation for Fly Effect
-                            animation: `drawCard${drawAnimation.isPlayer ? 'Player' : 'Opponent'} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
-                            zIndex: 9000,
-                            boxShadow: '0 0 10px rgba(255,255,255,0.5)'
-                        }}>
+                    {/* Draw Animation Overlay */}
+                    {
+                        drawAnimation && (
                             <div style={{
-                                width: '100%', height: '100%',
-                                background: 'repeating-linear-gradient(45deg, #2d3748, #2d3748 10px, #1a202c 10px, #1a202c 20px)',
-                                opacity: 0.5
-                            }} />
-                            <style>{`
+                                position: 'absolute',
+                                left: drawAnimation.isPlayer ? 'calc(100% - 90px)' : 90,
+                                top: drawAnimation.isPlayer ? 'calc(100% - 105px)' : 105,
+                                width: 80, height: 110,
+                                background: '#4a5568',
+                                borderRadius: 8,
+                                border: '2px solid white',
+                                // Use CSS Animation for Fly Effect
+                                animation: `drawCard${drawAnimation.isPlayer ? 'Player' : 'Opponent'} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+                                zIndex: 9000,
+                                boxShadow: '0 0 10px rgba(255,255,255,0.5)'
+                            }}>
+                                <div style={{
+                                    width: '100%', height: '100%',
+                                    background: 'repeating-linear-gradient(45deg, #2d3748, #2d3748 10px, #1a202c 10px, #1a202c 20px)',
+                                    opacity: 0.5
+                                }} />
+                                <style>{`
                         @keyframes drawCardPlayer {
                             0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
                             100% { transform: translate(-50vw, -100px) scale(0.5) rotate(-10deg); opacity: 0; }
@@ -3672,123 +3798,123 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             100% { transform: translate(50vw, 200px) scale(0.5) rotate(10deg); opacity: 0; }
                         }
                     `}</style>
-                        </div>
+                            </div>
+                        )
+                    }
+
+                    {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
+                </div>
+
+                {/* Evolve Drag Light Orb - Optimized */}
+                {
+                    dragState?.sourceType === 'EVOLVE' && (
+                        <>
+                            {/* Main orb with integrated glow */}
+                            <div style={{
+                                position: 'fixed', left: dragState.currentX, top: dragState.currentY,
+                                transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
+                                width: 40, height: 40, borderRadius: '50%',
+                                background: (dragState as any).useSep
+                                    ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 30%, #9f7aea 100%)'
+                                    : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 30%, #ecc94b 100%)',
+                                boxShadow: (dragState as any).useSep
+                                    ? '0 0 20px #b794f4, 0 0 40px rgba(159, 122, 234, 0.5)'
+                                    : '0 0 20px #f6e05e, 0 0 40px rgba(236, 201, 75, 0.5)',
+                                border: '2px solid rgba(255,255,255,0.7)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                {/* Inner core */}
+                                <div style={{
+                                    width: 14, height: 14, borderRadius: '50%',
+                                    background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.6) 100%)',
+                                    boxShadow: '0 0 10px white'
+                                }} />
+                            </div>
+                        </>
                     )
                 }
 
-                {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
-            </div>
+                {/* FLOATING DAMAGE TEXT */}
+                {
+                    damageNumbers.map(d => (
+                        <DamageText key={d.id} value={d.value} x={d.x} y={d.y} color={d.color} onComplete={() => setDamageNumbers(prev => prev.filter(p => p.id !== d.id))} />
+                    ))
+                }
 
-            {/* Evolve Drag Light Orb - Optimized */}
-            {
-                dragState?.sourceType === 'EVOLVE' && (
-                    <>
-                        {/* Main orb with integrated glow */}
-                        <div style={{
-                            position: 'fixed', left: dragState.currentX, top: dragState.currentY,
-                            transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                            width: 40, height: 40, borderRadius: '50%',
-                            background: (dragState as any).useSep
-                                ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 30%, #9f7aea 100%)'
-                                : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 30%, #ecc94b 100%)',
-                            boxShadow: (dragState as any).useSep
-                                ? '0 0 20px #b794f4, 0 0 40px rgba(159, 122, 234, 0.5)'
-                                : '0 0 20px #f6e05e, 0 0 40px rgba(236, 201, 75, 0.5)',
-                            border: '2px solid rgba(255,255,255,0.7)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            {/* Inner core */}
-                            <div style={{
-                                width: 14, height: 14, borderRadius: '50%',
-                                background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.6) 100%)',
-                                boxShadow: '0 0 10px white'
-                            }} />
-                        </div>
-                    </>
-                )
-            }
-
-            {/* FLOATING DAMAGE TEXT */}
-            {
-                damageNumbers.map(d => (
-                    <DamageText key={d.id} value={d.value} x={d.x} y={d.y} color={d.color} onComplete={() => setDamageNumbers(prev => prev.filter(p => p.id !== d.id))} />
-                ))
-            }
-
-            {/* SVG Overlay for Dragging Arrow */}
-            <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1000 }}>
-                {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
-                    <>
-                        <defs>
-                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                <polygon points="0 0, 10 3.5, 0 7" fill={
-                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#b794f4' :
-                                        (dragState.sourceType === 'EVOLVE' ? '#f6e05e' :
+                {/* SVG Overlay for Dragging Arrow */}
+                <svg style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1000 }}>
+                    {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
+                        <>
+                            <defs>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill={
+                                        (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#b794f4' :
+                                            (dragState.sourceType === 'EVOLVE' ? '#f6e05e' :
+                                                (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
+                                    } />
+                                </marker>
+                                <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur stdDeviation="6" result="blur" />
+                                    <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
+                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feMerge>
+                                        <feMergeNode in="glow" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                                <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur stdDeviation="8" result="blur" />
+                                    <feFlood floodColor="rgba(183, 148, 244, 0.8)" result="color" />
+                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feMerge>
+                                        <feMergeNode in="glow" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            <path
+                                d={getArrowPath()}
+                                fill="none"
+                                stroke={
+                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#9f7aea' :
+                                        (dragState.sourceType === 'EVOLVE' ? '#ecc94b' :
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
-                                } />
-                            </marker>
-                            <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                <feGaussianBlur stdDeviation="6" result="blur" />
-                                <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
-                                <feComposite in="color" in2="blur" operator="in" result="glow" />
-                                <feMerge>
-                                    <feMergeNode in="glow" />
-                                    <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                            </filter>
-                            <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                <feGaussianBlur stdDeviation="8" result="blur" />
-                                <feFlood floodColor="rgba(183, 148, 244, 0.8)" result="color" />
-                                <feComposite in="color" in2="blur" operator="in" result="glow" />
-                                <feMerge>
-                                    <feMergeNode in="glow" />
-                                    <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                            </filter>
-                        </defs>
-                        <path
-                            d={getArrowPath()}
-                            fill="none"
-                            stroke={
-                                (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#9f7aea' :
-                                    (dragState.sourceType === 'EVOLVE' ? '#ecc94b' :
-                                        (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
-                            }
-                            strokeWidth="6"
-                            strokeDasharray="10,5"
-                            markerEnd="url(#arrowhead)"
-                            filter={
-                                (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'url(#purpleGlow)' :
-                                    (dragState.sourceType === 'EVOLVE' ? 'url(#yellowGlow)' : 'none')
-                            }
-                        />
-                    </>
-                )}
-            </svg>
+                                }
+                                strokeWidth="6"
+                                strokeDasharray="10,5"
+                                markerEnd="url(#arrowhead)"
+                                filter={
+                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'url(#purpleGlow)' :
+                                        (dragState.sourceType === 'EVOLVE' ? 'url(#yellowGlow)' : 'none')
+                                }
+                            />
+                        </>
+                    )}
+                </svg>
 
-            {/* Play Card Animation Overlay */}
-            {
-                playingCardAnim && (
-                    <div style={{
-                        position: 'fixed',
-                        inset: 0,
-                        zIndex: 9999,
-                        pointerEvents: 'auto',
-                        background: 'rgba(0,0,0,0.5)'
-                    }}>
-                        <div
-                            onAnimationEnd={playingCardAnim.onComplete}
-                            style={{
-                                position: 'absolute',
-                                left: playingCardAnim.targetX,
-                                top: playingCardAnim.targetY,
-                                transform: 'translate(-50%, -50%)',
-                                animation: playingCardAnim.card.type === 'SPELL'
-                                    ? 'playSpellSequence 1s forwards'
-                                    : 'playCardSequence 0.8s forwards'
-                            }}
-                        >
-                            <style>{`
+                {/* Play Card Animation Overlay */}
+                {
+                    playingCardAnim && (
+                        <div style={{
+                            position: 'fixed',
+                            inset: 0,
+                            zIndex: 9999,
+                            pointerEvents: 'auto',
+                            background: 'rgba(0,0,0,0.5)'
+                        }}>
+                            <div
+                                onAnimationEnd={playingCardAnim.onComplete}
+                                style={{
+                                    position: 'absolute',
+                                    left: playingCardAnim.targetX,
+                                    top: playingCardAnim.targetY,
+                                    transform: 'translate(-50%, -50%)',
+                                    animation: playingCardAnim.card.type === 'SPELL'
+                                        ? 'playSpellSequence 1s forwards'
+                                        : 'playCardSequence 0.8s forwards'
+                                }}
+                            >
+                                <style>{`
                                 @keyframes playCardSequence {
                                     ${playingCardAnim.finalX !== undefined ? `
                                     0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
@@ -3816,115 +3942,116 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
-                            <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
-                            {playingCardAnim.card.type === 'SPELL' && (
-                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <SparkleBurst x={0} y={0} />
-                                </div>
-                            )}
+                                <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                                {playingCardAnim.card.type === 'SPELL' && (
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <SparkleBurst x={0} y={0} />
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )
-            }
+                    )
+                }
 
-            {/* --- Card Generation Animation Overlay --- */}
-            {
-                animatingCard && (
-                    <div style={{
-                        position: 'fixed',
-                        left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : '50%',
-                        top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : '50%',
-                        transform: animatingCard.status === 'APPEAR'
-                            ? 'translate(-50%, -50%) scale(1.2)'
-                            : 'translate(-50%, -50%) scale(0.2)', // Shrink to hand
-                        zIndex: 7000,
-                        pointerEvents: 'none',
-                        transition: animatingCard.status === 'FLY'
-                            ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
-                            : 'none',
-                        opacity: animatingCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
-                        animation: animatingCard.status === 'APPEAR' ? 'cardAppear 1s ease-out' : undefined
-                    }}>
-                        <Card card={animatingCard.card as any} />
-                        <style>{`
+                {/* --- Card Generation Animation Overlay --- */}
+                {
+                    animatingCard && (
+                        <div style={{
+                            position: 'fixed',
+                            left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : '50%',
+                            top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : '50%',
+                            transform: animatingCard.status === 'APPEAR'
+                                ? 'translate(-50%, -50%) scale(1.2)'
+                                : 'translate(-50%, -50%) scale(0.2)', // Shrink to hand
+                            zIndex: 7000,
+                            pointerEvents: 'none',
+                            transition: animatingCard.status === 'FLY'
+                                ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                                : 'none',
+                            opacity: animatingCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
+                            animation: animatingCard.status === 'APPEAR' ? 'cardAppear 1s ease-out' : undefined
+                        }}>
+                            <Card card={animatingCard.card as any} />
+                            <style>{`
                         @keyframes cardAppear {
                             0% { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }
                             50% { transform: translate(-50%, -50%) scale(1.3) rotate(5deg); opacity: 1; }
                             100% { transform: translate(-50%, -50%) scale(1.2) rotate(0deg); opacity: 1; }
                         }
                     `}</style>
-                    </div>
-                )
-            }
+                        </div>
+                    )
+                }
 
-            {/* --- Active Effects (Now using cached coordinates) --- */}
-            {
-                activeEffects.map(effect => (
-                    <AttackEffect
-                        key={effect.key}
-                        type={effect.type}
-                        x={effect.x}
-                        y={effect.y}
-                        onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
-                        audioSettings={audioSettings}
-                    />
-                ))
-            }
+                {/* --- Active Effects (Now using cached coordinates) --- */}
+                {
+                    activeEffects.map(effect => (
+                        <AttackEffect
+                            key={effect.key}
+                            type={effect.type}
+                            x={effect.x}
+                            y={effect.y}
+                            onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
+                            audioSettings={audioSettings}
+                        />
+                    ))
+                }
 
-            {/* --- Evolution Animation Overlay --- */}
-            {
-                evolveAnimation && (
-                    <EvolutionAnimation
-                        card={evolveAnimation.card}
-                        evolvedImageUrl={evolveAnimation.evolvedImageUrl}
-                        startX={evolveAnimation.startX}
-                        startY={evolveAnimation.startY}
-                        phase={evolveAnimation.phase}
-                        onPhaseChange={handleEvolvePhaseChange}
-                        onShake={triggerShake}
-                        useSep={evolveAnimation.useSep}
-                        playSE={playSE}
-                    />
-                )
-            }
+                {/* --- Evolution Animation Overlay --- */}
+                {
+                    evolveAnimation && (
+                        <EvolutionAnimation
+                            card={evolveAnimation.card}
+                            evolvedImageUrl={evolveAnimation.evolvedImageUrl}
+                            startX={evolveAnimation.startX}
+                            startY={evolveAnimation.startY}
+                            phase={evolveAnimation.phase}
+                            onPhaseChange={handleEvolvePhaseChange}
+                            onShake={triggerShake}
+                            useSep={evolveAnimation.useSep}
+                            playSE={playSE}
+                        />
+                    )
+                }
 
 
-            {/* --- Game Over Overlay --- */}
-            {
-                gameState.winnerId && (
-                    <GameOverScreen
-                        winnerId={gameState.winnerId}
-                        playerId={currentPlayerId}
-                        onRematch={() => {
-                            // 1. Reset visual and logic artifacts IMMEDIATELY
-                            setDamageNumbers([]);
-                            setActiveEffects([]);
-                            setAnimatingCard(null);
-                            setPlayingCardAnim(null);
-                            setEvolveAnimation(null);
-                            setDrawAnimation(null);
-                            setSummonedCardIds(new Set());
-                            aiProcessing.current = false;
-                            lastProcessedTurn.current = null;
+                {/* --- Game Over Overlay --- */}
+                {
+                    gameState.winnerId && (
+                        <GameOverScreen
+                            winnerId={gameState.winnerId}
+                            playerId={currentPlayerId}
+                            onRematch={() => {
+                                // 1. Reset visual and logic artifacts IMMEDIATELY
+                                setDamageNumbers([]);
+                                setActiveEffects([]);
+                                setAnimatingCard(null);
+                                setPlayingCardAnim(null);
+                                setEvolveAnimation(null);
+                                setDrawAnimation(null);
+                                setSummonedCardIds(new Set());
+                                aiProcessing.current = false;
+                                lastProcessedTurn.current = null;
 
-                            // 2. Suppress immediate diff detection by clearing and then resetting the Ref
-                            const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
-                            prevPlayersRef.current = freshState.players;
-                            prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
+                                // 2. Suppress immediate diff detection by clearing and then resetting the Ref
+                                const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+                                prevPlayersRef.current = freshState.players;
+                                prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
 
-                            // 3. Force BGM re-roll and restart
-                            setBgmLoadedForClass(null);
+                                // 3. Force BGM re-roll and restart
+                                setBgmLoadedForClass(null);
 
-                            // 4. Update Game State
-                            setCoinTossPhase('IDLE');
-                            setCoinTossResult(null);
-                            setIsGameStartAnim(false);
-                            dispatch({ type: 'SYNC_STATE', payload: freshState });
-                        }}
-                        onLeave={onLeave}
-                    />
-                )
-            }
-        </div >
+                                // 4. Update Game State
+                                setCoinTossPhase('IDLE');
+                                setCoinTossResult(null);
+                                setIsGameStartAnim(false);
+                                dispatch({ type: 'SYNC_STATE', payload: freshState });
+                            }}
+                            onLeave={onLeave}
+                        />
+                    )
+                }
+            </div>
+        </div>
     );
 };

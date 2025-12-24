@@ -15,9 +15,10 @@ interface CardProps {
     turnCount?: number; // Current game turn count from engine
     className?: string; // For custom animations
     suppressPassives?: boolean; // Explicitly hide passive effects (for play animation etc)
+    isMyTurn?: boolean; // Current player's turn?
 }
 
-export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className, suppressPassives }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className, suppressPassives, isMyTurn }) => {
     // Determine stats to show
     const attack = 'currentAttack' in card ? (card as any).currentAttack : card.attack;
     const health = 'currentHealth' in card ? (card as any).currentHealth : card.health;
@@ -63,7 +64,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     } else if (isPlayable) {
         glowColor = '0 0 10px #48bb78'; // Green for Playable
         borderColor = '2px solid #48bb78';
-    } else if (isReady) {
+    } else if (isReady && isMyTurn) {
         // Check for Storm (Green) vs Rush (Yellow)
         // Assume Green mostly, but Yellow if RUSH is present and NO STORM
         const hasStorm = abilities.includes('STORM');

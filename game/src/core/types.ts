@@ -54,6 +54,9 @@ export interface Card {
 
     imageUrl?: string;
     evolvedImageUrl?: string; // 進化後の画像URL
+
+    // Instance ID for cards in hand/deck (runtime)
+    instanceId?: string;
 }
 
 export interface BoardCard extends Card {
