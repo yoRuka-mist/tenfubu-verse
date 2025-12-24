@@ -1099,6 +1099,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         return { x: toGameX(screenX), y: toGameY(screenY) };
     }, [toGameX, toGameY]);
 
+    const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null); // New: Click selection for hand
+
     // Ref to store scaleInfo for use in event listeners
     const scaleInfoRef = React.useRef(scaleInfo);
     useEffect(() => {
@@ -2057,7 +2059,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             finalX = boardCenterX + offsetX;
 
             // Determine Y: Player slots are at bottom of board area
-            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (60 * scale); // Adjusted from 220*scale
+            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (80 * scale); // Adjusted to 80 for correct gap
             finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
         }
 
@@ -2264,7 +2266,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             finalX = boardCenterX + offsetX;
 
                             // Opponent slots are at top of board area
-                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (60 * scale); // Adjusted from 220*scale
+                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (80 * scale); // Adjusted to 80
                             finalY = opponentBoardAreaBottom - (CARD_HEIGHT * scale / 2);
                         }
 
@@ -2854,6 +2856,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
             setIsHandExpanded(false);
             setSelectedCard(null);
+            setSelectedHandIndex(null); // Clear selection on background click
         }
     };
 
@@ -3014,7 +3017,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 finalX = boardCenterX + offsetX;
 
-                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (60 * scale);
+                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (80 * scale); // Consistent with 80
                 finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
             }
 
@@ -3373,7 +3376,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Opponent Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${60 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top margin to 60
+                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${80 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top margin to 80
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3411,7 +3414,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Player Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${60 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom margin to 60
+                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${80 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom margin to 80
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3758,7 +3761,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 }
 
                                 offsetX = (i - (handSize - 1) / 2) * spacing;
-                                translateY = 0;
+                                translateY = selectedHandIndex === i ? -30 * scale : 0;
                                 rotate = 0;
                             }
 
@@ -3767,7 +3770,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             return (
                                 <div key={c.instanceId}
-                                    onMouseDown={(e) => handleHandMouseDown(e, i)}
+                                    onMouseDown={(e) => {
+                                        // Click to select/lift
+                                        handleHandMouseDown(e, i); // Pass event to drag handler
+                                        if (isHandExpanded) {
+                                            // Toggle selection
+                                            setSelectedHandIndex(i === selectedHandIndex ? null : i);
+                                        }
+                                    }}
                                     style={{
                                         position: 'absolute',
                                         // The container is centered (left: 0, width: 100%, justifyContent: center)
@@ -3788,10 +3798,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         card={c}
                                         turnCount={gameState.turnCount}
                                         isMyTurn={gameState.activePlayerId === currentPlayerId}
+                                        isPlayable={isPlayable} // Make sure Green Glow shows!
                                         style={{
                                             width: CARD_WIDTH * scale,
                                             height: CARD_HEIGHT * scale,
-                                            boxShadow: (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i) ? '0 0 40px rgba(49, 130, 206, 0.8)' : (isPlayable ? '0 0 15px rgba(255,255,255,0.3)' : 'none')
+                                            boxShadow: (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i) ? '0 0 40px rgba(49, 130, 206, 0.8)' : (isPlayable ? '0 0 15px rgba(40, 180, 100, 0.6)' : 'none')
                                         }}
                                     />
                                 </div>
