@@ -145,7 +145,7 @@ const MOCK_CARDS: Card[] = [
 
     // --- New Cards ---
     {
-        id: 'TOKEN_RICE', name: '米', cost: 1, type: 'SPELL',
+        id: 'TOKEN_RICE', name: '米', cost: 0, type: 'SPELL',
         description: 'リーダーを1回復',
         imageUrl: '/cards/rice.png',
         triggers: [{
@@ -156,13 +156,32 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yunagi', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: 'ファンファーレ：「米」を手札に加える',
+        description: 'ファンファーレ：「米」を手札に加える。進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」を手札に加える。',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
         attackEffectType: 'SLASH',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'DAMAGE', value: 1, targetType: 'SELECT_FOLLOWER' },
+                    { type: 'GENERATE_CARD', targetCardId: 'TOKEN_OOMORI_RICE' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'TOKEN_OOMORI_RICE', name: '大盛りごはん', cost: 1, type: 'SPELL',
+        description: '自分のリーダーの体力を3回復する。',
+        imageUrl: '/cards/oomoririce.png',
+        tags: ['Token'],
         triggers: [{
             trigger: 'FANFARE',
-            effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }]
+            effects: [{ type: 'HEAL_LEADER', value: 3, targetType: 'SELF' }]
         }]
     },
 
@@ -219,7 +238,7 @@ const MOCK_CARDS: Card[] = [
                     { type: 'SUMMON_CARD', targetCardId: 'c_tsubumaru' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
-                    { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS' }
+                    { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             }
         ]
@@ -398,6 +417,7 @@ const MOCK_CARDS: Card[] = [
         attack: 2, health: 2,
         description: '[守護]',
         imageUrl: '/cards/manary.png',
+        evolvedImageUrl: '/cards/manary_2.png',
         tags: ['Token'],
         passiveAbilities: ['WARD'],
         attackEffectType: 'WATER'
@@ -565,7 +585,7 @@ const MOCK_CARDS: Card[] = [
     },
     // --- ユウリ & 水氷龍 ---
     {
-        id: 'c_yuri', name: 'ユウリ', cost: 4, type: 'FOLLOWER',
+        id: 'c_yuri', name: 'ユウリ', cost: 5, type: 'FOLLOWER',
         attack: 3, health: 3,
         description: 'ファンファーレ：「水氷龍」を場に出す。進化時：相手のフォロワー1体に3ダメージ。',
         imageUrl: '/cards/yuri.png',
@@ -860,15 +880,24 @@ function processSingleEffect(
 
     const opponentId = getOpponentId(sourcePlayerId);
 
+    // Helper to find a follower on ANY board
+    const getBoardCardById = (id: string): { card: BoardCard, player: Player, index: number } | null => {
+        for (const pid of ['p1', 'p2'] as const) {
+            const idx = newState.players[pid].board.findIndex(c => c?.instanceId === id);
+            if (idx !== -1 && newState.players[pid].board[idx]) {
+                return { card: newState.players[pid].board[idx]!, player: newState.players[pid], index: idx };
+            }
+        }
+        return null;
+    };
+
     switch (effect.type) {
         case 'DAMAGE': {
             const damage = effect.value || 0;
             if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
-                const oppBoard = newState.players[opponentId].board;
-                const idx = oppBoard.findIndex(c => c?.instanceId === targetId);
-                // Fix: Check idx VALIDITY
-                if (idx !== -1 && oppBoard[idx]) {
-                    const target = oppBoard[idx]!;
+                const targetInfo = getBoardCardById(targetId);
+                if (targetInfo) {
+                    const { card: target, player: targetOwner, index: idx } = targetInfo;
 
                     if (target.hasBarrier) {
                         target.hasBarrier = false;
@@ -878,10 +907,9 @@ function processSingleEffect(
                         newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
 
                         if (target.currentHealth <= 0) {
-                            // Ensure it's 0 or less for damage detection
                             target.currentHealth = Math.min(0, target.currentHealth);
-                            newState.players[opponentId].graveyard.push(target);
-                            newState.players[opponentId].board[idx] = null;
+                            targetOwner.graveyard.push(target);
+                            targetOwner.board[idx] = null;
                             newState.logs.push(`${target.name} は破壊されました`);
                         }
                     }
@@ -984,16 +1012,13 @@ function processSingleEffect(
                 newState.logs.push(`${sourceCard.name} は他の全てのフォロワーを破壊した！`);
 
             } else if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
-                const oppBoard = newState.players[opponentId].board;
-                const idx = oppBoard.findIndex(c => c?.instanceId === targetId);
-                if (idx !== -1 && oppBoard[idx]) {
-                    const card = oppBoard[idx];
-                    if (card) {
-                        card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
-                        newState.players[opponentId].graveyard.push(card);
-                        newState.players[opponentId].board[idx] = null;
-                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
-                    }
+                const targetInfo = getBoardCardById(targetId);
+                if (targetInfo) {
+                    const { card, player: targetOwner, index: idx } = targetInfo;
+                    card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
+                    targetOwner.graveyard.push(card);
+                    targetOwner.board[idx] = null;
+                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
                 }
             }
             break;
@@ -1090,6 +1115,60 @@ function processSingleEffect(
                     if (card) {
                         card.currentHealth = newHp;
                         newState.logs.push(`${card.name} のHPは ${newHp} になりました`);
+                    }
+                });
+            }
+            break;
+        }
+        case 'RANDOM_DAMAGE': {
+            const count = effect.value2 || 1;
+            const damage = effect.value || 0;
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
+
+            if (targetIds && targetIds.length > 0) {
+                targetIds.forEach(tid => {
+                    const idx = targetBoard.findIndex(c => c?.instanceId === tid);
+                    if (idx !== -1 && targetBoard[idx]) {
+                        const target = targetBoard[idx]!;
+                        if (target.hasBarrier) {
+                            target.hasBarrier = false;
+                            newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
+                        } else {
+                            target.currentHealth -= damage;
+                            newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
+                        }
+                        if (target.currentHealth <= 0) {
+                            target.currentHealth = 0;
+                            newState.players[targetPid].graveyard.push(target);
+                            targetBoard[idx] = null;
+                            newState.logs.push(`${target.name} は破壊されました`);
+                        }
+                    }
+                });
+            } else {
+                const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                for (let i = validIndices.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng() * (i + 1));
+                    [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
+                }
+                const targets = validIndices.slice(0, count);
+                targets.forEach(idx => {
+                    const card = targetBoard[idx];
+                    if (card) {
+                        if (card.hasBarrier) {
+                            card.hasBarrier = false;
+                            newState.logs.push(`${card.name} のバリアがダメージを無効化しました`);
+                        } else {
+                            card.currentHealth -= damage;
+                            newState.logs.push(`${sourceCard.name} は ${card.name} に ${damage} ダメージを与えました`);
+                        }
+                        if (card.currentHealth <= 0) {
+                            card.currentHealth = 0;
+                            newState.players[targetPid].graveyard.push(card);
+                            targetBoard[idx] = null;
+                            newState.logs.push(`${card.name} は破壊されました`);
+                        }
                     }
                 });
             }
@@ -1220,9 +1299,9 @@ function processSingleEffect(
                     }
                 }
             } else if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
-                const p = newState.players[sourcePlayerId];
-                const boardCard = p.board.find(c => c?.instanceId === targetId);
-                if (boardCard) {
+                const targetInfo = getBoardCardById(targetId);
+                if (targetInfo) {
+                    const { card: boardCard } = targetInfo;
                     if (passive === 'BARRIER') {
                         boardCard.hasBarrier = true;
                         newState.logs.push(`${boardCard.name} はバリアを獲得した`);
@@ -1266,6 +1345,10 @@ function processSingleEffect(
                 const p = newState.players[sourcePlayerId];
                 p.board.forEach(c => {
                     if (c) {
+                        // Apply conditions if present
+                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) return;
+                        if (effect.conditions?.nameIn && !effect.conditions.nameIn.includes(c.name)) return;
+
                         // Track original stats for display purposes
                         if (!c.baseAttack) c.baseAttack = c.attack || 0;
                         if (!c.baseHealth) c.baseHealth = c.health || 0;
@@ -1558,14 +1641,14 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 // Resolution of RANDOM targets for visualization
                 let resolvedTargetIds: string[] | undefined = undefined;
 
-                if (e.targetType === 'OPPONENT' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE') {
+                if (e.targetType === 'OPPONENT' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE') {
                     // Pre-calculate targets for visualization
                     // Note: This logic duplicates processSingleEffect partially but is needed for UI cues
                     const targetPid = action.playerId === 'p1' ? 'p2' : 'p1'; // Default to opponent for most effects
                     const targetBoard = newState.players[targetPid].board;
 
-                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
-                        const count = e.value || 1;
+                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                        const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
                         // Use a temp RNG to predict (or effectively decide) targets
                         // IMPORTANT: To keep it deterministic and sync with processSingleEffect, 
                         // we should probably Pass these targets TO processSingleEffect via the queue.
@@ -1633,12 +1716,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (useSep) {
                 // Super Evolve Logic
                 if (!isRemote) {
-                    // Turn Constraints: FirstPlayer >= 7, SecondPlayer >= 6
-                    const isFirstPlayer = action.playerId === state.firstPlayerId;
-                    const turnReq = isFirstPlayer ? 7 : 6;
-
-                    if (state.turnCount < turnReq) {
-                        console.log(`[Engine] Cannot Super Evolve: Turn ${state.turnCount} < ${turnReq}`);
+                    // Turn Constraints: Min Turn 6 for all players for Super Evolve
+                    if (state.turnCount < 6) {
+                        console.log(`[Engine] Cannot Super Evolve: Turn ${state.turnCount} < 6`);
                         return newState;
                     }
 
@@ -1720,10 +1800,10 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 // Resolution of RANDOM targets for visualization (EVOLVE)
                 let resolvedTargetIds: string[] | undefined = undefined;
 
-                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
                     const targetPid = action.playerId === 'p1' ? 'p2' : 'p1';
                     const targetBoard = newState.players[targetPid].board;
-                    const count = e.value || 1;
+                    const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
 
                     const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                     for (let i = validIndices.length - 1; i > 0; i--) {

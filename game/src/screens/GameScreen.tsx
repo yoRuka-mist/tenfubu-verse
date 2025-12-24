@@ -480,9 +480,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
         playSERef.current = playSE;
     }, [onPhaseChange, onShake, playSE]);
 
-    // Card display size (2x larger than before: 180*2=360, 240*2=480)
-    const cardWidth = 360 * scale; // Use scale prop
-    const cardHeight = 480 * scale; // Use scale prop
+    // Card display size (original 360/480, scale controlled via prop/state)
+    const cardWidth = 360 * scale;
+    const cardHeight = 480 * scale;
 
     // Phase Timing
     React.useEffect(() => {
@@ -501,7 +501,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     const boardActualWidth = window.innerWidth - 340;
                     const boardCenterX = 340 + (boardActualWidth * 0.35); // More left of center
                     setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
-                    setCurrentScale(1.0); // Full size (2x original)
+                    setCurrentScale(0.75); // Target 3/4 size during animation (270/360)
                 }, 50);
                 // Play kirakira sound when card arrives
                 const kirakiraTimer = setTimeout(() => {
@@ -591,7 +591,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         const currentRotateY = 10 + eased * 160;
 
                         setRotateY(currentRotateY); // 10 to 170
-                        setCurrentScale(1.0 + eased * 0.3); // Scale up during flip
+                        setCurrentScale(0.75 + eased * 0.225); // Scale up from 0.75 to ~0.975 (3/4 of previous max)
 
                         // Fade out white light quickly as rotation starts
                         setWhiteness(Math.max(1 - progress * 3, 0));
@@ -1287,11 +1287,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Board Stability Helper ---
     const [shake, setShake] = React.useState(false); // Screen Shake State
 
-    // Target Selection State
     const [targetingState, setTargetingState] = React.useState<{
         type: 'PLAY' | 'EVOLVE';
         sourceIndex: number;
         useSep?: boolean;
+        allowedTargetPlayerId?: string; // Validated target side
     } | null>(null);
 
     // Refs
@@ -1400,7 +1400,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // case B: Visual Effects (Damage, Destroy, Heal)
-            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE';
+            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE';
             const isDestroyEffect = current.effect.type === 'DESTROY' || current.effect.type === 'RANDOM_DESTROY';
             const isHealEffect = current.effect.type === 'HEAL_LEADER';
             const isSetHpEffect = current.effect.type === 'RANDOM_SET_HP';
@@ -2027,7 +2027,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currentPlayer = playerRef.current;
         const card = currentPlayer.hand[index];
 
-        console.log(`[handlePlayCard] index: ${index}, card: ${card?.name}, needsTarget check...`);
+        // Check if card needs a target and identify which side
+        const fanfareTrigger = card.triggers?.find(t => t.trigger === 'FANFARE');
+        const firstEffect = fanfareTrigger?.effects[0];
+
+        // Extended logic: identify target side based on effect type
+        let allowedTargetPlayerId = opponentPlayerId; // Default to Enemy
+        if (firstEffect) {
+            if (['GRANT_PASSIVE', 'BUFF_STATS', 'HEAL_FOLLOWER'].includes(firstEffect.type)) {
+                allowedTargetPlayerId = currentPlayerId;
+            }
+        }
 
         const needsTarget =
             (card.type === 'SPELL' && card.triggers?.some(t => t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))) ||
@@ -2036,18 +2046,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))
             ));
 
-        // Check if there are ANY valid targets on opponent's board (not Stealthed and not Aura)
-        const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
-        const hasValidTargets = opponentBoard.some(c =>
-            c &&
-            !c.passiveAbilities?.includes('STEALTH') &&
-            !c.passiveAbilities?.includes('AURA')
+        // Check valid targets on the appropriate board
+        const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
+        const hasValidTargets = targetBoard.some(c =>
+            c && (
+                allowedTargetPlayerId === currentPlayerId || // Own units are usually always valid
+                (!c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA'))
+            )
         );
 
-        console.log(`[handlePlayCard] needsTarget: ${needsTarget}, hasValidTargets: ${hasValidTargets}`);
+        console.log(`[handlePlayCard] needsTarget: ${needsTarget}, allowedTarget: ${allowedTargetPlayerId}, hasValidTargets: ${hasValidTargets}`);
 
         if (needsTarget && hasValidTargets) {
-            setTargetingState({ type: 'PLAY', sourceIndex: index });
+            setTargetingState({ type: 'PLAY', sourceIndex: index, allowedTargetPlayerId });
             setDragState(null); // Stop dragging
             return;
         }
@@ -2066,7 +2077,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const newBoardSize = validCards.length + 1;
             const newIndex = validCards.length;
 
-            const spacing = 102 * scale; // Use scaled spacing
+            const spacing = CARD_SPACING * scale; // Use correct constant
             const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
             // Calculate Board Center in screen coordinates
@@ -2075,9 +2086,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             finalX = boardCenterX + offsetX;
 
-            // Determine Y: Player slots are at bottom of board area
-            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (70 * scale); // Adjusted to 70
-            finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
+            // Determine Y: Player slots are centered in board area
+            finalY = (window.innerHeight / 2) + (70 * scale);
         }
 
         const onComplete = () => {
@@ -2283,8 +2293,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             finalX = boardCenterX + offsetX;
 
                             // Opponent slots are at top of board area
-                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (70 * scale); // Adjusted to 70
-                            finalY = opponentBoardAreaBottom - (CARD_HEIGHT * scale / 2);
+                            finalY = (window.innerHeight / 2) - (70 * scale);
                         }
 
                         setPlayingCardAnim({
@@ -2890,8 +2899,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const handleTargetClick = (targetType: 'LEADER' | 'FOLLOWER', targetIndex: number, targetPlayerId: string) => {
         if (!targetingState) return;
 
-        // Determine validity (Simplified: assume all opponent followers are valid if targetingState is active for now)
-        // In full engine, checks would filter specific target requirements (e.g. "Select Allied Follower")
+        // Validating target side
+        if (targetingState.allowedTargetPlayerId && targetingState.allowedTargetPlayerId !== targetPlayerId) {
+            console.log("Invalid target side");
+            return;
+        }
 
         // 1. Get Target ID
         let targetId: string | undefined = undefined;
@@ -3034,8 +3046,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 finalX = boardCenterX + offsetX;
 
-                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (70 * scale); // Consistent with 70
-                finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
+                finalY = (window.innerHeight / 2) + (70 * scale);
             }
 
             setPlayingCardAnim({
@@ -3159,9 +3170,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'absolute', top: '15%', left: '50%', transform: 'translate(-50%, -50%)',
                         background: 'rgba(0, 0, 0, 0.7)', color: '#fff', padding: '10px 20px', borderRadius: 20,
-                        pointerEvents: 'none', zIndex: 1000, fontWeight: 'bold'
+                        pointerEvents: 'none', zIndex: 1000, fontWeight: 'bold',
+                        border: targetingState.allowedTargetPlayerId === currentPlayerId ? '2px solid #48bb78' : '2px solid #f56565'
                     }}>
-                        対象を選択してください
+                        {targetingState.allowedTargetPlayerId === currentPlayerId ? '味方のフォロワーを選択してください' : '相手のフォロワーを選択してください'}
                     </div>
                 )}
 
@@ -3417,13 +3429,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             top: 0,
                                             transform: `translateX(calc(-50% + ${offsetX}px)) ${(hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i) ? 'scale(1.05)' : 'scale(1)'}`,
                                             transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
-                                            border: (targetingState && c) ? '2px solid #f56565' : 'none', borderRadius: 8,
+                                            border: (targetingState && c && targetingState.allowedTargetPlayerId === opponentPlayerId) ? '2px solid #f56565' : 'none',
+                                            boxShadow: (targetingState && c && targetingState.allowedTargetPlayerId === opponentPlayerId) ? '0 0 15px #f56565' : 'none',
+                                            borderRadius: 8,
                                             cursor: targetingState ? 'crosshair' : 'default',
                                             width: CARD_WIDTH * scale,
                                             height: CARD_HEIGHT * scale,
-                                            pointerEvents: 'auto'
+                                            pointerEvents: 'auto',
+                                            opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
+                                            transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
                                         }}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                     </div>
                                 );
                             })}
@@ -3459,9 +3475,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             pointerEvents: 'auto',
                                             width: CARD_WIDTH * scale,
                                             height: CARD_HEIGHT * scale,
-                                            zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
+                                            border: (targetingState && c && targetingState.allowedTargetPlayerId === currentPlayerId) ? '2px solid #48bb78' : 'none',
+                                            boxShadow: (targetingState && c && targetingState.allowedTargetPlayerId === currentPlayerId) ? '0 0 15px #48bb78' : 'none',
+                                            borderRadius: 8,
+                                            zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1,
+                                            opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
+                                            transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
                                         }}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
 
                                         {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
                                         {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
@@ -4028,7 +4049,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     25% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
                                     85% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
                                     100% { 
-                                        transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(0.65); 
+                                        transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(1.0); 
                                         opacity: 1;
                                     }
                                     ` : `
@@ -4049,7 +4070,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
-                                <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                                <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
                                 {playingCardAnim.card.type === 'SPELL' && (
                                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <SparkleBurst x={0} y={0} />

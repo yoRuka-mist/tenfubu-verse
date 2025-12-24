@@ -10,7 +10,6 @@
     height: 200px;
     border-radius: 12px;
     position: relative;
-    transition: all 0.3s ease;
     transform-style: preserve-3d;
     cursor: pointer;
     background: linear-gradient(135deg, #2b3242 0%, #161b22 100%);
