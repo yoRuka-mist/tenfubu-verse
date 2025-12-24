@@ -1287,6 +1287,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [targetingState, setTargetingState] = React.useState<{
         type: 'PLAY' | 'EVOLVE';
         sourceIndex: number;
+        useSep?: boolean;
     } | null>(null);
 
     // Refs
@@ -2818,7 +2819,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     );
 
                     if (needsTarget && hasValidTargets) {
-                        setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex });
+                        setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex, useSep: (currentDrag as any).useSep });
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
@@ -3009,7 +3010,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const newBoardSize = validCards.length + 1;
                 const newIndex = validCards.length;
 
-                const spacing = 102 * scale;
+                const spacing = CARD_SPACING * scale;
                 const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
                 const boardAreaRect = boardRef.current?.getBoundingClientRect();
@@ -3043,7 +3044,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }, 2000);
         } else if (targetingState.type === 'EVOLVE') {
             // Start evolution animation with target
-            handleEvolveWithAnimation(targetingState.sourceIndex, false, targetId);
+            handleEvolveWithAnimation(targetingState.sourceIndex, !!targetingState.useSep, targetId);
         }
 
         // 3. Reset
@@ -3322,30 +3323,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
                         <div style={{
                             position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
-                            width: 50, height: 50, background: 'radial-gradient(circle, #feb2b2, #c53030)', borderRadius: '50%',
+                            width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
                             border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1.4rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10
+                            fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)'
                         }}>{opponent.hp}</div>
 
                         {/* Opponent EP - Circular Frame */}
                         <div style={{
-                            position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
-                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                            width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
                         }}>
-                            <div style={{ display: 'flex', gap: 3 }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            <div style={{ display: 'flex', gap: 3 * scale }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
                         </div>
 
                         {/* Opponent SEP - Circular Frame */}
                         <div style={{
-                            position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
-                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                            width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
                         }}>
-                            <div style={{ display: 'flex', gap: 3 }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            <div style={{ display: 'flex', gap: 3 * scale }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
                         </div>
                     </div>
