@@ -886,7 +886,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     {/* --- FRONT FACE (Original) --- */}
                     <div style={{
                         position: 'absolute', inset: 0,
-                        backfaceVisibility: 'hidden',
+                        // backfaceVisibility removed - controlled by opacity
                         borderRadius: 16, overflow: 'hidden',
                         background: '#1a202c', // Fallback bg
                         zIndex: totalRotateY <= 90 ? 2 : 1, // Explicit stacking order
@@ -912,7 +912,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     {/* --- BACK FACE (Evolved) --- */}
                     <div style={{
                         position: 'absolute', inset: 0,
-                        backfaceVisibility: 'hidden',
+                        // backfaceVisibility removed
                         transform: 'rotateY(180deg)',
                         borderRadius: 16, overflow: 'hidden',
                         background: '#1a202c',
@@ -920,7 +920,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         opacity: totalRotateY > 90 ? 1 : 0, // Explicit visibility toggle
                     }}>
                         <img
-                            src={evolvedImageUrl || card.imageUrl}
+                            src={(evolvedImageUrl && evolvedImageUrl !== '') ? evolvedImageUrl : card.imageUrl}
                             alt={`${card.name} Evolved`}
                             style={{
                                 width: '100%', height: '100%', objectFit: 'cover',
