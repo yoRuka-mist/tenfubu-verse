@@ -452,14 +452,15 @@ interface EvolutionAnimationProps {
     onShake: () => void;
     useSep?: boolean;
     playSE?: (file: string, volume?: number) => void;
+    scale: number; // Add scale prop
 }
 
-const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE }) => {
+const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE, scale }) => {
     const [rotateY, setRotateY] = React.useState(0);
     const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
     const [whiteness, setWhiteness] = React.useState(0);
     const [glowIntensity, setGlowIntensity] = React.useState(0);
-    const [scale, setScale] = React.useState(0.25); // Start at board card size
+    const [currentScale, setCurrentScale] = React.useState(0.25); // Start at board card size, renamed to avoid conflict with prop
     const [position, setPosition] = React.useState({ x: startX, y: startY });
     const [showParticles, setShowParticles] = React.useState(false);
     // Added dist, duration, and size to charge particles
@@ -480,8 +481,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     }, [onPhaseChange, onShake, playSE]);
 
     // Card display size (2x larger than before: 180*2=360, 240*2=480)
-    const cardWidth = 360;
-    const cardHeight = 480;
+    const cardWidth = 360 * scale; // Use scale prop
+    const cardHeight = 480 * scale; // Use scale prop
 
     // Phase Timing
     React.useEffect(() => {
@@ -493,14 +494,14 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             case 'ZOOM_IN':
                 // Start at card position, scale to match board card size initially
                 setPosition({ x: startX, y: startY });
-                setScale(0.25); // Match board card size (90/360)
+                setCurrentScale(0.25); // Match board card size (90/360)
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
                     // Move to left-center of board area (slightly left of center)
                     const boardActualWidth = window.innerWidth - 340;
                     const boardCenterX = 340 + (boardActualWidth * 0.35); // More left of center
                     setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
-                    setScale(1.0); // Full size (2x original)
+                    setCurrentScale(1.0); // Full size (2x original)
                 }, 50);
                 // Play kirakira sound when card arrives
                 const kirakiraTimer = setTimeout(() => {
@@ -590,7 +591,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         const currentRotateY = 10 + eased * 160;
 
                         setRotateY(currentRotateY); // 10 to 170
-                        setScale(1.0 + eased * 0.3); // Scale up during flip
+                        setCurrentScale(1.0 + eased * 0.3); // Scale up during flip
 
                         // Fade out white light quickly as rotation starts
                         setWhiteness(Math.max(1 - progress * 3, 0));
@@ -678,7 +679,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 const zoomOutStart = Date.now();
                 const zoomOutDuration = 250; // Quicker landing (Was 500ms)
 
-                const startScale = scale; // Current scale (should be ~1)
+                const startScale = currentScale; // Current scale (should be ~1)
 
                 intervalId = setInterval(() => {
                     const elapsed = Date.now() - zoomOutStart;
@@ -688,14 +689,14 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     const eased = 1 - Math.pow(1 - progress, 3);
 
                     // Gradually reduce scale to 0.25 (board card size)
-                    setScale(startScale - (startScale - 0.25) * eased);
+                    setCurrentScale(startScale - (startScale - 0.25) * eased);
 
                     if (progress >= 1) {
                         if (intervalId) clearInterval(intervalId);
                         // Keep rotation at 180 (flipped state)
                         setRotateY(180);
                         setChargeRotate(0); // Reset charge rotation
-                        setScale(0.25); // Ensure exact board size
+                        setCurrentScale(0.25); // Ensure exact board size
                         onPhaseChangeRef.current('LAND');
                     }
                 }, 16);
@@ -714,7 +715,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             if (timer) clearTimeout(timer);
             if (intervalId) clearInterval(intervalId);
         };
-    }, [phase, startX, startY]);
+    }, [phase, startX, startY, currentScale, scale]); // Added scale to dependencies
 
     // Total rotation is just pure Y rotation + charge wobble
     // 3D CSS will handle the face visibility
@@ -786,7 +787,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     <div style={{
                         position: 'absolute',
                         top: '50%', left: '50%',
-                        width: 500, height: 500,
+                        width: 500 * scale, height: 500 * scale, // Scaled
                         border: '8px solid rgba(255, 255, 255, 0.6)', // Thicker ring
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%) rotateX(75deg)',
@@ -797,7 +798,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     <div style={{
                         position: 'absolute',
                         top: '50%', left: '50%',
-                        width: 600, height: 600,
+                        width: 600 * scale, height: 600 * scale, // Scaled
                         border: '6px dashed rgba(100, 200, 255, 0.7)', // Thicker dashed ring
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%) rotateX(80deg) rotateY(10deg)',
@@ -827,8 +828,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute',
                         left: position.x,
                         top: position.y,
-                        width: p.size,
-                        height: p.size,
+                        width: p.size * scale, // Scaled
+                        height: p.size * scale, // Scaled
                         borderRadius: '50%',
                         background: useSep
                             ? `radial-gradient(circle, rgba(183, 148, 244, 1) 0%, rgba(159, 122, 234, 0.8) 50%, transparent 100%)`
@@ -847,7 +848,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 position: 'absolute',
                 left: position.x + vibrateOffset.x,
                 top: position.y + vibrateOffset.y,
-                transform: `translate(-50%, -50%) scale(${scale}) perspective(1200px) rotateY(${totalRotateY}deg)`,
+                transform: `translate(-50%, -50%) scale(${currentScale}) perspective(1200px) rotateY(${totalRotateY}deg)`, // Use currentScale
                 transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT')
                     ? 'left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
                     : 'none',
@@ -953,7 +954,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         return (
                             <div key={`land-${i}`} style={({
                                 position: 'absolute', left: 0, top: 0,
-                                width: 8, height: 8, borderRadius: '50%',
+                                width: 8 * scale, height: 8 * scale, borderRadius: '50%', // Scaled
                                 background: 'white',
                                 '--angle': `${angle}deg`,
                                 '--dist': dist,
@@ -1342,7 +1343,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const cardDef = getCardDefinition(current.effect.targetCardId);
                 if (cardDef) {
                     // Removed unused isPlayer variable
-                    let startX, startY;
+                    // Removed unused startX, startY variables
 
                     // Use refs to get exact screen coordinates for effect start
                     // NOTE: We need refs for hand/board/leader to do this perfectly.
@@ -2056,7 +2057,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             finalX = boardCenterX + offsetX;
 
             // Determine Y: Player slots are at bottom of board area
-            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (20 * scale); // Adjusted from 220*scale
+            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (60 * scale); // Adjusted from 220*scale
             finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
         }
 
@@ -2263,7 +2264,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             finalX = boardCenterX + offsetX;
 
                             // Opponent slots are at top of board area
-                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (20 * scale); // Adjusted from 220*scale
+                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (60 * scale); // Adjusted from 220*scale
                             finalY = opponentBoardAreaBottom - (CARD_HEIGHT * scale / 2);
                         }
 
@@ -2835,7 +2836,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         window.addEventListener('mouseup', handleGlobalMouseUp);
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [opponentPlayerId, currentPlayerId, isHandExpanded]); // Removed gameState and player to prevent double registration
+    }, [opponentPlayerId, currentPlayerId, isHandExpanded, scale]); // Added scale to dependencies
 
     // Background click to close expanded hand OR Cancel Targeting
     const handleBackgroundClick = () => {
@@ -3013,7 +3014,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 finalX = boardCenterX + offsetX;
 
-                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (20 * scale);
+                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (60 * scale);
                 finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
             }
 
@@ -3372,7 +3373,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Opponent Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${20 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top
+                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${60 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top margin to 60
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3410,7 +3411,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Player Slots - Scaled Position */}
                     <div style={{
-                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${20 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom
+                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${60 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom margin to 60
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3717,9 +3718,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // We want to maintain RIGHT alignment relative to window edge.
                                 // Rightmost Card Center X = ScreenWidth/2 + OffsetX
                                 // We want Rightmost Card Right Edge <= WindowWidth - Margin
-                                // Rightmost Card Center X <= WindowWidth - Margin - CardWidth/2
 
-                                const rightEdgeMargin = 20 * scale; // Margin from the right edge of the screen
+                                const rightEdgeMargin = 160 * scale; // INCREASED Margin to prevent clipping (User reported 2 cards clipped)
                                 const cardHalfWidth = CARD_WIDTH * scale / 2;
 
                                 // Calculate the X coordinate of the rightmost card's center, relative to the screen's center (0)
@@ -4088,6 +4088,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             onShake={triggerShake}
                             useSep={evolveAnimation.useSep}
                             playSE={playSE}
+                            scale={scale} // Pass scale
                         />
                     )
                 }
