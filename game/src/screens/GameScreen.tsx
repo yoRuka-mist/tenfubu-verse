@@ -19,6 +19,67 @@ interface GameScreenProps {
 
 
 
+// --- Heal Visual Effect (Soft) ---
+const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComplete: () => void }) => {
+    React.useEffect(() => {
+        const timer = setTimeout(onComplete, 2000);
+        return () => clearTimeout(timer);
+    }, [onComplete]);
+
+    const particles = React.useMemo(() => {
+        return Array(20).fill(0).map((_, i) => ({
+            id: i,
+            angle: Math.random() * 360,
+            dist: 50 + Math.random() * 100,
+            size: 15 + Math.random() * 25,
+            delay: Math.random() * 0.5,
+        }));
+    }, []);
+
+    return (
+        <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
+            <style>{`
+                @keyframes healGlowFade {
+                    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; filter: blur(10px); }
+                    30% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; filter: blur(15px); }
+                    100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; filter: blur(30px); }
+                }
+                @keyframes healParticleRise {
+                    0% { transform: translate(-50%, -50%) rotate(var(--angle)) translate(0, 0) scale(0); opacity: 0; }
+                    20% { transform: translate(-50%, -50%) rotate(var(--angle)) translate(0, 0) opacity: 0.7; }
+                    100% { transform: translate(-50%, -50%) rotate(var(--angle)) translate(calc(var(--dist) * 1px), 0) scale(1.5); opacity: 0; }
+                }
+            `}</style>
+
+            {/* Core Glow */}
+            <div style={{
+                position: 'absolute', left: 0, top: 0,
+                width: 250, height: 250,
+                background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,255,240,0.5) 50%, transparent 80%)',
+                borderRadius: '50%',
+                transform: 'translate(-50%, -50%)',
+                animation: 'healGlowFade 1.5s ease-out forwards',
+                filter: 'blur(10px)'
+            }} />
+
+            {/* Soft Particles */}
+            {particles.map(p => (
+                <div key={p.id} style={({
+                    position: 'absolute', left: 0, top: 0,
+                    width: p.size, height: p.size,
+                    background: 'rgba(255,250,240,0.6)',
+                    borderRadius: '50%',
+                    filter: 'blur(5px)',
+                    '--angle': `${p.angle}deg`,
+                    '--dist': p.dist,
+                    animation: `healParticleRise 1.2s ease-out ${p.delay}s forwards`,
+                    pointerEvents: 'none'
+                } as any)} />
+            ))}
+        </div>
+    );
+};
+
 // --- Visual Effects ---
 const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
     // Sprite Configuration (Updated for 8x8 standardization)
@@ -37,10 +98,10 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
     React.useEffect(() => {
         // Duration based on animation type
-        const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE'].includes(type);
+        const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH'].includes(type);
         const duration = isSprite
             ? (spriteConfig.cols * spriteConfig.rows) / spriteConfig.fps * 1000
-            : (type === 'FIREBALL' ? 500 : 400); // Snappy for FLASH/BEAM/SLASH
+            : (type === 'FIREBALL' ? 500 : (type === 'HEAL' ? 2000 : 400)); // Snappy for FLASH/BEAM/SLASH, Long for HEAL
 
         const timer = setTimeout(onComplete, duration);
         return () => clearTimeout(timer);
@@ -80,8 +141,14 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
             playSE('ray.mp3', 0.6);
         } else if (type === 'SUMI') {
             playSE('yami.mp3', 0.6);
+        } else if (type === 'HEAL') {
+            playSE('water.mp3', 0.6);
         }
     }, [type, audioSettings]);
+
+    if (type === 'HEAL') {
+        return <HealEffectVisual x={x} y={y} onComplete={onComplete} />;
+    }
 
     const style: React.CSSProperties = {
         position: 'fixed', left: x, top: y, transform: 'translate(-50%, -50%)',
@@ -89,7 +156,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
-    const isSpriteType = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE'].includes(type);
+    const isSpriteType = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH'].includes(type);
 
     if (isSpriteType) {
         // Map Type to Image
@@ -101,6 +168,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         if (type === 'WATER') bgImage = '/effects/water.png';
         if (type === 'RAY') bgImage = '/effects/ray.png';
         if (type === 'FIRE') bgImage = '/effects/fire.png';
+        if (type === 'SLASH') bgImage = '/effects/slash.png';
 
         const steps = spriteConfig.cols * spriteConfig.rows;
 
@@ -135,10 +203,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     let imgSrc = '';
     let animation = '';
 
-    if (type === 'SLASH') {
-        imgSrc = '/effects/slash.png';
-        animation = 'slash 0.4s ease-out forwards';
-    } else if (type === 'FIREBALL') {
+    if (type === 'FIREBALL') {
         imgSrc = '/effects/fireball.png';
         animation = 'explode 0.5s ease-out forwards';
     } else if (type === 'BEAM') {
@@ -170,35 +235,51 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         <div style={style}>
             <img src={imgSrc} style={{ width: '100%', height: '100%', objectFit: 'contain', animation: animation }} />
             <style>{`
-                @keyframes slash { 0% { transform: scale(0.5) rotate(-45deg); opacity: 0; } 20% { opacity: 1; } 100% { transform: scale(1.5) rotate(-45deg); opacity: 0; } }
                 @keyframes explode { 0% { transform: scale(0.5); opacity: 0; } 20% { opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
             `}</style>
         </div>
     );
 };
 
+
 // --- Floating Damage Text ---
 const DamageText = ({ value, x, y, color, onComplete }: { value: string | number, x: number, y: number, color?: string, onComplete: () => void }) => {
     React.useEffect(() => {
-        const timer = setTimeout(onComplete, 1000);
+        const timer = setTimeout(onComplete, 1200);
         return () => clearTimeout(timer);
     }, [onComplete]);
+
+    const isHealing = color === '#48bb78'; // Green = healing
+    const displayColor = color || '#e53e3e';
+
+    // Create gradient colors for text
+    const gradientColors = isHealing
+        ? 'linear-gradient(180deg, #68d391 0%, #38a169 50%, #276749 100%)'
+        : 'linear-gradient(180deg, #fc8181 0%, #e53e3e 50%, #c53030 100%)';
 
     return (
         <div style={{
             position: 'fixed', left: x, top: y,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none', zIndex: 6000,
-            fontSize: '2rem', fontWeight: '900', color: color || '#e53e3e',
-            textShadow: '0 0 5px black, 0 0 10px white',
-            animation: 'floatUp 1s ease-out forwards'
+            fontSize: '4rem',
+            fontWeight: '900',
+            fontFamily: '"Impact", "Arial Black", sans-serif',
+            letterSpacing: '-2px',
+            background: gradientColors,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            filter: `drop-shadow(0 0 8px ${displayColor}) drop-shadow(0 2px 4px rgba(0,0,0,0.8))`,
+            animation: 'floatUp 1.2s ease-out forwards'
         }}>
             {value}
             <style>{`
                 @keyframes floatUp {
-                    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-                    20% { transform: translate(-50%, -80%) scale(1.5); opacity: 1; }
-                    100% { transform: translate(-50%, -150%) scale(1); opacity: 0; }
+                    0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+                    15% { transform: translate(-50%, -70%) scale(1.8); opacity: 1; }
+                    30% { transform: translate(-50%, -90%) scale(1.4); opacity: 1; }
+                    100% { transform: translate(-50%, -180%) scale(1); opacity: 0; }
                 }
             `}</style>
         </div>
@@ -221,23 +302,25 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
 
     return (
         <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
+            <style>{`
+                @keyframes sparkleMove {
+                    0% { transform: rotate(var(--angle)) translate(0, 0) scale(0); opacity: 0; }
+                    20% { opacity: 1; transform: rotate(var(--angle)) translate(calc(var(--dist) * 0.2px), 0) scale(1.5); }
+                    100% { transform: rotate(var(--angle)) translate(calc(var(--dist) * 1px), 0) scale(0); opacity: 0; }
+                }
+            `}</style>
             {particles.map(p => (
-                <div key={p.id} style={{
+                <div key={p.id} style={({
                     position: 'absolute', left: 0, top: 0,
                     width: p.size, height: p.size,
                     background: p.color,
                     borderRadius: '50%',
                     boxShadow: `0 0 10px ${p.color}, 0 0 20px ${p.color}`,
-                    transform: `rotate(${p.angle}deg)`,
-                    animation: `sparkleMove 0.8s ease-out ${p.delay}s forwards`
-                }}>
-                    <style>{`
-                        @keyframes sparkleMove {
-                            0% { transform: rotate(${p.angle}deg) translate(0, 0) scale(0); opacity: 0; }
-                            20% { opacity: 1; transform: rotate(${p.angle}deg) translate(${p.dist * 0.2}px, 0) scale(1.5); }
-                            100% { transform: rotate(${p.angle}deg) translate(${p.dist}px, 0) scale(0); opacity: 0; }
-                        }
-                    `}</style>
+                    '--angle': `${p.angle}deg`,
+                    '--dist': p.dist,
+                    animation: `sparkleMove 0.8s ease-out ${p.delay}s forwards`,
+                    pointerEvents: 'none'
+                } as any)}>
                 </div>
             ))}
         </div>
@@ -385,20 +468,20 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     // Distance: 200 to 800 pixels (wide range)
                     const dist = 200 + Math.random() * 600;
 
-                    // Delay: 0 to 1.8 seconds (spread throughout WHITE_FADE phase)
+                    // Delay: 0 to 1.0 seconds (shortened for faster charge phase)
                     // This makes particles appear continuously
-                    const delay = Math.random() * 1.8;
+                    const delay = Math.random() * 1.0;
 
                     // Duration inversely proportional to distance (far = fast, near = slow)
                     // Adjusted so that even late-starting particles reach the card before FLIP
-                    // WHITE_FADE lasts ~2.4s, so delay + duration should be < 2.4s
-                    // Far particles (dist ~800): duration ~0.5s
-                    // Near particles (dist ~200): duration ~1.2s
+                    // WHITE_FADE lasts ~1.4s, so delay + duration should be < 1.4s
+                    // Far particles (dist ~800): duration ~0.3s
+                    // Near particles (dist ~200): duration ~0.8s
                     const normalizedDist = (dist - 200) / 600; // 0 to 1
-                    const baseDuration = 1.2 - normalizedDist * 0.7; // 1.2s to 0.5s
+                    const baseDuration = 0.8 - normalizedDist * 0.5; // 0.8s to 0.3s
 
                     // Ensure particle reaches center before phase ends
-                    const maxDuration = Math.max(0.3, 2.2 - delay); // Leave 0.2s buffer
+                    const maxDuration = Math.max(0.2, 1.2 - delay); // Leave 0.2s buffer
                     const duration = Math.min(baseDuration, maxDuration);
 
                     // Size: 24 to 72 pixels (Increased by 3x as requested)
@@ -417,9 +500,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 setVibrate(true);
 
                 // Gradually increase whiteness, glow, and slow rotation (0-10deg)
+                // Shortened from 2.4s to ~1.4s (1 second faster)
                 let whiteProgress = 0;
                 intervalId = setInterval(() => {
-                    whiteProgress += 0.02; // Slightly slower
+                    whiteProgress += 0.035; // Faster charge (was 0.02)
                     setWhiteness(Math.min(whiteProgress, 1));
                     setGlowIntensity(Math.min(whiteProgress * 80, 80)); // Stronger glow
                     setChargeRotate(whiteProgress * 15); // Rotate more
@@ -602,6 +686,23 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             background: 'rgba(0,0,0,0.75)',
             pointerEvents: 'none'
         }}>
+            {/* 1. Global style block for all particles to avoid thousands of <style> tags */}
+            <style>{`
+                ${chargeParticles.map(p => `
+                    @keyframes chargeParticleIn-${p.id} {
+                        0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.5); }
+                        20% { opacity: 0.8; transform: rotate(${p.angle}deg) translateX(${p.dist * 0.8}px) scale(1.2); }
+                        100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); }
+                    }
+                `).join('')}
+                ${burstParticles.map(p => `
+                    @keyframes burstParticleOut-${p.id} {
+                        0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1.5); }
+                        100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist * 1.5}px) scale(0); }
+                    }
+                `).join('')}
+            `}</style>
+
             {/* Charge Particles - Converging toward card */}
             {chargeParticles.map(p => (
                 <div
@@ -618,17 +719,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         filter: 'blur(1px)',
                         animation: `chargeParticleIn-${p.id} ${p.duration}s ease-in ${p.delay}s forwards`,
                         transform: `rotate(${p.angle}deg) translateX(${p.dist}px)`,
-                        opacity: 0
+                        opacity: 0,
+                        pointerEvents: 'none'
                     }}
-                >
-                    <style>{`
-                        @keyframes chargeParticleIn-${p.id} {
-                            0% { opacity: 0; transform: rotate(${p.angle}deg) translateX(${p.dist}px) scale(0.5); }
-                            20% { opacity: 0.8; transform: rotate(${p.angle}deg) translateX(${p.dist * 0.8}px) scale(1.2); }
-                            100% { opacity: 0; transform: rotate(${p.angle}deg) translateX(0) scale(0.2); }
-                        }
-                    `}</style>
-                </div>
+                />
             ))}
 
             {/* Energy Rings (Hula Hoop Effect) - Visible during WHITE_FADE */}
@@ -694,16 +788,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         boxShadow: useSep
                             ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)'
                             : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)',
-                        animation: `burstParticleOut-${p.id} 0.4s ease-out ${p.delay}s forwards`
+                        animation: `burstParticleOut-${p.id} 0.4s ease-out ${p.delay}s forwards`,
+                        pointerEvents: 'none'
                     }}
-                >
-                    <style>{`
-                        @keyframes burstParticleOut-${p.id} {
-                            0% { opacity: 1; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(0) scale(1.5); }
-                            100% { opacity: 0; transform: translate(-50%, -50%) rotate(${p.angle}deg) translateX(${p.dist * 1.5}px) scale(0); }
-                        }
-                    `}</style>
-                </div>
+                />
             ))}
 
             {/* Card Container */}
@@ -717,33 +805,21 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     : 'none',
                 transformStyle: 'preserve-3d'
             }}>
-                {/* Outer Background Glow */}
+                {/* Consolidated Background Glow - Optimized */}
                 <div style={{
                     position: 'absolute',
                     left: '50%',
                     top: '50%',
                     transform: 'translate(-50%, -50%)',
-                    width: cardWidth + 150 + glowIntensity * 4,
-                    height: cardHeight + 200 + glowIntensity * 4,
+                    width: cardWidth * 1.3,
+                    height: cardHeight * 1.2,
                     background: useSep
-                        ? `radial-gradient(ellipse, rgba(159, 122, 234, ${glowIntensity / 70}) 0%, rgba(128, 90, 213, ${glowIntensity / 100}) 30%, transparent 70%)`
-                        : `radial-gradient(ellipse, rgba(251, 211, 141, ${glowIntensity / 70}) 0%, rgba(236, 201, 75, ${glowIntensity / 100}) 30%, transparent 70%)`,
-                    filter: `blur(${25 + glowIntensity / 2}px)`,
+                        ? `radial-gradient(ellipse, rgba(159, 122, 234, 0.4) 0%, transparent 70%)`
+                        : `radial-gradient(ellipse, rgba(251, 211, 141, 0.4) 0%, transparent 70%)`,
+                    filter: 'blur(20px)',
                     pointerEvents: 'none',
-                    opacity: glowIntensity > 10 ? 1 : 0,
-                    transition: 'opacity 0.3s'
-                }} />
-
-                {/* Inner Glow Effect */}
-                <div style={{
-                    position: 'absolute',
-                    inset: -50,
-                    background: useSep
-                        ? `radial-gradient(circle, rgba(183, 148, 244, ${glowIntensity / 50}) 0%, rgba(159, 122, 234, ${glowIntensity / 80}) 40%, transparent 70%)`
-                        : `radial-gradient(circle, rgba(255, 251, 235, ${glowIntensity / 50}) 0%, rgba(251, 211, 141, ${glowIntensity / 80}) 40%, transparent 70%)`,
-                    borderRadius: 40,
-                    filter: `blur(${glowIntensity / 1.5}px)`,
-                    pointerEvents: 'none'
+                    opacity: glowIntensity > 1 ? 1 : 0,
+                    transition: 'opacity 0.4s'
                 }} />
 
                 {/* Card */}
@@ -753,8 +829,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     borderRadius: 16,
                     overflow: 'hidden',
                     boxShadow: useSep
-                        ? `0 0 ${40 + glowIntensity}px rgba(159, 122, 234, 0.9), 0 0 ${70 + glowIntensity * 2}px rgba(128, 90, 213, 0.5)`
-                        : `0 0 ${40 + glowIntensity}px rgba(251, 211, 141, 0.9), 0 0 ${70 + glowIntensity * 2}px rgba(236, 201, 75, 0.5)`,
+                        ? `0 0 40px rgba(159, 122, 234, 0.7)`
+                        : `0 0 40px rgba(251, 211, 141, 0.7)`,
                     position: 'relative'
                 }}>
                     {/* Card Image */}
@@ -787,23 +863,24 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     top: startY,
                     pointerEvents: 'none'
                 }}>
+                    <style>{`
+                        @keyframes landParticleMove {
+                            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateX(calc(var(--dist) * 1px)) scale(0); }
+                        }
+                    `}</style>
                     {Array(20).fill(0).map((_, i) => {
                         const angle = (i / 20) * 360;
                         const dist = 40 + Math.random() * 100;
                         return (
-                            <div key={`land-${i}`} style={{
+                            <div key={`land-${i}`} style={({
                                 position: 'absolute', left: 0, top: 0,
                                 width: 8, height: 8, borderRadius: '50%',
                                 background: 'white',
-                                animation: `landParticle${i} 0.5s ease-out forwards`
-                            }}>
-                                <style>{`
-                                    @keyframes landParticle${i} {
-                                        0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-                                        100% { opacity: 0; transform: translate(-50%, -50%) rotate(${angle}deg) translateX(${dist}px) scale(0); }
-                                    }
-                                `}</style>
-                            </div>
+                                '--angle': `${angle}deg`,
+                                '--dist': dist,
+                                animation: `landParticleMove 0.5s ease-out forwards`
+                            } as any)} />
                         );
                     })}
                 </div>
@@ -921,7 +998,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
         if (hasDying) {
             const timer = setTimeout(() => {
                 setVisualBoard(prev => prev.filter(c => !c.isDying));
-            }, 1200); // 1.2s delay for damage text readability
+            }, 700); // 0.7s delay (shortened from 1.2s)
             return () => clearTimeout(timer);
         }
     }, [visualBoard]);
@@ -988,7 +1065,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     } | null>(null);
 
     interface ActiveEffectState {
-        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI';
+        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER';
         x: number;
         y: number;
         key: number;
@@ -1154,7 +1231,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const current = gameState.pendingEffects[0];
 
             // Prevent re-processing the exact same effect object.
-            // This happens when setIsProcessingEffect(false) is called but the RESOLVE_EFFECT state update hasn't arrived yet.
             if (processingHandledRef.current === current) return;
             processingHandledRef.current = current;
 
@@ -1184,9 +1260,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             }
 
-            // case B: Visual Effects (Damage, etc.) or snappy logic buffs
+            // case B: Visual Effects (Damage, Destroy, Heal)
             const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE';
-            const delay = isDamageEffect ? 1200 : 50; // Buffs and card draws are snappy
+            const isDestroyEffect = current.effect.type === 'DESTROY' || current.effect.type === 'RANDOM_DESTROY';
+            const isHealEffect = current.effect.type === 'HEAL_LEADER';
+            const isSetHpEffect = current.effect.type === 'RANDOM_SET_HP';
+            const isBounceEffect = current.effect.type === 'RETURN_TO_HAND';
+            const isSummonEffect = current.effect.type === 'SUMMON_CARD';
+
+            const delay = (isHealEffect || isBounceEffect || isSummonEffect) ? 600 : 50;
 
             if (isDamageEffect) {
                 const effectType = current.sourceCard.attackEffectType || 'SLASH';
@@ -1201,18 +1283,67 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                         }
                     });
+                } else if ((current as any).targetIds) {
+                    (current as any).targetIds.forEach((tid: string) => {
+                        const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                        if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                    });
                 } else if (current.targetId) {
                     const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
                     if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                 }
+            } else if (isDestroyEffect) {
+                // Destroy effect visuals - Use character's specific animation if available
+                const effectType = current.sourceCard.attackEffectType || 'IMPACT';
+                const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
+                const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+
+                if (current.effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                    // Board clear visual
+                    vBoard.forEach((v, vIdx) => {
+                        if (v && v.instanceId !== (current.sourceCard as any).instanceId) {
+                            playEffect(effectType, targetPid, vIdx);
+                        }
+                    });
+                    triggerShake();
+                } else if ((current as any).targetIds) {
+                    (current as any).targetIds.forEach((tid: string) => {
+                        const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                        if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                    });
+                } else if (current.targetId) {
+                    const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
+                    if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                }
+            } else if (isHealEffect) {
+                // Trigger HEAL visual effect for leader recovery
+                const targetPid = current.sourcePlayerId; // HEAL_LEADER heals source
+                playEffect('HEAL', targetPid);
             }
 
             if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
+
+            // Timeline:
+            // 0ms: Animation Starts
+            // 1000ms: Impact / Damage Applied (Gap is zero relative to impact)
+            // 2000ms: Done / Next Effect (1s pause after damage)
+            const isDamageOrDestroy = isDamageEffect || isDestroyEffect || isSetHpEffect;
+            const stateUpdateDelay = isDamageOrDestroy ? 1000 : delay;
+            const postActionDelay = isDamageOrDestroy ? 1000 : 0;
+
             effectTimeoutRef.current = setTimeout(() => {
-                setIsProcessingEffect(false);
                 dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
-                effectTimeoutRef.current = null;
-            }, delay);
+
+                if (postActionDelay > 0) {
+                    effectTimeoutRef.current = setTimeout(() => {
+                        setIsProcessingEffect(false);
+                        effectTimeoutRef.current = null;
+                    }, postActionDelay);
+                } else {
+                    setIsProcessingEffect(false);
+                    effectTimeoutRef.current = null;
+                }
+            }, stateUpdateDelay);
         } else {
             // No more effects to process
             processingHandledRef.current = null;
@@ -1221,7 +1352,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 effectTimeoutRef.current = null;
             }
         }
-    }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId, visualPlayerBoard, visualOpponentBoard, animatingCard]);
+    }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
@@ -1383,12 +1514,60 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Add Damage Texts
         if (newDamages.length > 0) {
             setDamageNumbers(prev => [...prev, ...newDamages]);
-            triggerShake();
+            // Only shake if any of the new numbers are damage (not green recovery numbers)
+            const hasDamage = newDamages.some(d => d.color !== '#48bb78');
+            if (hasDamage) triggerShake();
         }
 
         prevPlayersRef.current = currentPlayers;
     }, [gameState.players, currentPlayerId, opponentPlayerId]);
 
+    // --- Destruction Effect (IMPACT on death) ---
+    const prevDyingIdsRef = React.useRef<Set<string>>(new Set());
+    React.useEffect(() => {
+        const currentDyingIds = new Set<string>();
+
+        // Collect dying cards from both boards
+        visualPlayerBoard.forEach((card, idx) => {
+            if (card?.isDying) {
+                currentDyingIds.add(card.instanceId);
+                // Play IMPACT effect if newly dying
+                if (!prevDyingIdsRef.current.has(card.instanceId)) {
+                    const el = playerBoardRefs.current[idx];
+                    if (el) {
+                        const rect = el.getBoundingClientRect();
+                        setActiveEffects(prev => [...prev, {
+                            type: 'IMPACT',
+                            x: rect.left + rect.width / 2,
+                            y: rect.top + rect.height / 2,
+                            key: Date.now() + Math.random()
+                        }]);
+                    }
+                }
+            }
+        });
+
+        visualOpponentBoard.forEach((card, idx) => {
+            if (card?.isDying) {
+                currentDyingIds.add(card.instanceId);
+                // Play IMPACT effect if newly dying
+                if (!prevDyingIdsRef.current.has(card.instanceId)) {
+                    const el = opponentBoardRefs.current[idx];
+                    if (el) {
+                        const rect = el.getBoundingClientRect();
+                        setActiveEffects(prev => [...prev, {
+                            type: 'IMPACT',
+                            x: rect.left + rect.width / 2,
+                            y: rect.top + rect.height / 2,
+                            key: Date.now() + Math.random()
+                        }]);
+                    }
+                }
+            }
+        });
+
+        prevDyingIdsRef.current = currentDyingIds;
+    }, [visualPlayerBoard, visualOpponentBoard]);
 
     // --- Visual Effect Helpers ---
 
@@ -1422,9 +1601,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // If going second, swap turn order
                 if (!isFirst) {
                     // Directly update game state to swap active player and PP
+                    // Also update firstPlayerId to 'p2' since p2 is now the first player
                     const newState = {
                         ...gameState,
                         activePlayerId: 'p2',
+                        firstPlayerId: 'p2', // CRITICAL: Update firstPlayerId for evolve turn calculation
                         players: {
                             p1: {
                                 ...gameState.players.p1,
@@ -1463,7 +1644,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // BGM Auto-Play - Initialize based on player class and game start
     React.useEffect(() => {
         // Only load if the BGM isn't already set up for this session/rematch
-        if (bgmLoadedForClass === player.class) return;
+        if (bgmLoadedForClass === player.class && bgmRef.current) return;
 
         const selectedBgmPath = selectBgm(player.class);
         console.log(`[BGM] Initializing track: ${selectedBgmPath} for class: ${player.class}`);
@@ -1479,43 +1660,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         bgm.volume = audioSettings.bgm;
         bgmRef.current = bgm;
         setBgmLoadedForClass(player.class);
+    }, [player.class, selectBgm]);
 
-        // Interaction helper to overcome autoplay policies
+    // BGM Playback Control & Interaction Listeners
+    React.useEffect(() => {
+        if (!bgmRef.current) return;
+        const bgm = bgmRef.current;
+
         const tryPlay = () => {
-            if (bgmRef.current && bgmRef.current.paused && audioSettings.enabled) {
+            if (bgm.paused && audioSettings.enabled) {
                 console.log("[BGM] Attempting play on interaction...");
-                bgmRef.current.play()
-                    .then(() => console.log("[BGM] Play success"))
+                bgm.play()
+                    .then(() => {
+                        console.log("[BGM] Play success");
+                        removeListeners();
+                    })
                     .catch(e => console.warn("[BGM] Play failed on interaction:", e));
-            }
-            // Keep listener active if play failed, or remove if succeeded?
-            // Usually, once played, we are good.
-            if (bgmRef.current && !bgmRef.current.paused) {
-                document.removeEventListener('click', tryPlay);
-                document.removeEventListener('keydown', tryPlay);
-                document.removeEventListener('touchstart', tryPlay);
             }
         };
 
-        document.addEventListener('click', tryPlay);
-        document.addEventListener('keydown', tryPlay);
-        document.addEventListener('touchstart', tryPlay);
-
-        // Immediate attempt
-        if (audioSettings.enabled) {
-            bgm.play()
-                .then(() => console.log("[BGM] Immediate play success"))
-                .catch(() => console.log("[BGM] Immediate play blocked, waiting for interaction"));
-        }
-
-        return () => {
-            bgm.pause();
-            bgm.currentTime = 0;
+        const removeListeners = () => {
             document.removeEventListener('click', tryPlay);
             document.removeEventListener('keydown', tryPlay);
             document.removeEventListener('touchstart', tryPlay);
         };
-    }, [player.class, bgmLoadedForClass, selectBgm, audioSettings.enabled]);
+
+        if (audioSettings.enabled) {
+            document.addEventListener('click', tryPlay);
+            document.addEventListener('keydown', tryPlay);
+            document.addEventListener('touchstart', tryPlay);
+
+            // Immediate attempt
+            bgm.play()
+                .then(() => {
+                    console.log("[BGM] Immediate play success");
+                    removeListeners();
+                })
+                .catch(() => console.log("[BGM] Immediate play blocked, waiting for interaction"));
+        } else {
+            bgm.pause();
+            removeListeners();
+        }
+
+        return () => {
+            removeListeners();
+        };
+    }, [audioSettings.enabled, audioSettings.bgm, bgmLoadedForClass]);
     useEffect(() => {
         if (!adapter) return;
         adapter.onMessage((msg) => {
@@ -2001,7 +2191,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {
                     const state = gameStateRef.current;
                     const aiPlayer = state.players[opponentPlayerId];
-                    const isFirstPlayer = (opponentPlayerId as string) === 'p1';
+                    const isFirstPlayer = opponentPlayerId === state.firstPlayerId;
                     const turnCount = state.turnCount;
 
                     const canEvolveCheck = canEvolve(aiPlayer, turnCount, isFirstPlayer);
@@ -2181,13 +2371,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             actionTaken = true;
 
                             // Check for Counter to optimize wait
-                            let hasCounter = false;
-                            if (!targetIsLeader && targetIndex >= 0) {
-                                const defender = playerBoard[targetIndex];
-                                if (defender && (defender.currentAttack || 0) > 0) hasCounter = true;
-                            }
+                            // Check for Counter to optimize wait (Unused)
 
-                            await waitForIdle(hasCounter ? 350 : 250);
+                            await waitForIdle(1000); // Wait for Impact (1s)
 
                             dispatch({
                                 type: 'ATTACK',
@@ -2195,7 +2381,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 payload: { attackerIndex: i, targetIndex, targetIsLeader }
                             });
 
-                            await waitForIdle(200); // Wait for damage text
+                            await waitForIdle(1000); // 1 second pause after damage
                             break;
                         }
                         if (!actionTaken) continueAttacking = false;
@@ -2280,7 +2466,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         e.stopPropagation();
 
         // Client-side visual check
-        const isFirstPlayer = currentPlayerId === 'p1';
+        const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
         if (useSepFlag) {
             if (player.sep <= 0) return;
         } else {
@@ -2399,7 +2585,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const opponent = state.players[opponentPlayerId]; // Use opponentPlayerId from closure (stable?)
                         // Note: opponentPlayerId in closure might be stable if useEffect dependency is correct.
                         // But verifying with gameStateRef is safer.
-                        const wardUnits = opponent.board.filter(c => c && (c as any).passiveAbilities?.includes('WARD'));
+                        // Note: Stealthed Ward units cannot be targeted, so they don't protect
+                        const wardUnits = opponent.board.filter(c =>
+                            c &&
+                            (c as any).passiveAbilities?.includes('WARD') &&
+                            !(c as any).passiveAbilities?.includes('STEALTH')
+                        );
                         let isBlocked = false;
 
                         if (wardUnits.length > 0) {
@@ -2458,7 +2649,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             targetIsLeader: targetIsLeader
                                         }
                                     });
-                                }, 350); // Wait 350ms for animation impact (snappier)
+                                }, 1000);
                             }
                         }
                     } else {
@@ -2741,7 +2932,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     if (gameMode !== 'CPU' && !connected && gameMode === 'JOIN') return <div>Connecting... <button onClick={onLeave}>Cancel</button></div>;
 
     const remainingEvolves = 2 - player.evolutionsUsed;
-    const canEvolveUI = player.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (currentPlayerId === 'p1' ? 5 : 4);
+    const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
+    const canEvolveUI = player.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 5 : 4);
 
     // Force re-render log
     console.log("GameScreen Layout Updated: Layer 3 Implemented");
@@ -2776,10 +2968,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
                 @keyframes cardDie {
                     0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 white); opacity: 1; }
-                    50% { transform: scale(1.1); filter: brightness(3) drop-shadow(0 0 20px white); opacity: 0.8; }
-                    100% { transform: scale(0.5) rotate(5deg); filter: brightness(5) drop-shadow(0 0 40px white); opacity: 0; }
+                    40% { transform: scale(1.15); filter: brightness(3) drop-shadow(0 0 20px white); opacity: 0.9; }
+                    100% { transform: scale(0.4) rotate(8deg); filter: brightness(5) drop-shadow(0 0 40px white); opacity: 0; }
                 }
-                .card-dying { animation: cardDie 1.2s forwards; }
+                .card-dying { animation: cardDie 0.7s forwards; }
              `}</style>
 
             {/* <BattleLog logs={gameState.logs || []} /> */}
@@ -3108,10 +3300,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                 filter: 'drop-shadow(0 0 8px currentColor)'
                                             }}>
                                                 <defs>
-                                                    <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-50%" y="-50%" width="200%" height="200%">
-                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+                                                    <filter id={dragState.useSep ? 'purpleMarkerGlow' : 'yellowMarkerGlow'} x="-30%" y="-30%" width="160%" height="160%">
+                                                        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
                                                         <feMerge>
-                                                            <feMergeNode in="blur" />
                                                             <feMergeNode in="blur" />
                                                             <feMergeNode in="SourceGraphic" />
                                                         </feMerge>
@@ -3488,48 +3679,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
             </div>
 
-            {/* Evolve Drag Light Orb - Enhanced Glow */}
+            {/* Evolve Drag Light Orb - Optimized */}
             {
                 dragState?.sourceType === 'EVOLVE' && (
                     <>
-                        {/* Outer glow layer */}
-                        <div style={{
-                            position: 'fixed', left: dragState.currentX, top: dragState.currentY,
-                            transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 999,
-                            width: 80, height: 80, borderRadius: '50%',
-                            background: (dragState as any).useSep
-                                ? 'radial-gradient(circle, rgba(159, 122, 234, 0.4) 0%, rgba(159, 122, 234, 0.1) 50%, transparent 70%)'
-                                : 'radial-gradient(circle, rgba(236, 201, 75, 0.4) 0%, rgba(236, 201, 75, 0.1) 50%, transparent 70%)',
-                            filter: 'blur(10px)',
-                            animation: 'evolveOrbPulse 1s ease-in-out infinite'
-                        }} />
-                        {/* Main orb */}
+                        {/* Main orb with integrated glow */}
                         <div style={{
                             position: 'fixed', left: dragState.currentX, top: dragState.currentY,
                             transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                            width: 45, height: 45, borderRadius: '50%',
+                            width: 40, height: 40, borderRadius: '50%',
                             background: (dragState as any).useSep
-                                ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 20%, #b794f4 50%, #9f7aea 100%)'
-                                : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 20%, #f6e05e 50%, #ecc94b 100%)',
+                                ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 30%, #9f7aea 100%)'
+                                : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 30%, #ecc94b 100%)',
                             boxShadow: (dragState as any).useSep
-                                ? '0 0 15px #b794f4, 0 0 30px rgba(159, 122, 234, 0.8), 0 0 50px rgba(159, 122, 234, 0.5), 0 0 80px rgba(159, 122, 234, 0.3), inset 0 0 15px rgba(255,255,255,0.5)'
-                                : '0 0 15px #f6e05e, 0 0 30px rgba(236, 201, 75, 0.8), 0 0 50px rgba(236, 201, 75, 0.5), 0 0 80px rgba(236, 201, 75, 0.3), inset 0 0 15px rgba(255,255,255,0.5)',
-                            border: '2px solid rgba(255,255,255,0.8)',
+                                ? '0 0 20px #b794f4, 0 0 40px rgba(159, 122, 234, 0.5)'
+                                : '0 0 20px #f6e05e, 0 0 40px rgba(236, 201, 75, 0.5)',
+                            border: '2px solid rgba(255,255,255,0.7)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                            {/* Inner bright core */}
+                            {/* Inner core */}
                             <div style={{
-                                width: 18, height: 18, borderRadius: '50%',
-                                background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.3) 100%)',
-                                boxShadow: '0 0 15px white, 0 0 25px rgba(255,255,255,0.8)'
+                                width: 14, height: 14, borderRadius: '50%',
+                                background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.6) 100%)',
+                                boxShadow: '0 0 10px white'
                             }} />
                         </div>
-                        <style>{`
-                            @keyframes evolveOrbPulse {
-                                0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
-                                50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-                            }
-                        `}</style>
                     </>
                 )
             }
@@ -3553,24 +3727,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
                                 } />
                             </marker>
-                            <filter id="yellowGlow" x="-200%" y="-200%" width="500%" height="500%">
-                                <feGaussianBlur stdDeviation="10" result="blur" />
-                                <feFlood floodColor="rgba(255, 255, 50, 0.9)" result="color" />
+                            <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                <feGaussianBlur stdDeviation="6" result="blur" />
+                                <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
                                 <feComposite in="color" in2="blur" operator="in" result="glow" />
                                 <feMerge>
-                                    <feMergeNode in="glow" />
-                                    <feMergeNode in="glow" />
                                     <feMergeNode in="glow" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
                             </filter>
-                            <filter id="purpleGlow" x="-200%" y="-200%" width="500%" height="500%">
-                                <feGaussianBlur stdDeviation="15" result="blur" />
-                                <feFlood floodColor="rgba(183, 148, 244, 0.9)" result="color" />
+                            <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                <feGaussianBlur stdDeviation="8" result="blur" />
+                                <feFlood floodColor="rgba(183, 148, 244, 0.8)" result="color" />
                                 <feComposite in="color" in2="blur" operator="in" result="glow" />
                                 <feMerge>
-                                    <feMergeNode in="glow" />
-                                    <feMergeNode in="glow" />
                                     <feMergeNode in="glow" />
                                     <feMergeNode in="SourceGraphic" />
                                 </feMerge>
@@ -3646,7 +3816,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
-                            <Card card={playingCardAnim.card} isOnBoard={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                            <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
                             {playingCardAnim.card.type === 'SPELL' && (
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <SparkleBurst x={0} y={0} />

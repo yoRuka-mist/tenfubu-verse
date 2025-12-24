@@ -59,7 +59,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 6, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: 'ファンファーレ：自分のリーダーを4回復。進化時：自分のリーダーを4回復。',
+        description: 'ファンファーレ：自分のリーダーを4回復する。さらに「cyoriena」1体を場に出す。進化時：自分のリーダーを4回復する。',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
         attackEffectType: 'WATER',
@@ -67,7 +67,8 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' }
+                    { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' },
+                    { type: 'SUMMON_CARD', targetCardId: 'c_cyoriena' }
                 ]
             },
             {
@@ -157,6 +158,7 @@ const MOCK_CARDS: Card[] = [
         description: 'ファンファーレ：「米」を手札に加える',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
+        attackEffectType: 'SLASH',
         triggers: [{
             trigger: 'FANFARE',
             effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }]
@@ -167,10 +169,11 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_nayuta', name: 'なゆた', cost: 5, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: 'ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
+        description: '[守護] ファンファーレ: 「なゆた」を場に出す。進化時: 「なゆた」を場に出す。',
         imageUrl: '/cards/nayuta.png',
         evolvedImageUrl: '/cards/nayuta_2.png',
         attackEffectType: 'RAY',
+        passiveAbilities: ['WARD'],
         triggers: [
             { trigger: 'FANFARE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] },
             { trigger: 'EVOLVE', effects: [{ type: 'SUMMON_CARD', targetCardId: 'c_nayuta' }] }
@@ -196,7 +199,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3点ダメージ。相手のフォロワーを1体選び、破壊する。相手のフォロワーを1体選び、手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+1/+1され守護を得る。',
+        description: 'ファンファーレ：相手のリーダーに3点ダメージ。相手のフォロワー1体を破壊する。相手のフォロワー1体をランダムで手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+1/+1され守護を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -206,7 +209,7 @@ const MOCK_CARDS: Card[] = [
                 effects: [
                     { type: 'DAMAGE', value: 3, targetType: 'OPPONENT' },
                     { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
-                    { type: 'RETURN_TO_HAND', targetType: 'SELECT_FOLLOWER' }
+                    { type: 'RANDOM_BOUNCE', value: 1 }
                 ]
             },
             {
@@ -252,7 +255,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_shieko', name: 'しゑこ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 1,
         description: '[突進]',
-        imageUrl: '/cards/shieko.jpg',
+        imageUrl: '/cards/shieko.png',
+        evolvedImageUrl: '/cards/shieko_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH'],
         attackEffectType: 'IMPACT'
@@ -348,7 +352,9 @@ const MOCK_CARDS: Card[] = [
         id: 'c_bucchi', name: 'ぶっちー', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 3,
         description: 'ファンファーレ：「まなりー」を3体出す',
-        imageUrl: '/cards/bucchi.jpg',
+        imageUrl: '/cards/bucchi.png',
+        evolvedImageUrl: '/cards/bucchi_2.png',
+        attackEffectType: 'IMPACT',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
@@ -365,7 +371,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/valkyrie.png',
         evolvedImageUrl: '/cards/valkyrie_2.png',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],
-        attackEffectType: 'RAY',
+        attackEffectType: 'FIRE',
         triggers: [
             {
                 trigger: 'END_OF_TURN',
@@ -415,6 +421,7 @@ const MOCK_CARDS: Card[] = [
         attack: 4, health: 6,
         description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「すみませんが、これで終わりです。」を手札に加える。超進化時：相手のフォロワー1体を破壊する。',
         imageUrl: '/cards/sara.png',
+        attackEffectType: 'SHOT',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -451,6 +458,7 @@ const MOCK_CARDS: Card[] = [
         attack: 2, health: 2,
         description: 'ファンファーレ：1枚ドロー。進化時：ランダムな相手のフォロワー1体を破壊。',
         imageUrl: '/cards/blue_tsubaki.png',
+        attackEffectType: 'SLASH',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -460,8 +468,7 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'EVOLVE',
                 effects: [{ type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }]
             }
-        ],
-        attackEffectType: 'SLASH'
+        ]
     },
     {
         id: 's_resignation_proxy', name: '退職代行', cost: 3, type: 'SPELL',
@@ -559,6 +566,36 @@ const MOCK_CARDS: Card[] = [
                 ]
             }
         ]
+    },
+    {
+        id: 'c_cyoriena', name: 'cyoriena', cost: 2, type: 'FOLLOWER',
+        attack: 1, health: 2,
+        description: '[守護] ターン終了時、リーダーのHPを2回復。進化時：「翼」を手札に加える。',
+        imageUrl: '/cards/cyoriena.png',
+        evolvedImageUrl: '/cards/cyoriena_2.png',
+        tags: ['Token'],
+        passiveAbilities: ['WARD'],
+        attackEffectType: 'RAY',
+        triggers: [
+            {
+                trigger: 'END_OF_TURN',
+                effects: [{ type: 'HEAL_LEADER', value: 2, targetType: 'SELF' }]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_TSUBASA' }]
+            }
+        ]
+    },
+    {
+        id: 'TOKEN_TSUBASA', name: '翼', cost: 1, type: 'SPELL',
+        description: '自分のフォロワー1体を選ぶ。それは[疾走]を得る。',
+        imageUrl: '/cards/tsubasa.png',
+        tags: ['Token'],
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [{ type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'SELECT_FOLLOWER' }]
+        }]
     },
     // --- 大和 ---
     {
@@ -737,6 +774,7 @@ export function initializeGame(p1Name: string, p1Class: ClassType, p2Name: strin
         phase: 'INIT',
         rngSeed: Math.floor(rng() * 1000000),
         activePlayerId: activePlayerId,
+        firstPlayerId: activePlayerId, // The one who goes first
         players: { p1, p2 },
         turnCount: 1,
         pendingEffects: [],
@@ -755,7 +793,8 @@ function processSingleEffect(
     sourcePlayerId: string,
     sourceCard: Card | BoardCard,
     effect: AbilityEffect,
-    targetId?: string
+    targetId?: string,
+    targetIds?: string[] // Pre-calculated targets
 ): GameState {
     // Deep copy state to prevent mutations (same pattern as ATTACK)
     let newState = {
@@ -947,28 +986,41 @@ function processSingleEffect(
             const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
             const targetBoard = newState.players[targetPid].board;
 
-            // Get all valid indices
-            const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+            // Use pre-calculated targets if available, otherwise roll
+            if (targetIds && targetIds.length > 0) {
+                // Map IDs back to indices (or just find them)
+                targetIds.forEach(tid => {
+                    const idx = targetBoard.findIndex(c => c?.instanceId === tid);
+                    if (idx !== -1 && targetBoard[idx]) {
+                        const card = targetBoard[idx]!;
+                        card.currentHealth = 1;
+                        newState.players[targetPid].graveyard.push(card);
+                        targetBoard[idx] = null;
+                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                    }
+                });
+            } else {
+                // Fallback (shouldn't be hit for visualized effects but good for safety)
+                // Get all valid indices
+                const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
 
-            // Shuffle
-            for (let i = validIndices.length - 1; i > 0; i--) {
-                const j = Math.floor(rng() * (i + 1));
-                [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
-            }
-
-            // Pick Top N
-            const targets = validIndices.slice(0, count);
-
-            // Destroy
-            targets.forEach(idx => {
-                const card = targetBoard[idx];
-                if (card) {
-                    card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
-                    newState.players[targetPid].graveyard.push(card);
-                    targetBoard[idx] = null;
-                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                // Shuffle
+                for (let i = validIndices.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng() * (i + 1));
+                    [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
                 }
-            });
+
+                const targets = validIndices.slice(0, count);
+                targets.forEach(idx => {
+                    const card = targetBoard[idx];
+                    if (card) {
+                        card.currentHealth = 1;
+                        newState.players[targetPid].graveyard.push(card);
+                        targetBoard[idx] = null;
+                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                    }
+                });
+            }
             break;
         }
         case 'RANDOM_SET_HP': {
@@ -977,26 +1029,33 @@ function processSingleEffect(
             const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
             const targetBoard = newState.players[targetPid].board;
 
-            // Get all valid indices
-            const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
-
-            // Shuffle
-            for (let i = validIndices.length - 1; i > 0; i--) {
-                const j = Math.floor(rng() * (i + 1));
-                [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
-            }
-
-            // Pick Top N
-            const targets = validIndices.slice(0, count);
-
-            // Set HP
-            targets.forEach(idx => {
-                const card = targetBoard[idx];
-                if (card) {
-                    card.currentHealth = newHp;
-                    newState.logs.push(`${card.name} のHPは ${newHp} になりました`);
+            if (targetIds && targetIds.length > 0) {
+                targetIds.forEach(tid => {
+                    const idx = targetBoard.findIndex(c => c?.instanceId === tid);
+                    if (idx !== -1 && targetBoard[idx]) {
+                        targetBoard[idx]!.currentHealth = newHp;
+                        newState.logs.push(`${targetBoard[idx]!.name} のHPは ${newHp} になりました`);
+                    }
+                });
+            } else {
+                // Get all valid indices
+                const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                // Shuffle
+                for (let i = validIndices.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng() * (i + 1));
+                    [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
                 }
-            });
+                // Pick Top N
+                const targets = validIndices.slice(0, count);
+                // Set HP
+                targets.forEach(idx => {
+                    const card = targetBoard[idx];
+                    if (card) {
+                        card.currentHealth = newHp;
+                        newState.logs.push(`${card.name} のHPは ${newHp} になりました`);
+                    }
+                });
+            }
             break;
         }
         case 'SET_MAX_HP': {
@@ -1027,7 +1086,8 @@ function processSingleEffect(
                         currentAttack: template.attack || 0,
                         attacksMade: 0,
                         turnPlayed: newState.turnCount,
-                        hasBarrier: template.passiveAbilities?.includes('BARRIER')
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER'),
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined
                     };
                     player.board.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を場に出した`);
@@ -1067,6 +1127,36 @@ function processSingleEffect(
             }
             break;
         }
+        case 'RANDOM_BOUNCE': {
+            const bounceCount = effect.value || 1;
+            const oppBoard = newState.players[opponentId].board;
+
+            for (let i = 0; i < bounceCount; i++) {
+                // Get valid targets (non-null cards)
+                const validTargets = oppBoard.map((c, idx) => c ? idx : -1).filter(idx => idx !== -1);
+                if (validTargets.length === 0) break;
+
+                // Pick random target
+                const randomIdx = validTargets[Math.floor(rng() * validTargets.length)];
+                const card = oppBoard[randomIdx]!;
+
+                // Remove from board
+                oppBoard[randomIdx] = null;
+
+                // Add to opponent's hand if space
+                const opponent = newState.players[opponentId];
+                const { currentHealth, maxHealth, canAttack, attacksMade, ...baseCard } = card;
+
+                if (opponent.hand.length < 9) {
+                    opponent.hand.push(baseCard as Card);
+                    newState.logs.push(`${card.name} は手札に戻された`);
+                } else {
+                    opponent.graveyard.push(baseCard as Card);
+                    newState.logs.push(`${card.name} は手札がいっぱいで消滅した（墓地へ）`);
+                }
+            }
+            break;
+        }
         case 'GRANT_PASSIVE': {
             const passive = effect.targetPassive;
             if (!passive) break;
@@ -1086,6 +1176,27 @@ function processSingleEffect(
                                 boardCard.passiveAbilities.push(passive);
                                 newState.logs.push(`${boardCard.name} は ${passive} を得た`);
                             }
+                            if (passive === 'STORM' || passive === 'RUSH') {
+                                boardCard.canAttack = true;
+                            }
+                        }
+                    }
+                }
+            } else if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
+                const p = newState.players[sourcePlayerId];
+                const boardCard = p.board.find(c => c?.instanceId === targetId);
+                if (boardCard) {
+                    if (passive === 'BARRIER') {
+                        boardCard.hasBarrier = true;
+                        newState.logs.push(`${boardCard.name} はバリアを獲得した`);
+                    } else {
+                        if (!boardCard.passiveAbilities) boardCard.passiveAbilities = [];
+                        if (!boardCard.passiveAbilities.includes(passive)) {
+                            boardCard.passiveAbilities.push(passive);
+                            newState.logs.push(`${boardCard.name} は ${passive} を得た`);
+                        }
+                        if (passive === 'STORM' || passive === 'RUSH') {
+                            boardCard.canAttack = true;
                         }
                     }
                 }
@@ -1314,7 +1425,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 currentEffect.sourcePlayerId,
                 currentEffect.sourceCard,
                 currentEffect.effect,
-                targetId
+                targetId,
+                (currentEffect as any).targetIds
             );
 
             // Cleanup null board slots if no effects remain
@@ -1406,11 +1518,49 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
                 }
 
+                // Resolution of RANDOM targets for visualization
+                let resolvedTargetIds: string[] | undefined = undefined;
+
+                if (e.targetType === 'OPPONENT' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE') {
+                    // Pre-calculate targets for visualization
+                    // Note: This logic duplicates processSingleEffect partially but is needed for UI cues
+                    const targetPid = action.playerId === 'p1' ? 'p2' : 'p1'; // Default to opponent for most effects
+                    const targetBoard = newState.players[targetPid].board;
+
+                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+                        const count = e.value || 1;
+                        // Use a temp RNG to predict (or effectively decide) targets
+                        // IMPORTANT: To keep it deterministic and sync with processSingleEffect, 
+                        // we should probably Pass these targets TO processSingleEffect via the queue.
+                        // However, processSingleEffect currently re-rolls. 
+                        // We will updated processSingleEffect to use provided targetIds if available.
+
+                        const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                        // Shuffle (using current rng state - effectively advancing it? No, checking state)
+                        // To avoid messing up the main RNG flow, we might need to rely on the fact that processSingleEffect
+                        //  will be called next. 
+                        // Ideally: Decide HERE, save to pendingEffect, and let processSingleEffect USE it.
+
+                        // Let's implement deciding HERE.
+                        // We need a mutable copy of RNG or just consume it? 
+                        // If we consume it here, processSingleEffect must NOT consume it again or use the same seed.
+                        // Actually, 'rng' variable is available in this scope.
+
+                        for (let i = validIndices.length - 1; i > 0; i--) {
+                            const j = Math.floor(rng() * (i + 1));
+                            [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
+                        }
+                        const selectedIndices = validIndices.slice(0, count);
+                        resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                    }
+                }
+
                 newPendingEffects.push({
                     sourceCard: sourceCard,
                     effect: e,
                     sourcePlayerId: action.playerId,
-                    targetId: targetId
+                    targetId: targetId,
+                    targetIds: resolvedTargetIds
                 });
             });
 
@@ -1446,9 +1596,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (useSep) {
                 // Super Evolve Logic
                 if (!isRemote) {
-                    // Turn Constraints: P1 >= 7, P2 >= 6
-                    const isP1 = action.playerId === 'p1';
-                    const turnReq = isP1 ? 7 : 6;
+                    // Turn Constraints: FirstPlayer >= 7, SecondPlayer >= 6
+                    const isFirstPlayer = action.playerId === state.firstPlayerId;
+                    const turnReq = isFirstPlayer ? 7 : 6;
 
                     if (state.turnCount < turnReq) {
                         console.log(`[Engine] Cannot Super Evolve: Turn ${state.turnCount} < ${turnReq}`);
@@ -1482,9 +1632,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             } else {
                 // Normal Evolve
                 if (!isRemote) {
-                    // Turn Constraints: P1 >= 5, P2 >= 4
-                    const isP1 = action.playerId === 'p1';
-                    const turnReq = isP1 ? 5 : 4;
+                    // Turn Constraints: FirstPlayer >= 5, SecondPlayer >= 4
+                    const isFirstPlayer = action.playerId === state.firstPlayerId;
+                    const turnReq = isFirstPlayer ? 5 : 4;
 
                     if (state.turnCount < turnReq) {
                         console.log(`[Engine] Cannot Evolve: Turn ${state.turnCount} < ${turnReq}`);
@@ -1530,11 +1680,29 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 if (e.conditions) {
                     if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
                 }
+                // Resolution of RANDOM targets for visualization (EVOLVE)
+                let resolvedTargetIds: string[] | undefined = undefined;
+
+                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+                    const targetPid = action.playerId === 'p1' ? 'p2' : 'p1';
+                    const targetBoard = newState.players[targetPid].board;
+                    const count = e.value || 1;
+
+                    const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                    for (let i = validIndices.length - 1; i > 0; i--) {
+                        const j = Math.floor(rng() * (i + 1));
+                        [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
+                    }
+                    const selectedIndices = validIndices.slice(0, count);
+                    resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                }
+
                 newPendingEffects.push({
                     sourceCard: follower,
                     effect: e,
                     sourcePlayerId: action.playerId,
-                    targetId: targetId
+                    targetId: targetId,
+                    targetIds: resolvedTargetIds
                 });
             });
 
@@ -1567,8 +1735,13 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const attacker = attPlayer.board[attackerIndex];
             if (!attacker || !attacker.canAttack) return newState;
 
-            // WARD Logic: If opponent nas Ward units, must attack one of them
-            const wardUnits = defPlayer.board.filter(c => c && c.passiveAbilities?.includes('WARD'));
+            // WARD Logic: If opponent has Ward units (that are targetable), must attack one of them
+            // Note: Stealthed Ward units cannot be targeted, so they don't protect
+            const wardUnits = defPlayer.board.filter(c =>
+                c &&
+                c.passiveAbilities?.includes('WARD') &&
+                !c.passiveAbilities?.includes('STEALTH')
+            );
             if (wardUnits.length > 0) {
                 // If target is Leader, block
                 if (targetIsLeader) {
@@ -1613,59 +1786,63 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 attacker.canAttack = true;
             }
 
-            // Attack Log
-            const targetName = targetIsLeader ? "相手リーダー" : (defPlayer.board[targetIndex]?.name || "Unknown");
-            newState.logs.push(`　${attacker.name} は ${targetName} を攻撃！`);
-
             const damage = attacker.currentAttack;
             console.log(`[Engine] Attack: ${attacker.name} (${damage}) -> Target (Leader? ${targetIsLeader}). DefHP before: ${defPlayer.hp}`);
 
             // 3. Resolve Damage
             if (targetIsLeader) {
+                const targetName = "相手リーダー";
+                newState.logs.push(`　${attacker.name} は ${targetName} を攻撃！`);
                 defPlayer.hp -= damage;
                 newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えました！`);
                 if (defPlayer.hp <= 0) newState.winnerId = action.playerId;
             } else {
                 const defender = defPlayer.board[targetIndex];
-                if (defender) {
-                    // Check Immunity (White Tsubaki Effect)
-                    let actualDamage = damage;
-                    if (defender.passiveAbilities?.includes('IMMUNE_TO_FOLLOWER_DAMAGE')) {
-                        actualDamage = 0;
-                        newState.logs.push(`　${defender.name} はダメージを無効化しました！`);
-                    } else if (defender.hasBarrier && actualDamage > 0) {
-                        actualDamage = 0;
-                        defender.hasBarrier = false;
-                        newState.logs.push(`　${defender.name} のバリアがダメージを無効化しました！`);
-                    } else {
-                        newState.logs.push(`　${attacker.name} は ${defender.name} に ${actualDamage} ダメージを与えました`);
-                    }
+                if (!defender) {
+                    // Target no longer exists (already destroyed), skip this attack
+                    console.log(`[Engine] Attack target at index ${targetIndex} no longer exists. Skipping.`);
+                    return newState;
+                }
+                // Attack log with defender's actual name
+                newState.logs.push(`　${attacker.name} は ${defender.name} を攻撃！`);
 
-                    defender.currentHealth -= actualDamage;
-                    let counterDamage = defender.currentAttack;
+                // Check Immunity (White Tsubaki Effect)
+                let actualDamage = damage;
+                if (defender.passiveAbilities?.includes('IMMUNE_TO_FOLLOWER_DAMAGE')) {
+                    actualDamage = 0;
+                    newState.logs.push(`　${defender.name} はダメージを無効化しました！`);
+                } else if (defender.hasBarrier && actualDamage > 0) {
+                    actualDamage = 0;
+                    defender.hasBarrier = false;
+                    newState.logs.push(`　${defender.name} のバリアがダメージを無効化しました！`);
+                } else {
+                    newState.logs.push(`　${attacker.name} は ${defender.name} に ${actualDamage} ダメージを与えました`);
+                }
 
-                    // Check Attacker Immunity (Super Evolve)
-                    if (attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN')) {
-                        counterDamage = 0;
-                        newState.logs.push(`　${attacker.name} は反撃ダメージを無効化しました！`);
-                    }
+                defender.currentHealth -= actualDamage;
+                let counterDamage = defender.currentAttack;
 
-                    if (attacker.hasBarrier && counterDamage > 0) {
-                        counterDamage = 0;
-                        attacker.hasBarrier = false;
-                        newState.logs.push(`　${attacker.name} のバリアが反撃ダメージを無効化しました！`);
-                    } else if (counterDamage > 0) {
-                        newState.logs.push(`　${defender.name} は ${attacker.name} に ${counterDamage} ダメージを与え返しました`);
-                    }
+                // Check Attacker Immunity (Super Evolve)
+                if (attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN')) {
+                    counterDamage = 0;
+                    newState.logs.push(`　${attacker.name} は反撃ダメージを無効化しました！`);
+                }
 
-                    attacker.currentHealth -= counterDamage;
+                if (attacker.hasBarrier && counterDamage > 0) {
+                    counterDamage = 0;
+                    attacker.hasBarrier = false;
+                    newState.logs.push(`　${attacker.name} のバリアが反撃ダメージを無効化しました！`);
+                } else if (counterDamage > 0) {
+                    newState.logs.push(`　${defender.name} は ${attacker.name} に ${counterDamage} ダメージを与え返しました`);
+                }
 
-                    if (defender.currentHealth <= 0) {
-                        defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
-                        defPlayer.graveyard.push(defender);
-                        defPlayer.board[targetIndex] = null;
-                        newState.logs.push(`　${defender.name} は破壊されました`);
-                    }
+                attacker.currentHealth -= counterDamage;
+
+                if (defender.currentHealth <= 0) {
+                    defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
+                    defPlayer.graveyard.push(defender);
+                    defPlayer.board[targetIndex] = null;
+                    newState.logs.push(`　${defender.name} は破壊されました`);
                 }
             }
 

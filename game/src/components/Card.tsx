@@ -14,9 +14,10 @@ interface CardProps {
     isSpecialSummoning?: boolean; // Special summon animation trigger
     turnCount?: number; // Current game turn count from engine
     className?: string; // For custom animations
+    suppressPassives?: boolean; // Explicitly hide passive effects (for play animation etc)
 }
 
-export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className, suppressPassives }) => {
     // Determine stats to show
     const attack = 'currentAttack' in card ? (card as any).currentAttack : card.attack;
     const health = 'currentHealth' in card ? (card as any).currentHealth : card.health;
@@ -242,7 +243,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
 
                 {/* 2d. Effects (Outside clipping container) */}
                 {/* WARD EFFECT */}
-                {isWard && isOnBoard && (
+                {isWard && isOnBoard && !suppressPassives && (
                     <div style={{
                         position: 'absolute',
                         top: -15, left: -15, right: -15, bottom: -15,
@@ -272,7 +273,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
 
                 {/* BARRIER EFFECT */}
-                {hasBarrier && (
+                {hasBarrier && isOnBoard && !playSummonAnim && !suppressPassives && (
                     <div style={{
                         position: 'absolute',
                         top: -12, left: -12, right: -12, bottom: -12,
@@ -300,7 +301,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
 
                 {/* AURA EFFECT */}
-                {isAura && isOnBoard && (
+                {isAura && isOnBoard && !playSummonAnim && !suppressPassives && (
                     <div style={{
                         position: 'absolute',
                         top: -15, left: -15, right: -15, bottom: -15,
@@ -334,7 +335,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
 
                 {/* STEALTH EFFECT */}
-                {isStealth && isOnBoard && (
+                {isStealth && isOnBoard && !playSummonAnim && !suppressPassives && (
                     <div style={{
                         position: 'absolute',
                         top: 0, left: 0, right: 0, bottom: 0,

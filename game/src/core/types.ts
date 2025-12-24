@@ -41,7 +41,7 @@ export interface Card {
     attack?: number; // For followers
     health?: number; // For followers
     description: string;
-    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE' | 'THUNDER';
+    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE' | 'THUNDER' | 'FIRE';
     tags?: string[]; // e.g. 'Knuckler'
 
     // New ability system
@@ -99,11 +99,13 @@ export interface GameState {
     winnerId?: string;
     logs: string[];
     rngSeed: number;
+    firstPlayerId: string;
     lastHash?: string;
     pendingEffects: {
         sourceCard: Card | BoardCard;
         effect: AbilityEffect;
         targetId?: string;
+        targetIds?: string[]; // Multiple targets
         sourcePlayerId: string;
     }[];
 }
