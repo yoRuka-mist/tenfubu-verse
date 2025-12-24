@@ -15,43 +15,46 @@ const senkaLeaderImg = '/leaders/senka_leader.png';
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 
-
+// Minimum scale multiplier to make elements larger on smaller screens (e.g., FullHD)
+const MIN_SCALE_MULTIPLIER = 1.0;
 
 interface ScaleInfo {
-    scale: number;
+    scaleX: number;
+    scaleY: number;
     // For coordinate conversions: viewport to game coords
     toGameX: (screenX: number) => number;
     toGameY: (screenY: number) => number;
+    // For coordinate conversions: game to viewport coords
+    toScreenX: (gameX: number) => number;
+    toScreenY: (gameY: number) => number;
 }
 
 const useScaleFactor = (): ScaleInfo => {
     const [scaleInfo, setScaleInfo] = useState<ScaleInfo>({
-        scale: 1,
+        scaleX: 1,
+        scaleY: 1,
         toGameX: (x) => x,
         toGameY: (y) => y,
+        toScreenX: (x) => x,
+        toScreenY: (y) => y,
     });
 
     const calculateScale = useCallback(() => {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // Calculate uniform scale based on the smaller dimension to fit, 
-        // multiplied by 1.5 as requested for larger UI elements relative to screen
-        // But we must ensure it doesn't get too crazy large.
-        // Let's stick to height-based scaling for consistent vertical layout, 
-        // but clamped by width to prevent overflow.
+        // Calculate independent scales for each axis
+        // This fills the entire screen without black bars
+        const scaleX = Math.max(MIN_SCALE_MULTIPLIER, width / BASE_WIDTH);
+        const scaleY = Math.max(MIN_SCALE_MULTIPLIER, height / BASE_HEIGHT);
 
-        let scale = Math.min(width / BASE_WIDTH, height / BASE_HEIGHT);
+        // Coordinate conversion functions
+        const toGameX = (screenX: number) => screenX / scaleX;
+        const toGameY = (screenY: number) => screenY / scaleY;
+        const toScreenX = (gameX: number) => gameX * scaleX;
+        const toScreenY = (gameY: number) => gameY * scaleY;
 
-        // Apply user requested magnification (approx 1.5x larger than standard relative size)
-        scale *= 1.5;
-
-        // Coordinate conversion functions (Offset is 0 because we will use relative CSS positioning)
-        // Coordinate conversion functions (Identity - we use screen coords everywhere now logic-wise)
-        const toGameX = (screenX: number) => screenX;
-        const toGameY = (screenY: number) => screenY;
-
-        setScaleInfo({ scale, toGameX, toGameY });
+        setScaleInfo({ scaleX, scaleY, toGameX, toGameY, toScreenX, toScreenY });
     }, []);
 
     useEffect(() => {
@@ -63,11 +66,11 @@ const useScaleFactor = (): ScaleInfo => {
     return scaleInfo;
 };
 
-// UI Element Size Constants (Base values, will be scaled)
-const CARD_WIDTH = 90;
-const CARD_HEIGHT = 120;
-const CARD_SPACING = CARD_WIDTH + 18; // 108
-const LEADER_SIZE = 240;
+// UI Element Size Constants (1.5x from original for better visibility)
+const CARD_WIDTH = 135; // Original: 90
+const CARD_HEIGHT = 180; // Original: 120
+const CARD_SPACING = 153; // Card width + gap (135 + 18)
+const LEADER_SIZE = 360; // Original: 240
 
 interface GameScreenProps {
     playerClass: ClassType;
@@ -1087,9 +1090,9 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
 export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave }) => {
     const { adapter, connected } = useGameNetwork(gameMode, targetRoomId);
 
-    // 4K/Multi-resolution scaling - now returns uniform scale
+    // 4K/Multi-resolution scaling - now returns scaleX, scaleY and conversion functions
     const scaleInfo = useScaleFactor();
-    const { scale, toGameX, toGameY } = scaleInfo;
+    const { scaleX, scaleY, toGameX, toGameY, toScreenX, toScreenY } = scaleInfo;
 
     // Helper to convert screen coordinates to game container coordinates
     // Since we now use independent X/Y scaling that fills the entire screen,
@@ -1341,39 +1344,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
                 const cardDef = getCardDefinition(current.effect.targetCardId);
                 if (cardDef) {
-                    // Removed unused isPlayer variable
-                    let startX, startY;
-
-                    // Use refs to get exact screen coordinates for effect start
-                    // NOTE: We need refs for hand/board/leader to do this perfectly.
-                    // Determine source position for the card appearing animation
-                    // This is a generic "card appearing" effect, so it might not have a specific source element.
-                    // Let's assume it appears from a general "off-screen" or "deck" area.
-                    // Determine source position for the card appearing animation
-                    // This is generic, just using defaults inside simpler logic if needed later.
-                    // Currently setAnimatingCard doesn't use these start coords for APPEAR.
-
-                    /* 
-                     * Pre-calculation of start positions kept for reference if 'FLY' logic needs updates:
-                     * Player Deck: window.innerWidth - (15 * scale) - (60 * scale / 2)
-                     * Opponent Deck: (20 * scale) + (60 * scale / 2)
-                     */
-
-                    // Target Coords for the card appearing animation (center of the board)
-                    let flyTargetX = window.innerWidth / 2;
-                    let flyTargetY = window.innerHeight / 2;
-
-                    // If the card is generated directly onto the board, we might want to target a specific board slot.
-                    // This logic is for a generic "card appears" animation, not necessarily landing on board.
-                    // The `setAnimatingCard` takes `targetX`, `targetY` which is the *final* resting place.
-                    // The current code uses `flyTargetX`, `flyTargetY` for the *initial* fly-to position.
-                    // Let's adjust `setAnimatingCard` to use `startX`, `startY` for the initial position.
-                    // And `flyTargetX`, `flyTargetY` for the intermediate "flying" position.
-                    // The `status: 'APPEAR'` phase should be the initial position.
-                    // The `status: 'FLY'` phase should be the intermediate position.
-                    // The `setAnimatingCard` structure needs to be updated to support this.
-                    // For now, let's assume `targetX`, `targetY` in `setAnimatingCard` is the *intermediate* flying position.
-                    // The actual landing on board is handled by `PLAY_CARD` or `SUMMON_CARD` effects later.
+                    const isPlayer = current.sourcePlayerId === currentPlayerId;
+                    const flyTargetX = window.innerWidth / 2;
+                    const flyTargetY = isPlayer ? window.innerHeight - 100 : 100;
 
                     setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
 
@@ -1523,10 +1496,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currentPlayers = gameState.players;
         let newDamages: { id: number, value: number | string, x: number, y: number, color?: string }[] = [];
 
-        // Helper to get screen coordinates from element
-        const getScreenCoordsFromElement = (el: HTMLElement) => {
+        // Helper to get game coordinates from element
+        const getGameCoordsFromElement = (el: HTMLElement) => {
             const rect = el.getBoundingClientRect();
-            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            return screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
         };
 
         Object.keys(currentPlayers).forEach(pid => {
@@ -1540,7 +1513,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const ref = isMe ? playerLeaderRef.current : opponentLeaderRef.current;
 
                 if (ref) {
-                    const coords = getScreenCoordsFromElement(ref);
+                    const coords = getGameCoordsFromElement(ref);
                     newDamages.push({
                         id: Date.now() + Math.random(),
                         value: diff,
@@ -1554,7 +1527,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const isMe = pid === currentPlayerId;
                 const ref = isMe ? playerLeaderRef.current : opponentLeaderRef.current;
                 if (ref) {
-                    const coords = getScreenCoordsFromElement(ref);
+                    const coords = getGameCoordsFromElement(ref);
                     newDamages.push({
                         id: Date.now() + Math.random(),
                         value: '+' + diff,
@@ -1582,7 +1555,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                         const el = refs[currIdx];
                         if (el) {
-                            const coords = getScreenCoordsFromElement(el);
+                            const coords = getGameCoordsFromElement(el);
                             newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
                         }
                     } else if (currCard.currentHealth > prevCard.currentHealth) {
@@ -1595,7 +1568,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                             const el = refs[currIdx];
                             if (el) {
-                                const coords = getScreenCoordsFromElement(el);
+                                const coords = getGameCoordsFromElement(el);
                                 newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: coords.x, y: coords.y, color: '#48bb78' });
                             }
                         }
@@ -1638,7 +1611,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
                         const el = refs[idx]; // idx matches prevCard index if no shift... wait.
                         if (el) {
-                            const coords = getScreenCoordsFromElement(el);
+                            const coords = getGameCoordsFromElement(el);
                             // Update the damage item pushed above
                             newDamages[newDamages.length - 1].x = coords.x;
                             newDamages[newDamages.length - 1].y = coords.y;
@@ -1657,7 +1630,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         prevPlayersRef.current = currentPlayers;
-    }, [gameState.players, currentPlayerId, opponentPlayerId]);
+    }, [gameState.players, currentPlayerId, opponentPlayerId, screenToGameCoords]);
 
     // --- Destruction Effect (IMPACT on death) ---
     // REMOVED: Replaced by CSS animation 'cardDie' (glowing fade out)
@@ -1808,7 +1781,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const bgm = bgmRef.current;
 
         const tryPlay = () => {
-            if (bgm.paused && audioSettings.bgmEnabled) { // Changed audioSettings.enabled to audioSettings.bgmEnabled
+            if (bgm.paused && audioSettings.enabled) {
                 console.log("[BGM] Attempting play on interaction...");
                 bgm.play()
                     .then(() => {
@@ -1825,7 +1798,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             document.removeEventListener('touchstart', tryPlay);
         };
 
-        if (audioSettings.bgmEnabled) { // Changed audioSettings.enabled to audioSettings.bgmEnabled
+        if (audioSettings.enabled) {
             document.addEventListener('click', tryPlay);
             document.addEventListener('keydown', tryPlay);
             document.addEventListener('touchstart', tryPlay);
@@ -1845,7 +1818,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         return () => {
             removeListeners();
         };
-    }, [audioSettings.bgmEnabled, audioSettings.bgm, bgmLoadedForClass]); // Changed audioSettings.enabled to audioSettings.bgmEnabled
+    }, [audioSettings.enabled, audioSettings.bgm, bgmLoadedForClass]);
     useEffect(() => {
         if (!adapter) return;
         adapter.onMessage((msg) => {
@@ -1885,10 +1858,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const dragStateRef = React.useRef<{
         sourceType: 'HAND' | 'BOARD' | 'EVOLVE';
         sourceIndex: number;
-        startX: number; // Screen coordinates
-        startY: number; // Screen coordinates
-        currentX: number; // Screen coordinates
-        currentY: number; // Screen coordinates
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
         offsetX: number;
         offsetY: number;
         useSep?: boolean;
@@ -1897,12 +1870,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Card Play Animation State
     const [playingCardAnim, setPlayingCardAnim] = React.useState<{
         card: any;
-        startX: number; // Screen coordinates
-        startY: number; // Screen coordinates
-        targetX: number; // Screen coordinates (intermediate flying point)
-        targetY: number; // Screen coordinates (intermediate flying point)
-        finalX?: number; // Screen coordinates (Board destination X)
-        finalY?: number; // Screen coordinates (Board destination Y)
+        startX: number;
+        startY: number;
+        targetX: number;
+        targetY: number;
+        finalX?: number; // Board destination X
+        finalY?: number; // Board destination Y
         onComplete: () => void;
     } | null>(null);
 
@@ -1910,8 +1883,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [evolveAnimation, setEvolveAnimation] = React.useState<{
         card: any;
         evolvedImageUrl?: string;
-        startX: number; // Screen coordinates
-        startY: number; // Screen coordinates
+        startX: number;
+        startY: number;
         phase: 'ZOOM_IN' | 'WHITE_FADE' | 'FLIP' | 'REVEAL' | 'ZOOM_OUT' | 'LAND';
         followerIndex: number;
         useSep: boolean;
@@ -1942,8 +1915,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const cardEl = playerBoardRefs.current[followerIndex];
 
         // Default to board center if card element is missing
-        let startX = window.innerWidth / 2;
-        let startY = window.innerHeight / 2;
+        let startX = 0;
+        let startY = 0;
+
+        if (boardRef.current) {
+            const boardRect = boardRef.current.getBoundingClientRect();
+            startX = boardRect.left + boardRect.width / 2;
+            startY = boardRect.top + boardRect.height / 2;
+        } else {
+            startX = window.innerWidth / 2;
+            startY = window.innerHeight / 2;
+        }
 
         if (cardEl) {
             const rect = cardEl.getBoundingClientRect();
@@ -2032,9 +2014,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return;
         }
 
-        // Determine target position in screen coordinates (Center of game area - aligned with leader)
-        const targetX = window.innerWidth / 2;
-        const targetY = window.innerHeight / 2;
+        // Determine target position in GAME coordinates (Center of game area - aligned with leader)
+        // Use BASE_WIDTH/HEIGHT for game coordinate system
+        const sidebarWidth = 340;
+        const boardAreaWidth = BASE_WIDTH - sidebarWidth;
+        const targetX = sidebarWidth + boardAreaWidth / 2; // Center of board area in game coords
+        const targetY = BASE_HEIGHT / 2;
 
         // Calculate board position for landing (Followers only)
         let finalX: number | undefined;
@@ -2046,18 +2031,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const newBoardSize = validCards.length + 1;
             const newIndex = validCards.length;
 
-            const spacing = 102 * scale; // Use scaled spacing
-            const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
+            const offsetX = (newIndex - (newBoardSize - 1) / 2) * CARD_SPACING;
 
-            // Calculate Board Center in screen coordinates
-            const boardAreaRect = boardRef.current?.getBoundingClientRect();
-            const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
+            // Calculate Board Center in game coordinates
+            const boardCenterX = sidebarWidth + boardAreaWidth / 2;
 
             finalX = boardCenterX + offsetX;
 
-            // Determine Y: Player slots are at bottom of board area
-            const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (20 * scale); // Adjusted from 220*scale
-            finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
+            // Determine Y: Player slots are at top: 'calc(50% + 5px)' relative to boardArea
+            // Card center is BASE_HEIGHT / 2 + 5 + 60
+            finalY = BASE_HEIGHT / 2 + 65;
         }
 
         const onComplete = () => {
@@ -2237,13 +2220,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         }
 
                         // Animation First
-                        // Start from opponent's hand area
-                        const startX = window.innerWidth - (20 * scale) - (80 * scale / 2); // Right edge - padding - half card width
-                        const startY = (20 * scale) + (110 * scale / 2); // Top edge + padding + half card height
-
-                        // Intermediate flying target (center of screen)
-                        const targetX = window.innerWidth / 2;
-                        const targetY = window.innerHeight / 2;
+                        const sidebarWidth = 340;
+                        const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                        const startY = 100;
 
                         let finalX: number | undefined;
                         let finalY: number | undefined;
@@ -2254,23 +2233,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const newBoardSize = validCards.length + 1;
                             const newIndex = validCards.length;
 
-                            const spacing = 102 * scale;
+                            const spacing = 102;
                             const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
-                            const boardAreaRect = boardRef.current?.getBoundingClientRect();
-                            const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
-
+                            let boardCenterX = window.innerWidth / 2;
+                            if (boardRef.current) {
+                                const rect = boardRef.current.getBoundingClientRect();
+                                boardCenterX = rect.left + rect.width / 2;
+                            } else {
+                                const sidebarWidth = 340;
+                                boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                            }
                             finalX = boardCenterX + offsetX;
-
-                            // Opponent slots are at top of board area
-                            const opponentBoardAreaBottom = (window.innerHeight / 2) - (CARD_HEIGHT * scale / 2) - (20 * scale); // Adjusted from 220*scale
-                            finalY = opponentBoardAreaBottom - (CARD_HEIGHT * scale / 2);
+                            finalY = window.innerHeight / 2 - 65;
                         }
 
                         setPlayingCardAnim({
                             card: bestCard,
                             startX, startY,
-                            targetX, targetY, // Intermediate flying point
+                            targetX: startX, targetY: window.innerHeight / 2, // Center of right side
                             finalX,
                             finalY,
                             onComplete: () => {
@@ -2549,8 +2530,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const info = {
             sourceType: 'HAND' as const,
             sourceIndex: index,
-            startX: rect.left + rect.width / 2, // Center of Card in screen coords
-            startY: rect.top + rect.height / 2, // Center of Card in screen coords
+            startX: rect.left + rect.width / 2, // Center of Card
+            startY: rect.top + rect.height / 2,
             currentX: e.clientX,
             currentY: e.clientY,
             offsetX: 0,
@@ -2581,15 +2562,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         if (gameState.activePlayerId === currentPlayerId && (card as any)?.canAttack) {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            // Use Screen Coords directly
-            const startGameCoords = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            // Convert screen coords to game coords for proper arrow rendering
+            const startGameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            const currentGameCoords = screenToGameCoords(e.clientX, e.clientY);
             const newState = {
                 sourceType: 'BOARD' as const,
                 sourceIndex: index,
                 startX: startGameCoords.x,
                 startY: startGameCoords.y,
-                currentX: e.clientX,
-                currentY: e.clientY,
+                currentX: currentGameCoords.x,
+                currentY: currentGameCoords.y,
                 offsetX: 0,
                 offsetY: 0
             };
@@ -2611,14 +2593,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (!canEvolve(player, gameState.turnCount, isFirstPlayer)) return;
         }
 
-        // Use Screen Coords directly
+        // Convert screen coords to game coords for proper arrow rendering
+        const gameCoords = screenToGameCoords(e.clientX, e.clientY);
         const newState = {
             sourceType: 'EVOLVE' as const,
             sourceIndex: 0, // Dummy index
-            startX: e.clientX,
-            startY: e.clientY,
-            currentX: e.clientX,
-            currentY: e.clientY,
+            startX: gameCoords.x,
+            startY: gameCoords.y,
+            currentX: gameCoords.x,
+            currentY: gameCoords.y,
             offsetX: 0,
             offsetY: 0,
             useSep: useSepFlag
@@ -2636,15 +2619,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const { canDrag, sourceType } = dragStateRef.current as any;
             if (sourceType === 'HAND' && !canDrag) return;
 
-            // Update with raw screen coordinates
+            // Convert screen coords to game coords using the ref
+            const { toGameX, toGameY } = scaleInfoRef.current;
+            const gameX = toGameX(e.clientX);
+            const gameY = toGameY(e.clientY);
+
+            // Apply immediately to ref for logic
             dragStateRef.current = {
                 ...dragStateRef.current,
-                currentX: e.clientX,
-                currentY: e.clientY
+                currentX: gameX,
+                currentY: gameY
             };
 
             // Sync state for React Render
-            setDragState(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
+            setDragState(prev => prev ? { ...prev, currentX: gameX, currentY: gameY } : null);
 
             // Update Hover Target logic could go here if needed, but usually handled by mouseEnter on elements
             // For now, elements update `hoveredTarget` state via onMouseEnter
@@ -2676,9 +2664,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const dragDistanceTotal = Math.sqrt(Math.pow(currentDrag.startX - currentDrag.currentX, 2) + Math.pow(currentDrag.startY - currentDrag.currentY, 2));
 
                     // Use "Board Rect" detection (Basic: Y < handY and not too far left/right? Or just "Is Y < 60% of screen")
+                    // Since Board is technically most of the screen except Hand area.
                     // Let's use a Y threshold: If Arrow Head is "above" the Hand area.
-                    const isOverBoard = currentDrag.currentY < (window.innerHeight - (200 * scale)); // Hand area height is 200*scale
+                    const isOverBoard = currentDrag.currentY < (window.innerHeight - 200);
 
+                    // Threshold for action > 30px to prevent accidental clicks becoming drags
                     // Threshold for action > 30px to prevent accidental clicks becoming drags
                     if ((currentDrag as any).canDrag && dragDistanceTotal > 30 && isOverBoard) {
                         const card = playerRef.current.hand[currentDrag.sourceIndex];
@@ -2950,13 +2940,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // Animation for spell/card
-            // Start from player's hand area
-            const startX = window.innerWidth / 2; // Center of screen
-            const startY = window.innerHeight - (200 * scale / 2); // Bottom of hand area
-
-            // Intermediate flying target (center of screen)
-            const targetX = window.innerWidth / 2;
-            const targetY = window.innerHeight / 2;
+            const sidebarWidth = 340;
+            const startX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+            const startY = window.innerHeight - 100;
 
             // Create onComplete handler that captures necessary values
             const onComplete = () => {
@@ -3005,22 +2991,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const newBoardSize = validCards.length + 1;
                 const newIndex = validCards.length;
 
-                const spacing = 102 * scale;
+                const spacing = 102;
                 const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
-                const boardAreaRect = boardRef.current?.getBoundingClientRect();
-                const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
-
+                let boardCenterX = window.innerWidth / 2;
+                if (boardRef.current) {
+                    const rect = boardRef.current.getBoundingClientRect();
+                    boardCenterX = rect.left + rect.width / 2;
+                } else {
+                    const sidebarWidth = 340;
+                    boardCenterX = sidebarWidth + (window.innerWidth - sidebarWidth) / 2;
+                }
                 finalX = boardCenterX + offsetX;
-
-                const playerBoardAreaTop = (window.innerHeight / 2) + (CARD_HEIGHT * scale / 2) + (20 * scale);
-                finalY = playerBoardAreaTop + (CARD_HEIGHT * scale / 2);
+                finalY = window.innerHeight / 2 + 65;
             }
 
             setPlayingCardAnim({
                 card: animCard,
                 startX, startY,
-                targetX, targetY,
+                targetX: sidebarWidth + (window.innerWidth - sidebarWidth) / 2, // Center of Board
+                targetY: window.innerHeight / 2,
                 finalX,
                 finalY,
                 onComplete
@@ -3054,9 +3044,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // If card needs target, we shouldn't simple-play it.
         // Reuse handlePlayCard logic which checks for targeting needs.
-        // Start animation from bottom center of BOARD in screen coordinates
-        const startX = window.innerWidth / 2;
-        const startY = window.innerHeight - (200 * scale / 2); // Bottom of hand area
+        // Start animation from bottom center of BOARD in GAME coordinates
+        const sidebarWidth = 340;
+        const boardAreaWidth = BASE_WIDTH - sidebarWidth;
+        let startX = sidebarWidth + boardAreaWidth / 2;
+        let startY = BASE_HEIGHT - 100;
+
+        if (boardRef.current) {
+            const rect = boardRef.current.getBoundingClientRect();
+            const gameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.bottom - 50);
+            startX = gameCoords.x;
+            startY = gameCoords.y;
+        }
 
         handlePlayCard(cardIndex, startX, startY);
         setIsHandExpanded(false);
@@ -3097,9 +3096,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         >
             <div className="game-screen"
                 style={{
-                    width: '100%',
-                    height: '100%',
-                    // Transform removed, layout now responsive
+                    width: `${BASE_WIDTH}px`,
+                    height: `${BASE_HEIGHT}px`,
+                    transform: `scale(${scaleX}, ${scaleY})`,
+                    transformOrigin: 'top left',
                     display: 'flex',
                     overflow: 'hidden',
                     background: 'radial-gradient(circle at center, #1a202c 0%, #000 100%)',
@@ -3235,14 +3235,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
 
 
-                {/* --- Left Sidebar: Card Info & Menu (Responsive width) --- */}
-                <div className={shake ? 'shake-target' : ''} style={{ width: 340 * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: `${50 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                {/* --- Left Sidebar: Card Info & Menu (Fixed 340px for base resolution) --- */}
+                <div className={shake ? 'shake-target' : ''} style={{ width: 340, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: '50px 20px 20px 20px', display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                     {/* Menu Button */}
-                    <div style={{ marginBottom: 30 * scale }}>
+                    <div style={{ marginBottom: 30 }}>
                         <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 5 }}>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0' }}></div>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0', marginBottom: 6 }}></div>
+                            <div style={{ width: 30, height: 3, background: '#cbd5e0' }}></div>
                         </button>
                     </div>
 
@@ -3307,8 +3307,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         onMouseLeave={() => setHoveredTarget(null)}
                         onClick={() => targetingState && handleTargetClick('LEADER', -1, opponentPlayerId)}
                         style={{
-                            position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
-                            width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
+                            position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                            width: LEADER_SIZE, height: LEADER_SIZE, borderRadius: '50%',
                             background: `url(${opponent.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg}) center/cover`,
                             border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
@@ -3347,21 +3347,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
 
                     {/* Opponent Deck - Top Left */}
-                    <div style={{ position: 'absolute', top: 20 * scale, left: 20 * scale, width: 60 * scale, height: 85 * scale, zIndex: 50 }}>
+                    <div style={{ position: 'absolute', top: 10, left: 20, width: 60, height: 85, zIndex: 50 }}>
                         {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
-                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
+                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
                         ))}
-                        <div style={{ position: 'absolute', bottom: -20 * scale, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
+                        <div style={{ position: 'absolute', bottom: -20, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
                     </div>
 
                     {/* Opponent Hand - Top Right */}
-                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right', zIndex: 50 }}>
+                    <div style={{ position: 'absolute', top: 10, right: 20, display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right', zIndex: 50 }}>
                         {opponent.hand.map((_, i) => (
                             <div key={i} style={{
-                                width: 80 * scale, height: 110 * scale,
+                                width: 80, height: 110,
                                 background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
                                 border: '1px solid #742a3a', borderRadius: 6,
-                                marginLeft: i > 0 ? -50 * scale : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
+                                marginLeft: i > 0 ? -50 : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
                             }}></div>
                         ))}
                     </div>
@@ -3370,9 +3370,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* BATTLE FIELD - Fixed Areas with smooth sliding cards */}
                     {/* ========================================== */}
 
-                    {/* Opponent Slots - Scaled Position */}
+                    {/* Opponent Slots - Fixed Y (Gap center at 50%) */}
                     <div style={{
-                        position: 'absolute', top: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${20 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted top
+                        position: 'absolute', top: 'calc(50% - 125px)', left: '0', width: '100%', height: CARD_HEIGHT,
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3381,7 +3381,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         }}>
                             {visualOpponentBoard.map((c: any, i: number) => {
                                 const boardSize = visualOpponentBoard.length;
-                                const offsetX = (i - (boardSize - 1) / 2) * CARD_SPACING * scale;
+                                const offsetX = (i - (boardSize - 1) / 2) * CARD_SPACING;
 
                                 return (
                                     <div key={c?.instanceId || `empty-opp-${i}`}
@@ -3396,21 +3396,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             transform: `translateX(calc(-50% + ${offsetX}px)) ${(hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i) ? 'scale(1.05)' : 'scale(1)'}`,
                                             transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             border: (targetingState && c) ? '2px solid #f56565' : 'none', borderRadius: 8,
-                                            cursor: targetingState ? 'crosshair' : 'default',
-                                            width: CARD_WIDTH * scale,
-                                            height: CARD_HEIGHT * scale,
+                                            cursor: targetingState ? 'crosshair' : 'pointer',
+                                            width: CARD_WIDTH,
+                                            height: CARD_HEIGHT,
                                             pointerEvents: 'auto'
                                         }}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH, height: CARD_HEIGHT, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH, height: CARD_HEIGHT, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* Player Slots - Scaled Position */}
+                    {/* Player Slots - Fixed Y (Gap center at 50%) */}
                     <div style={{
-                        position: 'absolute', bottom: `calc(50% - ${CARD_HEIGHT * scale / 2}px - ${20 * scale}px)`, left: '0', width: '100%', height: CARD_HEIGHT * scale, // Adjusted bottom
+                        position: 'absolute', top: 'calc(50% + 5px)', left: '0', width: '100%', height: CARD_HEIGHT,
                         pointerEvents: 'none', zIndex: 10
                     }}>
                         <div style={{
@@ -3419,7 +3419,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         }}>
                             {visualPlayerBoard.map((c: any, i: number) => {
                                 const boardSize = visualPlayerBoard.length;
-                                const offsetX = (i - (boardSize - 1) / 2) * CARD_SPACING * scale;
+                                const offsetX = (i - (boardSize - 1) / 2) * CARD_SPACING;
 
                                 return (
                                     <div key={c?.instanceId || `empty-plr-${i}`}
@@ -3435,11 +3435,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             cursor: 'pointer',
                                             pointerEvents: 'auto',
-                                            width: CARD_WIDTH * scale,
-                                            height: CARD_HEIGHT * scale,
+                                            width: CARD_WIDTH,
+                                            height: CARD_HEIGHT,
                                             zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1
                                         }}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH, height: CARD_HEIGHT, opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any).isDying ? 0.8 : 1, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH, height: CARD_HEIGHT, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
 
                                         {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
                                         {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
@@ -3510,18 +3510,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* ========================================== */}
                     {/* RIGHT SIDE CONTROLS - Centered vertically (UPSIZED 2X) */}
                     {/* ========================================== */}
-                    <div style={{ position: 'absolute', right: 30 * scale, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30 * scale, zIndex: 50 }}>
+                    <div style={{ position: 'absolute', right: 30, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30, zIndex: 50 }}>
                         {/* Opponent PP */}
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f6e05e' }}>{opponent.pp}/{opponent.maxPp}</div>
-                            <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10 * scale, height: 10 * scale, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
                         </div>
                         {/* End Turn Button */}
-                        <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160 * scale, height: 160 * scale, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
+                        <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160, height: 160, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>{player.pp}/{player.maxPp}</div>
-                            <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(10).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.pp ? '#f6e05e' : (i < player.maxPp ? '#744210' : '#2d3748') }} />)}</div>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>{Array(10).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.pp ? '#f6e05e' : (i < player.maxPp ? '#744210' : '#2d3748') }} />)}</div>
                         </div>
                     </div>
 
@@ -3541,17 +3541,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             <div style={{ textAlign: 'center' }}>
                                 {/* Coin */}
                                 <div style={{
-                                    width: 120 * scale, height: 120 * scale, margin: `0 auto ${30 * scale}px`,
+                                    width: 120, height: 120, margin: '0 auto 30px',
                                     borderRadius: '50%',
                                     background: coinTossPhase === 'RESULT'
                                         ? (coinTossResult === 'FIRST' ? 'linear-gradient(135deg, #ffd700, #ff8c00)' : 'linear-gradient(135deg, #c0c0c0, #808080)')
                                         : 'linear-gradient(135deg, #ffd700, #ff8c00)',
                                     boxShadow: coinTossPhase === 'RESULT'
-                                        ? `0 0 ${40 * scale}px ${coinTossResult === 'FIRST' ? '#ffd700' : '#c0c0c0'}, 0 0 ${80 * scale}px ${coinTossResult === 'FIRST' ? 'rgba(255,215,0,0.5)' : 'rgba(192,192,192,0.5)'}`
-                                        : `0 0 ${30 * scale}px #ffd700`,
+                                        ? `0 0 40px ${coinTossResult === 'FIRST' ? '#ffd700' : '#c0c0c0'}, 0 0 80px ${coinTossResult === 'FIRST' ? 'rgba(255,215,0,0.5)' : 'rgba(192,192,192,0.5)'}`
+                                        : '0 0 30px #ffd700',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     fontSize: '3rem', fontWeight: 900, color: '#1a202c',
-                                    textShadow: '0 2px 2px rgba(0,0,0,0.5)',
                                     animation: coinTossPhase === 'TOSSING' ? 'coinFlip 0.3s ease-in-out infinite' : 'coinLand 0.5s ease-out',
                                     border: '4px solid rgba(255,255,255,0.3)'
                                 }}>
@@ -3572,7 +3571,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                 {coinTossPhase === 'RESULT' && (
                                     <div style={{
-                                        fontSize: '1rem', color: '#a0aec0', marginTop: 10 * scale,
+                                        fontSize: '1rem', color: '#a0aec0', marginTop: 10,
                                         animation: 'fadeIn 0.5s ease-out 0.3s both'
                                     }}>
                                         {coinTossResult === 'FIRST' ? 'あなたの先攻です' : '相手の先攻です'}
@@ -3633,10 +3632,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )}
 
                     {/* ========================================== */}
-                    {/* PLAYER LEADER - Bottom center */}
+                    {/* PLAYER LEADER - Fixed at bottom center */}
+                    {/* Size: 240px, EP/SEP at top, HP left of EP */}
+                    {/* ========================================== */}
                     <div ref={playerLeaderRef} style={{
-                        position: 'absolute', bottom: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
-                        width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
+                        position: 'absolute', bottom: -40, left: '50%', transform: 'translateX(-50%)',
+                        width: LEADER_SIZE, height: LEADER_SIZE, borderRadius: '50%',
                         zIndex: 200
                     }}>
                         <div style={{
@@ -3649,7 +3650,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* Player HP - Top Left (Center - 140px) */}
                         <div style={{
                             position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
-                            width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
+                            width: 55, height: 55, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
                             border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
                             boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10
@@ -3657,35 +3658,35 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         {/* Player EP - Circular Frame */}
                         <div onMouseDown={(e) => handleEvolveMouseDown(e, false)} style={{
-                            position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
-                            width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10
                         }}>
-                            <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < remainingEvolves ? '#ecc94b' : '#2d3748', boxShadow: i < remainingEvolves ? (canEvolveUI ? '0 0 10px #ecc94b, 0 0 20px #ecc94b' : '0 0 5px #ecc94b') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < remainingEvolves ? '#ecc94b' : '#2d3748', boxShadow: i < remainingEvolves ? (canEvolveUI ? '0 0 10px #ecc94b, 0 0 20px #ecc94b' : '0 0 5px #ecc94b') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
                         </div>
 
                         {/* Player SEP - Circular Frame */}
                         <div onMouseDown={(e) => handleEvolveMouseDown(e, true)} style={{
-                            position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
-                            width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
+                            position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                            width: 45, height: 45, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             zIndex: 10, cursor: player.sep > 0 ? 'grab' : 'default'
                         }}>
-                            <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? '0 0 10px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                            <div style={{ display: 'flex', gap: 3 }}>
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? '0 0 10px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
                         </div>
                     </div>
 
                     {/* Player Deck - Bottom Right */}
-                    <div style={{ position: 'absolute', bottom: 10 * scale, right: 15 * scale, width: 60 * scale, height: 85 * scale, zIndex: 50 }}>
+                    <div style={{ position: 'absolute', bottom: 10, right: 15, width: 60, height: 85, zIndex: 50 }}>
                         {[...Array(Math.min(5, Math.ceil(player.deck.length / 5)))].map((_, i) => (
-                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096', boxShadow: '1px 1px 3px rgba(0,0,0,0.5)' }} />
+                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2}px, ${-i * 2}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096', boxShadow: '1px 1px 3px rgba(0,0,0,0.5)' }} />
                         ))}
-                        <div style={{ position: 'absolute', top: -20 * scale, width: '100%', textAlign: 'center', color: '#a0aec0', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 1px 2px black' }}>{player.deck.length}</div>
+                        <div style={{ position: 'absolute', top: -20, width: '100%', textAlign: 'center', color: '#a0aec0', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 1px 2px black' }}>{player.deck.length}</div>
                     </div>
 
                     {/* ========================================== */}
@@ -3698,7 +3699,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         bottom: 0,
                         left: 0,
                         width: '100%', // Full width, fixed - prevents layout shift
-                        height: 200 * scale,
+                        height: 200,
                         display: 'flex',
                         justifyContent: 'center', // Center alignment for positioning reference
                         alignItems: 'flex-end',
@@ -3712,88 +3713,47 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             let rotate = 0;
 
                             if (!isHandExpanded) {
-                                // Collapsed: Position from right end.
-                                const maxSpacing = 45 * scale;
-                                // We want to maintain RIGHT alignment relative to window edge.
-                                // Rightmost Card Center X = ScreenWidth/2 + OffsetX
-                                // We want Rightmost Card Right Edge <= WindowWidth - Margin
-                                // Rightmost Card Center X <= WindowWidth - Margin - CardWidth/2
+                                // Collapsed: positioned at midpoint between center (50%) and right edge (100%)
+                                // Midpoint = 75% from left = 25% from right
+                                // In pixels from center: +25% of board width
+                                // Use BASE_WIDTH for scaled layout
+                                const boardWidth = BASE_WIDTH * 0.8; // 80% of base width (right side minus sidebar)
+                                const rightQuadrantCenter = boardWidth * 0.25; // 25% right of center
 
-                                const rightEdgeMargin = 20 * scale; // Margin from the right edge of the screen
-                                const cardHalfWidth = CARD_WIDTH * scale / 2;
-
-                                // Calculate the X coordinate of the rightmost card's center, relative to the screen's center (0)
-                                // Screen Right Edge is at +window.innerWidth/2 relative to center.
-                                const rightMostX = (window.innerWidth / 2) - rightEdgeMargin - cardHalfWidth;
-
-                                // Calculate spacing based on available width.
-                                // The available width for the hand is from the sidebar's right edge to the screen's right edge.
-                                const availableWidthForHand = window.innerWidth - (340 * scale) - rightEdgeMargin;
-
-                                // Calculate the total width the hand would occupy if using maxSpacing
-                                const requiredWidthForMaxSpacing = (handSize - 1) * maxSpacing + (CARD_WIDTH * scale);
-
-                                let spacing = maxSpacing;
-                                if (requiredWidthForMaxSpacing > availableWidthForHand) {
-                                    // If maxSpacing makes the hand too wide, reduce spacing to fit
-                                    spacing = (availableWidthForHand - (CARD_WIDTH * scale)) / Math.max(1, handSize - 1);
-                                }
-
-                                // Calculate offsetX for each card, anchoring to the rightmost card
-                                // offsetX(last) = rightMostX
-                                offsetX = rightMostX - ((handSize - 1) - i) * spacing;
-
-                                translateY = 0;
+                                const spacing = Math.min(45, 300 / handSize);
+                                offsetX = rightQuadrantCenter + (i - (handSize - 1) / 2) * spacing;
+                                translateY = 0; // User requested 0 for collapsed too
                                 rotate = (i - (handSize - 1) / 2) * 3;
                             } else {
-                                // Expanded: Center of screen
-                                const maxSpacing = 115 * scale;
-                                // Constrain total width to screen width minus padding
-                                const availableWidth = window.innerWidth - (40 * scale);
-                                const requiredWidthForMaxSpacing = (handSize - 1) * maxSpacing + (CARD_WIDTH * scale);
-
-                                let spacing = maxSpacing;
-                                if (requiredWidthForMaxSpacing > availableWidth) {
-                                    spacing = (availableWidth - (CARD_WIDTH * scale)) / Math.max(1, handSize - 1);
-                                }
-
+                                // Expanded: centered on board center (leader's center axis)
+                                const spacing = Math.min(115, 600 / handSize);
                                 offsetX = (i - (handSize - 1) / 2) * spacing;
-                                translateY = 0;
+                                translateY = 0; // NO Y offset - cards at bottom
                                 rotate = 0;
                             }
 
-
-                            const isPlayable = player.pp >= c.cost && gameState.activePlayerId === currentPlayerId;
+                            // Selected card rises ONLY when expanded
+                            if (isHandExpanded && selectedCard?.card === c) {
+                                translateY = -10;
+                            }
 
                             return (
-                                <div key={c.instanceId}
-                                    onMouseDown={(e) => handleHandMouseDown(e, i)}
+                                <div key={c.id + i}
                                     style={{
                                         position: 'absolute',
-                                        // The container is centered (left: 0, width: 100%, justifyContent: center)
-                                        // So offsetX=0 means center of screen.
-                                        left: '50%',
-                                        bottom: 5 * scale, // Slightly higher to avoid cut-off
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.1) translateY(-30px)' : (isHandExpanded ? 'translateY(-10px)' : '')}`,
-                                        transition: dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'none' : 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                                        zIndex: dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 1000 : i + 100,
-                                        width: CARD_WIDTH * scale,
-                                        height: CARD_HEIGHT * scale,
-                                        pointerEvents: 'auto',
-                                        cursor: isPlayable ? 'grab' : 'not-allowed'
+                                        bottom: 0, // Absolutely at bottom - no gap
+                                        left: '50%', // Start from center
+                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg)`,
+                                        transformOrigin: 'bottom center',
+                                        zIndex: i,
+                                        transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                                        cursor: 'pointer',
+                                        pointerEvents: 'auto'
                                     }}
-                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => handleHandMouseDown(e, i)}
+                                    onClick={(e) => e.stopPropagation()} // Prevent background click from firing
                                 >
-                                    <Card
-                                        card={c}
-                                        turnCount={gameState.turnCount}
-                                        isMyTurn={gameState.activePlayerId === currentPlayerId}
-                                        style={{
-                                            width: CARD_WIDTH * scale,
-                                            height: CARD_HEIGHT * scale,
-                                            boxShadow: (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i) ? '0 0 40px rgba(49, 130, 206, 0.8)' : (isPlayable ? '0 0 15px rgba(255,255,255,0.3)' : 'none')
-                                        }}
-                                    />
+                                    <Card card={c} style={{ width: 100, height: 140, boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }} isSelected={selectedCard?.card === c} isPlayable={player.pp >= c.cost && gameState.activePlayerId === currentPlayerId} />
                                 </div>
                             );
                         })}
@@ -3920,7 +3880,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 {/* SVG Overlay for Dragging Arrow - Now uses game coordinates */}
-                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1000 }}>
+                <svg style={{ position: 'absolute', top: 0, left: 0, width: `${BASE_WIDTH}px`, height: `${BASE_HEIGHT}px`, pointerEvents: 'none', zIndex: 1000 }}>
                     {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
                         <>
                             <defs>
