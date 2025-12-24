@@ -888,7 +888,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         position: 'absolute', inset: 0,
                         backfaceVisibility: 'hidden',
                         borderRadius: 16, overflow: 'hidden',
-                        background: '#1a202c' // Fallback bg
+                        background: '#1a202c', // Fallback bg
+                        zIndex: totalRotateY <= 90 ? 2 : 1, // Explicit stacking order
+                        opacity: totalRotateY <= 90 ? 1 : 0, // Explicit visibility toggle
                     }}>
                         <img
                             src={card.imageUrl}
@@ -913,7 +915,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         backfaceVisibility: 'hidden',
                         transform: 'rotateY(180deg)',
                         borderRadius: 16, overflow: 'hidden',
-                        background: '#1a202c'
+                        background: '#1a202c',
+                        zIndex: totalRotateY > 90 ? 2 : 1, // Explicit stacking order
+                        opacity: totalRotateY > 90 ? 1 : 0, // Explicit visibility toggle
                     }}>
                         <img
                             src={evolvedImageUrl || card.imageUrl}
