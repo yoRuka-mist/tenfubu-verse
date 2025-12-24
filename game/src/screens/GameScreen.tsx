@@ -1988,22 +1988,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             playSE('gan.mp3', 0.6);
         }
         if (newPhase === 'DONE') {
-            // Animation complete - store pending action in ref and clear animation
-            setEvolveAnimation(prev => {
-                if (prev && !prev.isRemote) {
-                    pendingEvolveRef.current = {
-                        followerIndex: prev.followerIndex,
-                        useSep: prev.useSep,
-                        targetId: prev.targetId,
-                        playerId: prev.sourcePlayerId || currentPlayerId // Use sourcePlayerId if available, else current
-                    };
+            // Animation complete - Execute Evolve Action
+            const currentAnim = evolveAnimationRef.current;
+            if (currentAnim && !currentAnim.isRemote) {
+                const executePlayerId = currentAnim.sourcePlayerId || currentPlayerId;
+                const action = {
+                    type: 'EVOLVE' as const,
+                    playerId: executePlayerId,
+                    payload: {
+                        followerIndex: currentAnim.followerIndex,
+                        useSep: currentAnim.useSep,
+                        targetId: currentAnim.targetId
+                    }
+                };
+
+                // Local Apply
+                dispatch(action as any);
+
+                // Network Send
+                if (adapter && gameMode !== 'CPU') {
+                    adapter.send({ type: 'ACTION', payload: action });
                 }
-                return null; // Clear animation
-            });
+            }
+            // Clear animation
+            setEvolveAnimation(null);
         } else {
             setEvolveAnimation(prev => prev ? { ...prev, phase: newPhase } : null);
         }
-    }, [currentPlayerId, playSE]);
+    }, [adapter, dispatch, gameMode, currentPlayerId, playSE]);
 
     // Handle Play Card with Animation
     const handlePlayCard = (index: number, startX: number, startY: number) => {
@@ -2258,7 +2270,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const newBoardSize = validCards.length + 1;
                             const newIndex = validCards.length;
 
-                            const spacing = 102 * scale;
+                            const spacing = CARD_SPACING * scale;
                             const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
                             const boardAreaRect = boardRef.current?.getBoundingClientRect();
