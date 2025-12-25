@@ -246,11 +246,11 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuki', name: 'ユキ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 2,
-        description: '[隠密] 進化時：自分のフォロワーすべては+1/+1する。',
+        description: '[突進] 進化時：自分のフォロワーすべては+1/+1する。',
         imageUrl: '/cards/yuki.png',
         evolvedImageUrl: '/cards/yuki_2.png',
         tags: ['Knuckler'],
-        passiveAbilities: ['STEALTH'],
+        passiveAbilities: ['RUSH'],
         attackEffectType: 'IMPACT',
         triggers: [
             {
