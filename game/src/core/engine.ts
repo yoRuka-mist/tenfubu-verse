@@ -1700,9 +1700,27 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
         case 'EVOLVE': {
             const { followerIndex, targetId, useSep } = action.payload;
 
-            // 1. Create Fully Independent Copies
-            const p1 = { ...newState.players.p1, hand: [...newState.players.p1.hand], deck: [...newState.players.p1.deck], board: [...newState.players.p1.board], graveyard: [...newState.players.p1.graveyard] };
-            const p2 = { ...newState.players.p2, hand: [...newState.players.p2.hand], deck: [...newState.players.p2.deck], board: [...newState.players.p2.board], graveyard: [...newState.players.p2.graveyard] };
+            // 1. Create Fully Independent Copies with DEEP copy of board cards
+            const p1 = {
+                ...newState.players.p1,
+                hand: [...newState.players.p1.hand],
+                deck: [...newState.players.p1.deck],
+                board: newState.players.p1.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : undefined
+                } : null), // Deep copy board cards with passiveAbilities
+                graveyard: [...newState.players.p1.graveyard]
+            };
+            const p2 = {
+                ...newState.players.p2,
+                hand: [...newState.players.p2.hand],
+                deck: [...newState.players.p2.deck],
+                board: newState.players.p2.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : undefined
+                } : null), // Deep copy board cards with passiveAbilities
+                graveyard: [...newState.players.p2.graveyard]
+            };
 
             const player = action.playerId === 'p1' ? p1 : p2;
             const follower = player.board[followerIndex];
@@ -1741,7 +1759,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 follower.canAttack = true; // Rush-like effect (can attack followers)
 
                 // Add Immunity and Rush (only if not already having STORM)
-                const passives = follower.passiveAbilities || [];
+                // Create a new array to avoid reference issues
+                const passives = [...(follower.passiveAbilities || [])];
                 if (!passives.includes('IMMUNE_TO_DAMAGE_MY_TURN')) passives.push('IMMUNE_TO_DAMAGE_MY_TURN');
                 // Only add RUSH if the follower doesn't have STORM (STORM is superior)
                 if (!passives.includes('STORM') && !passives.includes('RUSH')) {
@@ -1778,10 +1797,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 // Only add RUSH if the follower doesn't already have STORM or RUSH
                 // STORM is superior to RUSH, so we don't add RUSH if STORM exists
-                const currentPassives = follower.passiveAbilities || [];
+                // Create a new array to avoid reference issues
+                const currentPassives = [...(follower.passiveAbilities || [])];
                 if (!currentPassives.includes('STORM') && !currentPassives.includes('RUSH')) {
-                    follower.passiveAbilities = [...currentPassives, 'RUSH'];
+                    currentPassives.push('RUSH');
                 }
+                follower.passiveAbilities = currentPassives;
             }
 
             // Queue Effects (EVOLVE or SUPER_EVOLVE trigger)
@@ -1848,10 +1869,24 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             console.log(`[Engine] ATTACK received. Incoming state P1 HP: ${state.players.p1.hp}, P2 HP: ${state.players.p2.hp}`);
             const { attackerIndex, targetIndex, targetIsLeader } = action.payload;
 
-            // 1. Create Fully Independent Copies for this transaction
+            // 1. Create Fully Independent Copies for this transaction with DEEP copy of board cards
             // This ensures potential mutations don't hit the old state and references are definitely new.
-            const p1 = { ...newState.players.p1, board: [...newState.players.p1.board], graveyard: [...newState.players.p1.graveyard] };
-            const p2 = { ...newState.players.p2, board: [...newState.players.p2.board], graveyard: [...newState.players.p2.graveyard] };
+            const p1 = {
+                ...newState.players.p1,
+                board: newState.players.p1.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : undefined
+                } : null), // Deep copy board cards with passiveAbilities
+                graveyard: [...newState.players.p1.graveyard]
+            };
+            const p2 = {
+                ...newState.players.p2,
+                board: newState.players.p2.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : undefined
+                } : null), // Deep copy board cards with passiveAbilities
+                graveyard: [...newState.players.p2.graveyard]
+            };
 
             const isAttackerP1 = action.playerId === 'p1';
             const attPlayer = isAttackerP1 ? p1 : p2;
