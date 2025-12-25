@@ -652,7 +652,7 @@ const MOCK_CARDS: Card[] = [
         tags: ['Token'],
         triggers: [{
             trigger: 'FANFARE',
-            effects: [{ type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'SELECT_FOLLOWER' }]
+            effects: [{ type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'SELECT_ALLY_FOLLOWER' }]
         }]
     },
     // --- 大和 ---

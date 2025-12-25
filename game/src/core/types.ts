@@ -21,7 +21,7 @@ export interface AbilityEffect {
     type: EffectType;
     value?: number; // X value (damage, count, etc)
     value2?: number; // Y value (optional second param)
-    targetType?: 'SELF' | 'OPPONENT' | 'ALL_FOLLOWERS' | 'ALL_OTHER_FOLLOWERS' | 'RANDOM_FOLLOWER' | 'SELECT_FOLLOWER'; // More specific usage
+    targetType?: 'SELF' | 'OPPONENT' | 'ALL_FOLLOWERS' | 'ALL_OTHER_FOLLOWERS' | 'RANDOM_FOLLOWER' | 'SELECT_FOLLOWER' | 'SELECT_ALLY_FOLLOWER' | 'SELECT_OTHER_ALLY_FOLLOWER'; // More specific usage
     targetPassive?: PassiveAbility; // For GRANT_PASSIVE
     targetCardId?: string; // For SUMMON
     conditions?: { [key: string]: any }; // Flexible conditions

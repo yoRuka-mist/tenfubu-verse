@@ -1418,6 +1418,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         sourceVisualIndex?: number; // Visual board index for animation position
         useSep?: boolean;
         allowedTargetPlayerId?: string; // Validated target side
+        excludeInstanceId?: string; // For SELECT_OTHER_ALLY_FOLLOWER - exclude source card from valid targets
     } | null>(null);
 
     // Refs
@@ -2427,19 +2428,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const fanfareTrigger = card.triggers?.find(t => t.trigger === 'FANFARE');
         const firstEffect = fanfareTrigger?.effects[0];
 
-        // Extended logic: identify target side based on effect type
+        // Extended logic: identify target side based on effect type or targetType
         let allowedTargetPlayerId = opponentPlayerId; // Default to Enemy
+        const isAllyTarget = firstEffect?.targetType === 'SELECT_ALLY_FOLLOWER' || firstEffect?.targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
         if (firstEffect) {
-            if (['GRANT_PASSIVE', 'BUFF_STATS', 'HEAL_FOLLOWER'].includes(firstEffect.type)) {
+            // SELECT_ALLY_FOLLOWER and SELECT_OTHER_ALLY_FOLLOWER explicitly target own followers
+            if (isAllyTarget) {
+                allowedTargetPlayerId = currentPlayerId;
+            } else if (['GRANT_PASSIVE', 'BUFF_STATS', 'HEAL_FOLLOWER'].includes(firstEffect.type)) {
+                // Legacy check for effect types that typically target self
                 allowedTargetPlayerId = currentPlayerId;
             }
         }
 
+        const targetTypes = ['SELECT_FOLLOWER', 'SELECT_ALLY_FOLLOWER', 'SELECT_OTHER_ALLY_FOLLOWER'];
         const needsTarget =
-            (card.type === 'SPELL' && card.triggers?.some(t => t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))) ||
+            (card.type === 'SPELL' && card.triggers?.some(t => t.effects.some(e => e.targetType && targetTypes.includes(e.targetType)))) ||
             (card.type === 'FOLLOWER' && (
-                card.triggerAbilities?.FANFARE?.targetType === 'SELECT_FOLLOWER' ||
-                card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'))
+                (card.triggerAbilities?.FANFARE?.targetType && targetTypes.includes(card.triggerAbilities.FANFARE.targetType)) ||
+                card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType && targetTypes.includes(e.targetType)))
             ));
 
         // Check valid targets on the appropriate board
@@ -3032,6 +3039,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         const currentCard = actualIndex >= 0 ? playerBoard[actualIndex] : null;
 
+        // If in targeting mode and targeting ally followers, handle target selection
+        if (targetingState && targetingState.allowedTargetPlayerId === currentPlayerId && currentCard) {
+            handleTargetClick('FOLLOWER', actualIndex, currentPlayerId, instanceId);
+            return;
+        }
+
         // Inspect - set selected card
         if (currentCard) setSelectedCard({ card: currentCard, owner: 'PLAYER' });
 
@@ -3142,11 +3155,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const card = playerRef.current.hand[currentDrag.sourceIndex];
                         if (playerRef.current.pp >= card.cost) {
                             // Check for Target Selection Requirement (Play Trigger)
-                            const needsTarget = card.triggerAbilities?.FANFARE?.targetType === 'SELECT_FOLLOWER' ||
+                            const needsEnemyTarget = card.triggerAbilities?.FANFARE?.targetType === 'SELECT_FOLLOWER' ||
                                 card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'));
+                            const needsAllyTarget = card.triggerAbilities?.FANFARE?.targetType === 'SELECT_ALLY_FOLLOWER' ||
+                                card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_ALLY_FOLLOWER'));
+                            const needsOtherAllyTarget = card.triggerAbilities?.FANFARE?.targetType === 'SELECT_OTHER_ALLY_FOLLOWER' ||
+                                card.triggers?.some(t => t.trigger === 'FANFARE' && t.effects.some(e => e.targetType === 'SELECT_OTHER_ALLY_FOLLOWER'));
+                            const needsTarget = needsEnemyTarget || needsAllyTarget || needsOtherAllyTarget;
 
                             if (needsTarget) {
-                                setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex });
+                                // Determine which player's board to target
+                                const allowedTargetPlayerId = (needsAllyTarget || needsOtherAllyTarget) ? currentPlayerId : opponentPlayerId;
+                                setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex, allowedTargetPlayerId });
                                 // Don't collapse hand - only collapse on background click
                                 // Keep selected card visible during targeting
                                 ignoreClickRef.current = true; // Prevent quick close
@@ -3299,21 +3319,55 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     // Check for Target Selection Requirement (Evolve or Super Evolve Trigger)
                     const isSuper = (currentDrag as any).useSep;
-                    const needsTarget = card?.triggerAbilities?.EVOLVE?.targetType === 'SELECT_FOLLOWER' ||
-                        card?.triggers?.some(t => t.trigger === 'EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER')) ||
-                        (isSuper && card?.triggers?.some(t => t.trigger === 'SUPER_EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER')));
+                    const triggerToCheck = isSuper ? 'SUPER_EVOLVE' : 'EVOLVE';
 
-                    // Check valid targets
-                    const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
-                    const hasValidTargets = opponentBoard.some(c =>
-                        c &&
-                        !c.passiveAbilities?.includes('STEALTH') &&
-                        !c.passiveAbilities?.includes('AURA')
-                    );
+                    // Check which target type is needed
+                    const getTargetTypeFromTrigger = () => {
+                        const legacyType = card?.triggerAbilities?.EVOLVE?.targetType;
+                        if (legacyType) return legacyType;
+
+                        for (const trigger of card?.triggers || []) {
+                            if (trigger.trigger === triggerToCheck) {
+                                for (const effect of trigger.effects) {
+                                    if (effect.targetType && ['SELECT_FOLLOWER', 'SELECT_ALLY_FOLLOWER', 'SELECT_OTHER_ALLY_FOLLOWER'].includes(effect.targetType)) {
+                                        return effect.targetType;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    };
+
+                    const targetTypeNeeded = getTargetTypeFromTrigger();
+                    const needsTarget = !!targetTypeNeeded;
+                    const needsAllyTarget = targetTypeNeeded === 'SELECT_ALLY_FOLLOWER' || targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
+                    const excludeSelf = targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
+
+                    // Check valid targets based on target type
+                    const targetPlayerIdForValidation = needsAllyTarget ? currentPlayerId : opponentPlayerId;
+                    const targetBoardForValidation = gameStateRef.current.players[targetPlayerIdForValidation].board;
+                    const hasValidTargets = targetBoardForValidation.some(c => {
+                        if (!c) return false;
+                        // For ally targets, exclude self if SELECT_OTHER_ALLY_FOLLOWER
+                        if (needsAllyTarget && excludeSelf && (c as any).instanceId === followerInstanceId) return false;
+                        // For enemy targets, check STEALTH and AURA
+                        if (!needsAllyTarget) {
+                            if (c.passiveAbilities?.includes('STEALTH') || c.passiveAbilities?.includes('AURA')) return false;
+                        }
+                        return true;
+                    });
 
                     if (needsTarget && hasValidTargets) {
                         // Store both visual index and instanceId for targeting state
-                        setTargetingState({ type: 'EVOLVE', sourceIndex: actualFollowerIndex, sourceInstanceId: followerInstanceId, sourceVisualIndex: visualFollowerIndex, useSep: (currentDrag as any).useSep, allowedTargetPlayerId: opponentPlayerId });
+                        setTargetingState({
+                            type: 'EVOLVE',
+                            sourceIndex: actualFollowerIndex,
+                            sourceInstanceId: followerInstanceId,
+                            sourceVisualIndex: visualFollowerIndex,
+                            useSep: (currentDrag as any).useSep,
+                            allowedTargetPlayerId: targetPlayerIdForValidation,
+                            excludeInstanceId: excludeSelf ? followerInstanceId : undefined
+                        });
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
@@ -3372,6 +3426,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Validating target side
         if (targetingState.allowedTargetPlayerId && targetingState.allowedTargetPlayerId !== targetPlayerId) {
             console.log("Invalid target side");
+            return;
+        }
+
+        // Check if this target is excluded (for SELECT_OTHER_ALLY_FOLLOWER)
+        if (targetingState.excludeInstanceId && instanceId === targetingState.excludeInstanceId) {
+            console.log("Cannot target self (SELECT_OTHER_ALLY_FOLLOWER)");
+            triggerShake();
             return;
         }
 

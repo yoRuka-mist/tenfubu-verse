@@ -327,8 +327,8 @@ function processSingleEffect(
                 const p = { ...newState.players[playerId] };
 
                 // If targeting ALL (e.g. Senka effect), update board AND hand if specified?
-                // Usually GRANT_PASSIVE is for board. 
-                // For Senka: "味方のナックラーは疾走を得る" -> Board + Future? 
+                // Usually GRANT_PASSIVE is for board.
+                // For Senka: "味方のナックラーは疾走を得る" -> Board + Future?
                 // We'll implement Board update here. Hand update usually is separate effect but we can combine or map.
                 // Let's assume custom mapping for Senka logic or robust support.
                 // Logic: Apply to all board cards matching condition.
@@ -348,7 +348,26 @@ function processSingleEffect(
                     });
                     newState.players = { ...newState.players, [playerId]: p };
                 }
-                // Specific target (Source)
+                // SELECT_ALLY_FOLLOWER or SELECT_OTHER_ALLY_FOLLOWER: Target specific ally follower by instanceId
+                else if ((effect.targetType === 'SELECT_ALLY_FOLLOWER' || effect.targetType === 'SELECT_OTHER_ALLY_FOLLOWER') && targetId) {
+                    const cardIdx = p.board.findIndex(c => c?.instanceId === targetId);
+                    if (cardIdx !== -1 && p.board[cardIdx]) {
+                        const c = { ...p.board[cardIdx]! };
+                        const passives = new Set(c.passiveAbilities || []);
+                        passives.add(effect.targetPassive);
+                        c.passiveAbilities = Array.from(passives);
+
+                        // If granting STORM, enable attack immediately (bypass summoning sickness)
+                        if (effect.targetPassive === 'STORM') {
+                            c.canAttack = true;
+                        }
+
+                        p.board[cardIdx] = c;
+                        newState.players = { ...newState.players, [playerId]: p };
+                        console.log(`[GRANT_PASSIVE] Applied ${effect.targetPassive} to ${c.name} (instanceId: ${targetId})`);
+                    }
+                }
+                // Specific target (Source - fallback for legacy behavior)
                 else if (sourceCard) {
                     // ... existing logic for source target ...
                     const cardIdx = p.board.findIndex(c => c?.instanceId === (sourceCard as BoardCard).instanceId);
