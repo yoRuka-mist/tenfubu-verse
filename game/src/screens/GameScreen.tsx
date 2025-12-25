@@ -3095,7 +3095,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         };
                         const actualTargetIndex = currentHover.type === 'LEADER' ? -1 : getActualBoardIndex(currentHover.instanceId);
 
-                        if (wardUnits.length > 0) {
+                        // Check Attacker for STEALTH (Ignores Ward)
+                        const visualAttackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
+                        const hasStealth = visualAttackerCard?.passiveAbilities?.includes('STEALTH');
+
+                        if (wardUnits.length > 0 && !hasStealth) {
                             if (currentHover.type === 'LEADER') {
                                 isBlocked = true;
                             } else if (currentHover.type === 'FOLLOWER' && actualTargetIndex >= 0) {

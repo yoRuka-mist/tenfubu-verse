@@ -246,11 +246,11 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuki', name: 'ユキ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 2,
-        description: '[突進] 進化時：自分のフォロワーすべては+1/+1する。',
+        description: '[隠密] 進化時：自分のフォロワーすべては+1/+1する。',
         imageUrl: '/cards/yuki.png',
         evolvedImageUrl: '/cards/yuki_2.png',
         tags: ['Knuckler'],
-        passiveAbilities: ['RUSH'],
+        passiveAbilities: ['STEALTH'],
         attackEffectType: 'IMPACT',
         triggers: [
             {
@@ -1903,7 +1903,11 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 c.passiveAbilities?.includes('WARD') &&
                 !c.passiveAbilities?.includes('STEALTH')
             );
-            if (wardUnits.length > 0) {
+
+            // STEALTH attacker ignores WARD
+            const attackerHasStealth = attacker.passiveAbilities?.includes('STEALTH');
+
+            if (wardUnits.length > 0 && !attackerHasStealth) {
                 // If target is Leader, block
                 if (targetIsLeader) {
                     console.log(`[Engine] Attack blocked: Must attack Ward unit first.`);
