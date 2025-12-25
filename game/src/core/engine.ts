@@ -282,20 +282,28 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_shieko', name: 'しゑこ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 1,
-        description: '[突進]',
+        description: '[突進] 進化時：味方の他のフォロワーを1体選び、+2/+2する。',
         imageUrl: '/cards/shieko.png',
         evolvedImageUrl: '/cards/shieko_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH'],
-        attackEffectType: 'IMPACT'
+        attackEffectType: 'IMPACT',
+        triggers: [
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'SELECT_OTHER_ALLY_FOLLOWER' }
+                ]
+            }
+        ]
     },
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] 進化時：相手のフォロワー1体に2ダメージ。',
-        imageUrl: '/cards/urara.jpg',
-        evolvedImageUrl: '/cards/urara.jpg',
-        passiveAbilities: ['WARD'],
+        description: '3コスト 2/2 [守護] [バリア] 進化時：相手のフォロワー1体に2ダメージ。',
+        imageUrl: '/cards/urara.png',
+        evolvedImageUrl: '/cards/urara_2.png',
+        passiveAbilities: ['WARD', 'BARRIER'],
         attackEffectType: 'WATER',
         triggers: [
             {
@@ -337,12 +345,16 @@ const MOCK_CARDS: Card[] = [
         attackEffectType: 'SLASH'
     },
     {
-        id: 'c_sia', name: 'しあ', cost: 3, type: 'FOLLOWER',
-        attack: 3, health: 3,
-        description: '',
+        id: 'c_sia', name: 'しあ', cost: 2, type: 'FOLLOWER',
+        attack: 2, health: 1,
+        description: 'ファンファーレ：相手のフォロワーランダム2体に1ダメージ。',
         imageUrl: '/cards/sia.png',
         evolvedImageUrl: '/cards/sia_2.png',
-        attackEffectType: 'SLASH'
+        attackEffectType: 'SLASH',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [{ type: 'RANDOM_DAMAGE', value: 1, value2: 2, targetType: 'OPPONENT' }]
+        }]
     },
     // --- Senka Tokens ---
     {
@@ -533,12 +545,25 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 's_samurai_tea', name: '侍茶', cost: 2, type: 'SPELL',
-        description: '自分のフォロワーすべてを+1/+1する',
+        description: '1枚ドローする。自分のフォロワーすべてを+1/+1する。',
         imageUrl: '/cards/samuraitea.png',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
+                { type: 'DRAW', value: 1 },
                 { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS' }
+            ]
+        }]
+    },
+    {
+        id: 's_crazy_knucklers', name: 'クレイジー・ナックラーズ', cost: 5, type: 'SPELL',
+        description: '「無敵の闘士 白ツバキ」と「しゑこ」を場に出す。',
+        imageUrl: '/cards/crazy_knucklers.png',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'SUMMON_CARD', targetCardId: 'c_white_tsubaki' },
+                { type: 'SUMMON_CARD', targetCardId: 'c_shieko' }
             ]
         }]
     },
@@ -715,8 +740,8 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_bucchi', count: 3 },           // ぶっちー
     { cardId: 'c_potechi', count: 3 },          // ぽてち
     { cardId: 's_tenfubu_yabe_hutari', count: 3 }, // てんふぶのヤベー2人
-    { cardId: 'c_yamato', count: 2 },           // 大和
-    { cardId: 'c_kyokune', count: 2 },          // 曲音
+    { cardId: 's_crazy_knucklers', count: 2 },  // クレイジー・ナックラーズ
+    { cardId: 'c_sia', count: 2 },              // しあ
     { cardId: 'c_mono', count: 3 },             // Mono
     { cardId: 'c_ruiyu', count: 2 },            // ルイ・ユー
     { cardId: 'c_y', count: 2 },                // Y
@@ -727,9 +752,10 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
 
 const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_azya', count: 3 },             // あじゃ
-    { cardId: 'c_ruiyu', count: 3 },            // ルイ・ユー
-    { cardId: 'c_y', count: 3 },                // Y
-    { cardId: 'c_sara', count: 3 },             // sara
+    { cardId: 'c_ruiyu', count: 2 },            // ルイ・ユー
+    { cardId: 'c_y', count: 2 },                // Y
+    { cardId: 'c_sara', count: 2 },             // sara
+    { cardId: 'c_urara', count: 3 },            // ウララ
     { cardId: 'c_yunagi', count: 3 },           // ゆうなぎ
     { cardId: 'c_tsubumaru', count: 3 },        // つぶまる
     { cardId: 'c_nayuta', count: 3 },           // なゆた
@@ -1367,6 +1393,21 @@ function processSingleEffect(
                         newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
                     }
                 });
+            } else if ((effect.targetType === 'SELECT_FOLLOWER' || effect.targetType === 'SELECT_ALLY_FOLLOWER' || effect.targetType === 'SELECT_OTHER_ALLY_FOLLOWER') && targetId) {
+                const targetInfo = getBoardCardById(targetId);
+                if (targetInfo) {
+                    const { card: c } = targetInfo;
+                    if (!c.baseAttack) c.baseAttack = (c as any).attack || 0;
+                    if (!c.baseHealth) c.baseHealth = (c as any).health || 0;
+
+                    c.attack = (c.attack || 0) + attackBuff;
+                    c.currentAttack = (c.currentAttack || 0) + attackBuff;
+                    c.health = (c.health || 0) + healthBuff;
+                    c.maxHealth = (c.maxHealth || 0) + healthBuff;
+                    c.currentHealth = (c.currentHealth || 0) + healthBuff;
+
+                    newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
+                }
             }
             break;
         }
@@ -1599,7 +1640,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             // Skip activePlayerId check for remote actions (already validated on sender side)
             if (!(action as any).isRemote && newState.activePlayerId !== action.playerId) return newState;
 
-            const { cardIndex, targetId } = action.payload;
+            const { cardIndex, targetId, instanceId } = action.payload;
 
             // 1. Create Fully Independent Copies (Like ATTACK)
             const p1 = { ...newState.players.p1, hand: [...newState.players.p1.hand], deck: [...newState.players.p1.deck], board: [...newState.players.p1.board], graveyard: [...newState.players.p1.graveyard] };
@@ -1607,14 +1648,27 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
             const player = action.playerId === 'p1' ? p1 : p2;
 
-            console.log(`[Engine] PLAY_CARD: playerId=${action.playerId}, cardIndex=${cardIndex}, handLength=${player.hand.length}, isRemote=${(action as any).isRemote}`);
-            console.log(`[Engine] PLAY_CARD: hand cards:`, player.hand.map(c => c.name));
+            console.log(`[Engine] PLAY_CARD: playerId=${action.playerId}, cardIndex=${cardIndex}, instanceId=${instanceId}, handLength=${player.hand.length}, isRemote=${(action as any).isRemote}`);
+            console.log(`[Engine] PLAY_CARD: hand cards:`, player.hand.map(c => `${c.name}(${c.instanceId})`));
 
-            if (cardIndex < 0 || cardIndex >= player.hand.length) {
+            // Find the actual index using instanceId (more reliable when hand changes)
+            let actualCardIndex = cardIndex;
+            if (instanceId) {
+                const foundIndex = player.hand.findIndex(c => c.instanceId === instanceId);
+                if (foundIndex >= 0) {
+                    actualCardIndex = foundIndex;
+                    console.log(`[Engine] PLAY_CARD: Using instanceId ${instanceId}, found at index ${foundIndex} (was ${cardIndex})`);
+                } else {
+                    console.log(`[Engine] PLAY_CARD: instanceId ${instanceId} not found in hand!`);
+                    return newState;
+                }
+            }
+
+            if (actualCardIndex < 0 || actualCardIndex >= player.hand.length) {
                 console.log(`[Engine] PLAY_CARD: Invalid cardIndex! Returning unchanged state.`);
                 return newState;
             }
-            const card = player.hand[cardIndex];
+            const card = player.hand[actualCardIndex];
 
             let targetName = '';
             if (targetId) {
@@ -1658,7 +1712,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     console.log('[Engine] PLAY_CARD: Extra PP consumed, marked as used');
                 }
             }
-            player.hand.splice(cardIndex, 1);
+            player.hand.splice(actualCardIndex, 1);
 
             let sourceCard: BoardCard | Card = card;
             if (card.type === 'FOLLOWER') {

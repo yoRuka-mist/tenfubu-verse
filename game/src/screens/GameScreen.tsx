@@ -3,7 +3,7 @@ import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
-import { canEvolve } from '../core/abilities';
+import { canEvolve, canSuperEvolve } from '../core/abilities';
 
 // Leader Images
 const azyaLeaderImg = '/leaders/azya_leader.png';
@@ -1621,12 +1621,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (notifiedTurn === turn) return;
             setTurnNotification('SUPER_EVOLVE_READY');
             setNotifiedTurn(turn);
-            setTimeout(() => setTurnNotification(null), 3500);
+            setTimeout(() => setTurnNotification(null), 2500);
         } else if (turn === unlockEvolveTurn) {
             if (notifiedTurn === turn) return;
             setTurnNotification('EVOLVE_READY');
             setNotifiedTurn(turn);
-            setTimeout(() => setTurnNotification(null), 3500);
+            setTimeout(() => setTurnNotification(null), 2500);
         }
     }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId, notifiedTurn, gameState.firstPlayerId]);
 
@@ -1991,7 +1991,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         bgm.volume = audioSettings.bgm;
         bgmRef.current = bgm;
         setBgmLoadedForClass(player.class);
-    }, [player.class, selectBgm]);
+    }, [player.class, selectBgm, bgmLoadedForClass]);
 
     // BGM Cleanup on Unmount
     React.useEffect(() => {
@@ -2461,7 +2461,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         console.log(`[handlePlayCard] needsTarget: ${needsTarget}, allowedTarget: ${allowedTargetPlayerId}, hasValidTargets: ${hasValidTargets}`);
 
         if (needsTarget && hasValidTargets) {
-            setTargetingState({ type: 'PLAY', sourceIndex: index, allowedTargetPlayerId });
+            setTargetingState({ type: 'PLAY', sourceIndex: index, sourceInstanceId: card.instanceId, allowedTargetPlayerId });
             setDragState(null); // Stop dragging
             return;
         }
@@ -3077,8 +3077,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Client-side visual check
         const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
         if (useSepFlag) {
-            if (player.sep <= 0) return;
+            // Check super evolve conditions (includes canEvolveThisTurn check)
+            if (!canSuperEvolve(player, gameState.turnCount, isFirstPlayer)) return;
         } else {
+            // Check normal evolve conditions (includes canEvolveThisTurn check)
             if (!canEvolve(player, gameState.turnCount, isFirstPlayer)) return;
         }
 
@@ -3476,11 +3478,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // 2. Dispatch Action
         if (targetingState.type === 'PLAY') {
-            const index = targetingState.sourceIndex;
-
-            // Use playerRef to ensure we have the latest state
+            // Use sourceInstanceId to find the actual card index
             const currentPlayer = playerRef.current;
-            const animCard = currentPlayer.hand[index];
+            let index = targetingState.sourceIndex;
+            let animCard = currentPlayer.hand[index];
+
+            // If sourceInstanceId is available, use it to find the correct card
+            if (targetingState.sourceInstanceId) {
+                const foundIndex = currentPlayer.hand.findIndex(c => c.instanceId === targetingState.sourceInstanceId);
+                if (foundIndex >= 0) {
+                    index = foundIndex;
+                    animCard = currentPlayer.hand[foundIndex];
+                    console.log(`[handleTargetClick] Using sourceInstanceId ${targetingState.sourceInstanceId}, found at index ${foundIndex} (was ${targetingState.sourceIndex})`);
+                } else {
+                    console.error('[handleTargetClick] Card not found with instanceId:', targetingState.sourceInstanceId);
+                    setTargetingState(null);
+                    return;
+                }
+            }
 
             if (!animCard) {
                 console.error('[handleTargetClick] Card not found at index:', index);
@@ -3525,6 +3540,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }, 500);
             }
 
+            // --- あじゃ (c_azya) Visuals ---
+            if (animCard.id === 'c_azya') {
+                // 1. Leader damage effect (immediate)
+                playEffect('THUNDER', opponentPlayerId, -1);
+
+                // 2. Target follower destruction effect (delayed)
+                setTimeout(() => {
+                    playEffect('THUNDER', targetPlayerId, actualTargetIndex, targetId);
+                }, 300);
+            }
+
+            // --- あじゃ (c_azya) Visuals ---
+            if (animCard.id === 'c_azya') {
+                // 1. Leader damage effect (immediate)
+                playEffect('THUNDER', opponentPlayerId, -1);
+
+                // 2. Target follower destruction effect (delayed)
+                setTimeout(() => {
+                    playEffect('THUNDER', targetPlayerId, actualTargetIndex, targetId);
+                }, 300);
+            }
+
             // Animation for spell/card
             // Start from player's hand area
             const startX = window.innerWidth / 2; // Center of screen
@@ -3558,17 +3595,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 // --- Player Azya FANFARE Visuals ---
-                if (animCard.id === 'c_azya') {
-                    // 1. Damage to Leader
-                    setTimeout(() => {
-                        playEffect('THUNDER', opponentPlayerId, -1);
-                    }, 200);
-
-                    // 2. Destroy Target
-                    setTimeout(() => {
-                        playEffect('THUNDER', targetPlayerId, targetIndex, targetId);
-                    }, 400);
-                }
+                // (Moved to before onComplete to avoid duplicate effects)
 
                 setPlayingCardAnim(null);
             };
@@ -3652,6 +3679,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
     const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
     const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 5 : 4);
+    const canSuperEvolveUI = player?.canEvolveThisTurn && player.sep > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 7 : 6);
 
     // Force re-render log
     console.log("GameScreen Layout Updated: Layer 3 Implemented");
@@ -4402,10 +4430,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            zIndex: 10, cursor: player.sep > 0 ? 'grab' : 'default'
+                            zIndex: 10, cursor: canSuperEvolveUI ? 'grab' : 'default'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? '0 0 10px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? (canSuperEvolveUI ? '0 0 10px #9f7aea, 0 0 20px #9f7aea' : '0 0 5px #9f7aea') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
                             </div>
                         </div>
                     </div>
@@ -4846,7 +4874,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         transform: 'translateY(-50%)',
                         zIndex: 9000,
                         pointerEvents: 'none',
-                        animation: 'notificationFade 3.5s forwards'
+                        animation: 'notificationFade 2.5s forwards'
                     }}>
                         <div style={{
                             padding: '30px 140px',
