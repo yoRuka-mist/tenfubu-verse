@@ -402,7 +402,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/valkyrie.png',
         evolvedImageUrl: '/cards/valkyrie_2.png',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],
-        attackEffectType: 'FIRE',
+        attackEffectType: 'RAY',
         triggers: [
             {
                 trigger: 'END_OF_TURN',
@@ -546,6 +546,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_amandava', name: 'amandava', cost: 5, attack: 2, health: 3, type: 'FOLLOWER',
         description: 'ファンファーレ：相手のフォロワーからランダム2体のHPを1にする。進化時：相手のフォロワーすべてに1ダメージ',
         imageUrl: '/cards/amandava.png',
+        evolvedImageUrl: '/cards/amandava_2.png',
         attackEffectType: 'SHOT',
         triggers: [
             {

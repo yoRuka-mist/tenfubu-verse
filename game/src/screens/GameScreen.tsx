@@ -1349,39 +1349,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
                 const cardDef = getCardDefinition(current.effect.targetCardId);
                 if (cardDef) {
-                    // Removed unused isPlayer variable
-                    // Removed unused startX, startY variables
+                    // Determine if the card is generated for the player or opponent
+                    const isForPlayer = current.sourcePlayerId === currentPlayerId;
 
-                    // Use refs to get exact screen coordinates for effect start
-                    // NOTE: We need refs for hand/board/leader to do this perfectly.
-                    // Determine source position for the card appearing animation
-                    // This is a generic "card appearing" effect, so it might not have a specific source element.
-                    // Let's assume it appears from a general "off-screen" or "deck" area.
-                    // Determine source position for the card appearing animation
-                    // This is generic, just using defaults inside simpler logic if needed later.
-                    // Currently setAnimatingCard doesn't use these start coords for APPEAR.
-
-                    /* 
-                     * Pre-calculation of start positions kept for reference if 'FLY' logic needs updates:
-                     * Player Deck: window.innerWidth - (15 * scale) - (60 * scale / 2)
-                     * Opponent Deck: (20 * scale) + (60 * scale / 2)
-                     */
-
-                    // Target Coords for the card appearing animation (center of the board)
-                    let flyTargetX = window.innerWidth / 2;
-                    let flyTargetY = window.innerHeight / 2;
-
-                    // If the card is generated directly onto the board, we might want to target a specific board slot.
-                    // This logic is for a generic "card appears" animation, not necessarily landing on board.
-                    // The `setAnimatingCard` takes `targetX`, `targetY` which is the *final* resting place.
-                    // The current code uses `flyTargetX`, `flyTargetY` for the *initial* fly-to position.
-                    // Let's adjust `setAnimatingCard` to use `startX`, `startY` for the initial position.
-                    // And `flyTargetX`, `flyTargetY` for the intermediate "flying" position.
-                    // The `status: 'APPEAR'` phase should be the initial position.
-                    // The `status: 'FLY'` phase should be the intermediate position.
-                    // The `setAnimatingCard` structure needs to be updated to support this.
-                    // For now, let's assume `targetX`, `targetY` in `setAnimatingCard` is the *intermediate* flying position.
-                    // The actual landing on board is handled by `PLAY_CARD` or `SUMMON_CARD` effects later.
+                    // Target Coords in GAME COORDINATE SYSTEM (BASE_WIDTH x BASE_HEIGHT)
+                    // Player hand is bottom-right, Opponent hand is top-left
+                    const flyTargetX = isForPlayer ? BASE_WIDTH - 200 : 200;
+                    const flyTargetY = isForPlayer ? BASE_HEIGHT - 100 : 100;
 
                     setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
 
@@ -2718,13 +2692,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             if (needsTarget) {
                                 setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex });
-                                setIsHandExpanded(false);
+                                // Don't collapse hand - only collapse on background click
                                 setSelectedCard(null);
                                 ignoreClickRef.current = true; // Prevent quick close
                                 setTimeout(() => { ignoreClickRef.current = false; }, 100);
                             } else {
                                 handlePlayCard(currentDrag.sourceIndex, currentDrag.startX, currentDrag.startY);
-                                setIsHandExpanded(false);
+                                // Don't collapse hand - only collapse on background click
                                 setSelectedCard(null);
                                 ignoreClickRef.current = true;
                                 setTimeout(() => { ignoreClickRef.current = false; }, 100);
@@ -2788,7 +2762,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // Could add specific visual feedback here
                             } else {
 
-                                // Correctly pass target info to playEffect
+                                // Capture attack parameters IMMEDIATELY before any async operations
+                                const attackParams = {
+                                    attackerIndex: currentDrag.sourceIndex,
+                                    targetIndex: targetIsLeader ? -1 : targetIndex,
+                                    targetIsLeader: targetIsLeader
+                                };
+
+                                // CRITICAL FIX: Dispatch attack IMMEDIATELY to prevent race conditions
+                                // The engine will process the damage, and we show animations concurrently
+                                // This ensures the attack ALWAYS happens if the user initiated it
+                                dispatchAndSend({
+                                    type: 'ATTACK',
+                                    playerId: currentPlayerId,
+                                    payload: attackParams
+                                });
+
+                                // Correctly pass target info to playEffect (runs concurrently with dispatch)
                                 const attackType = attackerCard?.attackEffectType || 'SLASH';
                                 playEffect(attackType, opponentPlayerId, targetIsLeader ? -1 : targetIndex);
                                 triggerShake();
@@ -2803,22 +2793,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         }, 200);
                                     }
                                 }
-
-                                // Capture attack parameters before state reset
-                                const attackParams = {
-                                    attackerIndex: currentDrag.sourceIndex,
-                                    targetIndex: targetIsLeader ? -1 : targetIndex,
-                                    targetIsLeader: targetIsLeader
-                                };
-
-                                // Delay Dispatch to match animation impact point (approx 300-350ms)
-                                setTimeout(() => {
-                                    dispatchAndSend({
-                                        type: 'ATTACK',
-                                        playerId: currentPlayerId,
-                                        payload: attackParams
-                                    });
-                                }, 1000);
                             }
                         }
                     } else {
@@ -3091,7 +3065,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const startY = window.innerHeight - (200 * scale / 2); // Bottom of hand area
 
         handlePlayCard(cardIndex, startX, startY);
-        setIsHandExpanded(false);
+        // Don't collapse hand - only collapse on background click
         setSelectedCard(null);
     };
 
@@ -3338,7 +3312,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div ref={opponentLeaderRef}
                         onMouseEnter={() => setHoveredTarget({ type: 'LEADER', playerId: opponentPlayerId })}
                         onMouseLeave={() => setHoveredTarget(null)}
-                        onClick={() => targetingState && handleTargetClick('LEADER', -1, opponentPlayerId)}
+                        onClick={(e) => { e.stopPropagation(); if (targetingState) handleTargetClick('LEADER', -1, opponentPlayerId); }}
                         style={{
                             position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                             width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
@@ -3422,7 +3396,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         ref={el => opponentBoardRefs.current[i] = el}
                                         onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId })}
                                         onMouseLeave={() => setHoveredTarget(null)}
-                                        onClick={() => { if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
+                                        onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
                                         style={{
                                             position: 'absolute',
                                             left: '50%',
@@ -3789,7 +3763,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 rotate = (i - (handSize - 1) / 2) * 3;
                             } else {
                                 // Expanded: Center of screen
-                                const maxSpacing = 115 * scale;
+                                const maxSpacing = 100 * scale; // Reduced from 115 to make cards slightly closer
                                 // Constrain total width to screen width minus padding
                                 const availableWidth = window.innerWidth - (40 * scale);
                                 const requiredWidthForMaxSpacing = (handSize - 1) * maxSpacing + (CARD_WIDTH * scale);
@@ -3849,9 +3823,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         })}
                     </div>
 
-                    {/* Play Button - Bottom Left (Moved above hand count) */}
+                    {/* Play Button - Left side, above hand count badge */}
                     {selectedCard && selectedCard.owner === 'PLAYER' && isHandExpanded && (
-                        <div style={{ position: 'absolute', left: 15, bottom: 100, zIndex: 600, pointerEvents: 'auto' }}>
+                        <div style={{ position: 'absolute', left: 15, bottom: 290 * scale, zIndex: 600, pointerEvents: 'auto' }}>
                             <button
                                 disabled={player.pp < selectedCard.card.cost}
                                 onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
@@ -3883,7 +3857,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )}
 
                     {/* Hand Count Badge & Card Icon - Far Left near boundary */}
-                    <div style={{ position: 'absolute', bottom: 30, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
+                    <div style={{ position: 'absolute', bottom: 220 * scale, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
                         {/* Hand Icon - Stacked Cards */}
                         <div style={{ position: 'relative', width: 40, height: 50 }}>
                             <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />

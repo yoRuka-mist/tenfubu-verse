@@ -13,7 +13,7 @@
 
 ### engine.ts (ゲームエンジン・状態管理)
 ゲームの根幹。カードデータ、初期化、状態遷移(Reducer)を担当。
--   **L008 - L666**: `MOCK_CARDS` (全カードのデータ定義。コスト、攻撃力、体力、効果、画像パス)
+-   **L008 - L667**: `MOCK_CARDS` (全カードのデータ定義。コスト、攻撃力、体力、効果、画像パス)
 -   **L708 - L743**: `DECK_TEMPLATE` (構築済みデッキの内容定義)
 -   **L848 - L1371**: `processSingleEffect` (個別の効果処理ロジック: ダメージ、ドロー、回復、破壊、特殊召喚など)
 -   **L1410 - L2004**: `gameReducer` / `internalGameReducer` (プレイヤーの各行動を処理。`PLAY_CARD`, `ATTACK`, `END_TURN`, `EVOLVE` など)
@@ -33,16 +33,17 @@
 ### GameScreen.tsx (メイン対戦画面)
 最も巨大で複雑なファイル。UI構造、アニメーション、音、ユーザーとの対話。
 -   **L027 - L064**: `useScaleFactor` (4K/HD等の解像度、レスポンシブスケーリングの計算)
--   **L143 - L302**: `AttackEffect` (攻撃時の視覚演出: SLASH, FIREBALL, RAYなど)
+-   **L144 - L302**: `AttackEffect` (攻撃時の視覚演出: SLASH, FIREBALL, RAYなど)
 -   **L458 - L973**: `EvolutionAnimation` (進化・超進化時の拡大・回転・パーティクル演出)
--   **L1092 - L4187**: `GameScreen` コンポーネント本体
-    -   **L1177 - L1229**: `playEffect` (特定座標にエフェクトを発生させる)
-    -   **L1335 - L1494**: 効果処理キューの処理 (`pendingEffects`を順次ビジュアルに反映)
+-   **L1092 〜**: `GameScreen` コンポーネント本体
+    -   **L1177**: `playEffect` (特定座標にエフェクトを発生させる)
+    -   **L1339 - L1494**: 効果処理キューの処理 (`pendingEffects`を順次ビジュアルに反映)
     -   **L1530 - L1668**: HP変動の監視とダメージ数字・回復数字のポップアップ表示
-    -   **L1944**: `handleEvolveWithAnimation` (進化ボタンクリック時の演出開始)
-    -   **L2024**: `handlePlayCard` (手札から場に出す際のアニメーションと処理)
+    -   **L1945**: `handleEvolveWithAnimation` (進化ボタンクリック時の演出開始)
+    -   **L2025**: `handlePlayCard` (手札から場に出す際のアニメーションと処理)
     -   **L2210**: `runAiTurn` (CPUの行動選択アルゴリズム)
-    -   **L3000 〜 (最後の方)**: `return` (JSX構造: フィールド、手札、リーダー、ログ、UIボタン等のレイアウト)
+    -   **L2698**: `handleGlobalMouseUp` (ドラッグ終了時の攻撃/プレイ処理)
+    -   **L3100 〜**: `return` (JSX構造: フィールド、手札、リーダー、ログ、UIボタン等のレイアウト)
 
 ### TitleScreen.tsx / ClassSelectScreen.tsx
 ゲーム開始前の画面。構成はシンプル。
