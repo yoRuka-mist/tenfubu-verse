@@ -2973,15 +2973,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // Board Drag (Attack)
-    const handleBoardMouseDown = (e: React.MouseEvent, index: number) => {
-        // Inspect
-        const card = player.board[index];
-        if (card) setSelectedCard({ card, owner: 'PLAYER' });
+    // CRITICAL: Use instanceId to find the actual board index, since visualPlayerBoard may have different indices
+    const handleBoardMouseDown = (e: React.MouseEvent, visualIndex: number, instanceId?: string) => {
         e.stopPropagation();
 
         // Use fresh state for validation to fix evolution-attack sync issues
         const currentState = gameStateRef.current;
-        const currentCard = currentState.players[currentPlayerId].board[index];
+        const playerBoard = currentState.players[currentPlayerId].board;
+
+        // Find actual board index using instanceId (critical for correct targeting when board has nulls)
+        const actualIndex = instanceId
+            ? playerBoard.findIndex(c => c && (c as any).instanceId === instanceId)
+            : visualIndex;
+
+        const currentCard = actualIndex >= 0 ? playerBoard[actualIndex] : null;
+
+        // Inspect - set selected card
+        if (currentCard) setSelectedCard({ card: currentCard, owner: 'PLAYER' });
 
         if (currentState.activePlayerId === currentPlayerId && (currentCard as any)?.canAttack) {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -2989,7 +2997,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const startGameCoords = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
             const newState = {
                 sourceType: 'BOARD' as const,
-                sourceIndex: index,
+                sourceIndex: actualIndex, // Use actual board index, not visual index
                 sourceInstanceId: (currentCard as any).instanceId, // Use fresh instanceId
                 startX: startGameCoords.x,
 
@@ -3922,7 +3930,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 return (
                                     <div key={c?.instanceId || `empty-plr-${i}`}
                                         ref={el => playerBoardRefs.current[i] = el}
-                                        onMouseDown={(e) => handleBoardMouseDown(e, i)}
+                                        onMouseDown={(e) => handleBoardMouseDown(e, i, c?.instanceId)}
                                         onClick={(e) => e.stopPropagation()} // Prevent background click from validating selection
                                         onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: c?.instanceId })}
                                         onMouseLeave={() => setHoveredTarget(null)}

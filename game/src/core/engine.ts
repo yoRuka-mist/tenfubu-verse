@@ -1552,8 +1552,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             newState.activePlayerId = nextPlayerId;
             newState.pendingEffects = newPendingEffects;
 
-            // Turn Count: Increment only if returning to P1 (Round Logic)
-            if (nextPlayerId === 'p1') {
+            // Turn Count: Increment when returning to the FIRST player (Round Logic)
+            // This ensures turnCount represents the actual turn number for both players
+            if (nextPlayerId === state.firstPlayerId) {
                 newState.turnCount += 1;
             }
 
@@ -1803,6 +1804,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         console.log('[Engine] Cannot Super Evolve: No SEP');
                         return newState;
                     }
+
+                    // Check if already evolved this turn (shared limit with normal evolve)
+                    if (!player.canEvolveThisTurn) {
+                        console.log('[Engine] Cannot Super Evolve: Already evolved this turn');
+                        return newState;
+                    }
                 }
 
                 player.sep = Math.max(0, player.sep - 1);
@@ -1843,6 +1850,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                     if (player.evolutionsUsed >= 2) { // Simple limit check
                         console.log('[Engine] Cannot Evolve: Limit reached');
+                        return newState;
+                    }
+
+                    // Check if already evolved this turn (1 evolution per turn limit)
+                    if (!player.canEvolveThisTurn) {
+                        console.log('[Engine] Cannot Evolve: Already evolved this turn');
                         return newState;
                     }
                 }
