@@ -2212,6 +2212,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const dragStateRef = React.useRef<{
         sourceType: 'HAND' | 'BOARD' | 'EVOLVE';
         sourceIndex: number;
+        sourceInstanceId?: string; // Add instanceId
         startX: number; // Screen coordinates
         startY: number; // Screen coordinates
         currentX: number; // Screen coordinates
@@ -2903,7 +2904,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Hand Click / Drag Start
     const handleHandMouseDown = (e: React.MouseEvent, index: number) => {
         // --- PREVENTION: Do not start a new drag if one is active ---
-        if (dragStateRef.current) return;
+        if (dragStateRef.current || playingCardAnim || animatingCard) return;
 
         const card = player.hand[index];
         e.stopPropagation();
@@ -2949,15 +2950,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         if (card) setSelectedCard({ card, owner: 'PLAYER' });
         e.stopPropagation();
 
-        if (gameState.activePlayerId === currentPlayerId && (card as any)?.canAttack) {
+        // Use fresh state for validation to fix evolution-attack sync issues
+        const currentState = gameStateRef.current;
+        const currentCard = currentState.players[currentPlayerId].board[index];
+
+        if (currentState.activePlayerId === currentPlayerId && (currentCard as any)?.canAttack) {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             // Use Screen Coords directly
             const startGameCoords = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
             const newState = {
                 sourceType: 'BOARD' as const,
                 sourceIndex: index,
-                sourceInstanceId: (card as any).instanceId,
+                sourceInstanceId: (currentCard as any).instanceId, // Use fresh instanceId
                 startX: startGameCoords.x,
+
                 startY: startGameCoords.y,
                 currentX: e.clientX,
                 currentY: e.clientY,
@@ -4541,8 +4547,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <AttackEffect
                             key={effect.key}
                             type={effect.type}
-                            x={effect.x}
-                            y={effect.y}
+                            x={effect.x * scale}
+                            y={effect.y * scale}
                             onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
                             audioSettings={audioSettings}
                         />
