@@ -3,7 +3,7 @@ import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
-import { canEvolve } from '../core/abilities';
+import { canEvolve, canSuperEvolve } from '../core/abilities';
 
 // Leader Images
 const azyaLeaderImg = '/leaders/azya_leader.png';
@@ -1239,7 +1239,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Effect Processing State
     const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
-    const [turnNotification, setTurnNotification] = React.useState<string | null>(null); // Notification State
+    const [turnNotification, setTurnNotification] = React.useState<string | null>(null);
+    const [notifiedTurn, setNotifiedTurn] = React.useState<number>(-1); // Track notified turn
     const processingHandledRef = React.useRef<any>(null);
 
     // Generic Card Animation (e.g. Draw, Generate)
@@ -1589,22 +1590,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Only show for current player
         if (gameState.activePlayerId !== currentPlayerId) return;
 
+        // Avoid repeated notifications for the same turn
+        if (notifiedTurn === gameState.turnCount) return;
+
         const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
+        const player = gameState.players[currentPlayerId];
         const turn = gameState.turnCount;
 
-        // Evolve: P1 Turn 5, P2 Turn 4
-        const evolveTurn = isFirstPlayer ? 5 : 4;
-        // Super Evolve: P1 Turn 7, P2 Turn 6
-        const superEvolveTurn = isFirstPlayer ? 7 : 6;
-
-        if (turn === superEvolveTurn) {
+        // Check Super Evolve capability
+        if (canSuperEvolve(player, turn, isFirstPlayer)) {
             setTurnNotification('SUPER_EVOLVE_READY');
+            setNotifiedTurn(turn);
             setTimeout(() => setTurnNotification(null), 3000);
-        } else if (turn === evolveTurn) {
-            setTurnNotification('EVOLVE_READY');
-            setTimeout(() => setTurnNotification(null), 3000);
+            return;
         }
-    }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId]);
+
+        // Check Normal Evolve capability
+        if (canEvolve(player, turn, isFirstPlayer)) {
+            setTurnNotification('EVOLVE_READY');
+            setNotifiedTurn(turn);
+            setTimeout(() => setTurnNotification(null), 3000);
+            return;
+        }
+    }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId, notifiedTurn]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
