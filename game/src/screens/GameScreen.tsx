@@ -1288,7 +1288,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }
     const [activeEffects, setActiveEffects] = React.useState<ActiveEffectState[]>([]);
 
-    const playEffect = (effectType: any, targetPlayerId?: string, targetIndex?: number) => {
+    // CRITICAL: playEffect now accepts instanceId for accurate visual positioning
+    // This ensures the effect plays on the correct card even when board indices differ from visual indices
+    const playEffect = (effectType: any, targetPlayerId?: string, targetIndex?: number, targetInstanceId?: string) => {
         if (!effectType) return;
 
         // NO SHAKE for SPELLS (Assuming SPELL effect types or derived by context?)
@@ -1322,7 +1324,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         } else if (targetIndex !== undefined && targetIndex >= 0) {
             const refs = isOpponentTarget ? opponentBoardRefs : playerBoardRefs;
-            const el = refs.current[targetIndex];
+            const visualBoard = isOpponentTarget ? visualOpponentBoard : visualPlayerBoard;
+
+            // CRITICAL: Find visual index using instanceId if provided, otherwise use targetIndex
+            // This ensures effect plays on the correct visual card position
+            let visualIndex = targetIndex;
+            if (targetInstanceId) {
+                const foundIndex = visualBoard.findIndex((c: any) => c && c.instanceId === targetInstanceId);
+                if (foundIndex >= 0) {
+                    visualIndex = foundIndex;
+                }
+            }
+
+            const el = refs.current[visualIndex];
             if (el) {
                 const rect = el.getBoundingClientRect();
                 // Convert screen coordinates to game container coordinates
@@ -1399,7 +1413,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     const [targetingState, setTargetingState] = React.useState<{
         type: 'PLAY' | 'EVOLVE';
-        sourceIndex: number;
+        sourceIndex: number; // Actual board index for engine processing
+        sourceInstanceId?: string; // Card instance ID for accurate lookup
+        sourceVisualIndex?: number; // Visual board index for animation position
         useSep?: boolean;
         allowedTargetPlayerId?: string; // Validated target side
     } | null>(null);
@@ -1422,8 +1438,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const lastBgmKey = 'lastPlayedBgm';
     const selectBgm = React.useCallback((className: string) => {
         const bgmPools: Record<string, string[]> = {
-            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3'],
-            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3']
+            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3', '/bgm/kingetsu.mp3'],
+            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3', '/bgm/kingetsu.mp3']
         };
         const currentPool = bgmPools[className] || bgmPools['SENKA'];
         const lastPlayed = sessionStorage.getItem(lastBgmKey);
@@ -2068,15 +2084,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // EVOLVE_ANIM: Remote evolve animation start (before game state changes)
             if (msg.type === 'EVOLVE_ANIM') {
-                const { playerId, followerIndex, useSep, targetId } = msg.payload;
+                const { playerId, followerIndex, useSep, targetId, instanceId: remoteInstanceId } = msg.payload;
                 const targetFollower = gameState.players[playerId]?.board[followerIndex];
                 if (targetFollower) {
                     // Use card's evolvedImageUrl directly, or fallback to definition
                     const evolvedImageUrl = targetFollower.evolvedImageUrl || getCardDefinition(targetFollower.id)?.evolvedImageUrl;
 
-                    // Get opponent's board element for accurate position
+                    // CRITICAL: Find visual index by matching instanceId in visualOpponentBoard
+                    // followerIndex is the actual board index, but opponentBoardRefs uses visual board indices
+                    // Prefer instanceId from network message for accuracy, fallback to local lookup
+                    const targetInstanceId = remoteInstanceId || (targetFollower as any).instanceId;
+                    const visualIndex = visualOpponentBoard.findIndex(
+                        (c: any) => c && c.instanceId === targetInstanceId
+                    );
+
+                    // Get opponent's board element for accurate position (use visual index)
                     // Since playerId is the remote player, their board is shown as opponentBoard (top of screen)
-                    const cardEl = opponentBoardRefs.current[followerIndex];
+                    const cardEl = visualIndex >= 0 ? opponentBoardRefs.current[visualIndex] : null;
                     const currentScale = scaleInfoRef.current.scale;
                     const screenCenterY = window.innerHeight / 2;
 
@@ -2097,7 +2121,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         startX,
                         startY,
                         phase: 'ZOOM_IN',
-                        followerIndex,
+                        followerIndex, // Keep actual board index for engine processing
                         sourcePlayerId: playerId,
                         useSep: useSep || false,
                         targetId,
@@ -2202,7 +2226,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const targetIdx = payload.targetIsLeader ? -1 : payload.targetIndex;
                     const targetPid = playerId === 'p1' ? 'p2' : 'p1';
                     if (attackerCard) {
-                        playEffect(attackerCard.attackEffectType, targetPid, targetIdx);
+                        // Get target instanceId for accurate visual positioning
+                        const targetPlayer = gameState.players[targetPid];
+                        const targetCard = payload.targetIsLeader ? null : targetPlayer?.board[payload.targetIndex];
+                        const targetInstanceId = targetCard ? (targetCard as any).instanceId : undefined;
+                        playEffect(attackerCard.attackEffectType, targetPid, targetIdx, targetInstanceId);
                     }
                 } else if (action.type === 'PLAY_CARD') {
                     // Note: Animation is now handled by PLAY_CARD_ANIM message
@@ -2290,12 +2318,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [activeEffects, animatingCard, playingCardAnim, evolveAnimation]);
 
     // Handle Evolve with Animation
-    const handleEvolveWithAnimation = (followerIndex: number, useSep: boolean, targetId?: string) => {
-        const card = playerRef.current.board[followerIndex];
+    // CRITICAL: Use instanceId to ensure animation and processing target the same card
+    const handleEvolveWithAnimation = (visualIndex: number, useSep: boolean, targetId?: string, instanceId?: string) => {
+        const playerBoard = playerRef.current.board;
+
+        // Find actual board index using instanceId (critical for correct targeting)
+        const actualFollowerIndex = instanceId
+            ? playerBoard.findIndex(c => c && (c as any).instanceId === instanceId)
+            : visualIndex;
+
+        const card = actualFollowerIndex >= 0 ? playerBoard[actualFollowerIndex] : null;
         if (!card) return;
 
-        // Get the card's current position on the board
-        const cardEl = playerBoardRefs.current[followerIndex];
+        // Get the card's current position on the board (using visual index for display position)
+        const cardEl = playerBoardRefs.current[visualIndex];
 
         // Default to board center if card element is missing
         let startX = window.innerWidth / 2;
@@ -2308,10 +2344,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         // Send animation start message to opponent immediately (for sync)
+        // CRITICAL: Send actualFollowerIndex (real board index) for engine processing
+        // Also send instanceId for accurate visual positioning on opponent's screen
+        const cardInstanceId = (card as any).instanceId;
         if (gameMode !== 'CPU' && connected && adapter) {
             adapter.send({
                 type: 'EVOLVE_ANIM',
-                payload: { playerId: currentPlayerId, followerIndex, useSep, targetId }
+                payload: { playerId: currentPlayerId, followerIndex: actualFollowerIndex, useSep, targetId, instanceId: cardInstanceId }
             });
         }
 
@@ -2321,7 +2360,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             startX,
             startY,
             phase: 'ZOOM_IN',
-            followerIndex,
+            followerIndex: actualFollowerIndex, // Use actual board index for engine processing
             useSep,
             targetId,
             sourcePlayerId: currentPlayerId
@@ -2683,8 +2722,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         if (c) {
                                             // Since it's random 2, we just show effects on the board or guess
                                             // For visuals, showing it on 2 random valid targets is fine
+                                            const cardInstanceId = (c as any).instanceId;
                                             setTimeout(() => {
-                                                playEffect('SHOT', currentPlayerId, i);
+                                                playEffect('SHOT', currentPlayerId, i, cardInstanceId);
                                             }, 200);
                                         }
                                     });
@@ -2703,7 +2743,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         const targetIdx = playerBoard.findIndex(c => c?.instanceId === targetId);
                                         if (targetIdx !== -1) {
                                             setTimeout(() => {
-                                                playEffect('THUNDER', currentPlayerId, targetIdx);
+                                                playEffect('THUNDER', currentPlayerId, targetIdx, targetId);
                                             }, 400);
                                         }
                                     }
@@ -2883,18 +2923,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
 
                             // Visual Feedback
-                            // Visual Feedback - ATTACKER
-                            playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex);
+                            // Visual Feedback - ATTACKER (CPU -> Player)
+                            // Get target instanceId for accurate visual positioning
+                            const targetCard = targetIsLeader ? null : playerBoard[targetIndex];
+                            const targetInstanceId = targetCard ? (targetCard as any).instanceId : undefined;
+                            playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
 
-                            // Counter-Attack Visuals
+                            // Counter-Attack Visuals (Player -> CPU)
                             if (!targetIsLeader && targetIndex >= 0) {
                                 const defender = playerBoard[targetIndex];
                                 if (defender && (defender.currentAttack || 0) > 0) {
                                     // Defender attacks Attacker (who is at index 'i' on Opponent Board)
                                     // Delayed for overlap effect
+                                    const attackerInstanceId = (attacker as any).instanceId;
                                     setTimeout(() => {
                                         // Use defender's effect type, targeting the attacker (index i on opponent board)
-                                        playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, i);
+                                        playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, i, attackerInstanceId);
                                     }, 200); // Shorter overlap
                                 }
                             }
@@ -3196,6 +3240,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     return;
                                 }
 
+                                // Get instanceIds for accurate visual effect positioning
+                                const targetInstanceId = currentHover.instanceId;
+                                const attackerInstanceId = currentDrag.sourceInstanceId;
+
+                                // Get defender card for counter-attack
+                                const defender = !targetIsLeader && targetIndex >= 0 ? opponent.board[targetIndex] : null;
+
                                 // Capture attack parameters IMMEDIATELY before any async operations
                                 const attackParams = {
                                     attackerIndex: actualAttackerIndex,
@@ -3212,20 +3263,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     payload: attackParams
                                 });
 
-                                // Correctly pass target info to playEffect (runs concurrently with dispatch)
+                                // Correctly pass target info to playEffect with instanceId for accurate positioning
                                 const attackType = attackerCard?.attackEffectType || 'SLASH';
-                                playEffect(attackType, opponentPlayerId, targetIsLeader ? -1 : targetIndex);
+                                playEffect(attackType, opponentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
                                 triggerShake();
 
                                 // Counter-Attack Visuals for Player Attack
-                                if (!targetIsLeader && targetIndex >= 0) {
-                                    const defender = opponent.board[targetIndex];
-                                    if (defender && (defender.currentAttack || 0) > 0) {
-                                        // Defender (Opponent) attacks Attacker (Player index sourceIndex)
-                                        setTimeout(() => {
-                                            playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, actualAttackerIndex);
-                                        }, 200);
-                                    }
+                                if (!targetIsLeader && defender && (defender.currentAttack || 0) > 0) {
+                                    // Defender (Opponent) attacks Attacker (Player)
+                                    // Use instanceIds for accurate visual positioning
+                                    setTimeout(() => {
+                                        playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, actualAttackerIndex, attackerInstanceId);
+                                    }, 200);
                                 }
                             }
                         }
@@ -3236,8 +3285,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
                 // Evolve Logic
                 else if (currentDrag.sourceType === 'EVOLVE' && currentHover && currentHover.type === 'FOLLOWER' && currentHover.playerId === currentPlayerId) {
-                    const followerIndex = currentHover.index!;
-                    const card = playerRef.current.board[followerIndex];
+                    const visualFollowerIndex = currentHover.index!;
+                    const followerInstanceId = currentHover.instanceId;
+
+                    // CRITICAL: Find actual board index using instanceId for consistent processing
+                    const playerBoard = playerRef.current.board;
+                    const actualFollowerIndex = followerInstanceId
+                        ? playerBoard.findIndex(c => c && (c as any).instanceId === followerInstanceId)
+                        : visualFollowerIndex;
+
+                    const card = actualFollowerIndex >= 0 ? playerBoard[actualFollowerIndex] : null;
+                    if (!card) return;
 
                     // Check for Target Selection Requirement (Evolve or Super Evolve Trigger)
                     const isSuper = (currentDrag as any).useSep;
@@ -3254,12 +3312,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     );
 
                     if (needsTarget && hasValidTargets) {
-                        setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex, useSep: (currentDrag as any).useSep, allowedTargetPlayerId: opponentPlayerId });
+                        // Store both visual index and instanceId for targeting state
+                        setTargetingState({ type: 'EVOLVE', sourceIndex: actualFollowerIndex, sourceInstanceId: followerInstanceId, sourceVisualIndex: visualFollowerIndex, useSep: (currentDrag as any).useSep, allowedTargetPlayerId: opponentPlayerId });
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
                         // Start evolution animation instead of direct dispatch
-                        handleEvolveWithAnimation(followerIndex, (currentDrag as any).useSep);
+                        // Pass both visual index (for position) and instanceId (for correct targeting)
+                        handleEvolveWithAnimation(visualFollowerIndex, (currentDrag as any).useSep, undefined, followerInstanceId);
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     }
@@ -3370,15 +3430,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // --- C_Y Visuals Trigger ---
             if (animCard.id === 'c_y') {
                 // 1. Lightning on Target (Now SUMI)
-                playEffect('SUMI', 'p2', actualTargetIndex);
+                playEffect('SUMI', 'p2', actualTargetIndex, targetId);
 
                 // 2. AOE on all OTHER enemies
                 const opponentBoard = gameStateRef.current.players[opponentPlayerId].board; // Safe access via Ref
                 opponentBoard.forEach((c, i) => {
                     if (c) {
+                        const cardInstanceId = (c as any).instanceId;
                         // Delay slightly for dramatic effect?
                         setTimeout(() => {
-                            playEffect('SUMI', opponentPlayerId, i);
+                            playEffect('SUMI', opponentPlayerId, i, cardInstanceId);
                         }, 300);
                     }
                 });
@@ -3387,15 +3448,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // --- 退職代行 (s_resignation_proxy) Visuals ---
             if (animCard.id === 's_resignation_proxy') {
                 // 1. Target enemy destruction effect
-                playEffect('SUMI', targetPlayerId, actualTargetIndex);
+                playEffect('SUMI', targetPlayerId, actualTargetIndex, targetId);
 
                 // 2. Self random destruction effect (Delayed slightly)
                 setTimeout(() => {
                     const selfBoard = gameStateRef.current.players[currentPlayerId].board;
-                    const validSelfIndices = selfBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                    const validSelfIndices: { index: number; instanceId: string }[] = [];
+                    selfBoard.forEach((c, i) => {
+                        if (c) validSelfIndices.push({ index: i, instanceId: (c as any).instanceId });
+                    });
                     if (validSelfIndices.length > 0) {
-                        const randomIdx = validSelfIndices[Math.floor(Math.random() * validSelfIndices.length)];
-                        playEffect('SUMI', currentPlayerId, randomIdx);
+                        const randomTarget = validSelfIndices[Math.floor(Math.random() * validSelfIndices.length)];
+                        playEffect('SUMI', currentPlayerId, randomTarget.index, randomTarget.instanceId);
                     }
                 }, 500);
             }
@@ -3424,8 +3488,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
                     opponentBoard.forEach((c, i) => {
                         if (c) {
+                            const cardInstanceId = (c as any).instanceId;
                             setTimeout(() => {
-                                playEffect('SHOT', opponentPlayerId, i);
+                                playEffect('SHOT', opponentPlayerId, i, cardInstanceId);
                             }, 200);
                         }
                     });
@@ -3440,7 +3505,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     // 2. Destroy Target
                     setTimeout(() => {
-                        playEffect('THUNDER', targetPlayerId, targetIndex);
+                        playEffect('THUNDER', targetPlayerId, targetIndex, targetId);
                     }, 400);
                 }
 
@@ -3497,7 +3562,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }, 2000);
         } else if (targetingState.type === 'EVOLVE') {
             // Start evolution animation with target
-            handleEvolveWithAnimation(targetingState.sourceIndex, !!targetingState.useSep, targetId);
+            // Use sourceVisualIndex for position and sourceInstanceId for correct targeting
+            const visualIndex = targetingState.sourceVisualIndex ?? targetingState.sourceIndex;
+            handleEvolveWithAnimation(visualIndex, !!targetingState.useSep, targetId, targetingState.sourceInstanceId);
         }
 
         // 3. Reset
