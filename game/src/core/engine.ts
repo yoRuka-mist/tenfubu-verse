@@ -1642,10 +1642,11 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 // Resolution of RANDOM targets for visualization
                 let resolvedTargetIds: string[] | undefined = undefined;
 
-                if (e.targetType === 'OPPONENT' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE') {
+                if (e.targetType === 'OPPONENT' || e.targetType === 'SELF' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE') {
                     // Pre-calculate targets for visualization
                     // Note: This logic duplicates processSingleEffect partially but is needed for UI cues
-                    const targetPid = action.playerId === 'p1' ? 'p2' : 'p1'; // Default to opponent for most effects
+                    // Determine target player based on effect targetType
+                    const targetPid = e.targetType === 'SELF' ? action.playerId : (action.playerId === 'p1' ? 'p2' : 'p1');
                     const targetBoard = newState.players[targetPid].board;
 
                     if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
@@ -1808,7 +1809,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 let resolvedTargetIds: string[] | undefined = undefined;
 
                 if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
-                    const targetPid = action.playerId === 'p1' ? 'p2' : 'p1';
+                    // Determine target player based on effect targetType
+                    const targetPid = e.targetType === 'SELF' ? action.playerId : (action.playerId === 'p1' ? 'p2' : 'p1');
                     const targetBoard = newState.players[targetPid].board;
                     const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
 
