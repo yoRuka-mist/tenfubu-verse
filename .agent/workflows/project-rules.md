@@ -31,6 +31,8 @@ description: プロジェクトの開発ルールとワークフロー
 4. 動作確認
 5. **Gitにコミット**
 6. walkthrough.mdを更新
+7. **project_map.mdの確認**: 作業前に必ず `project_map.md` を参照し、該当箇所の行数を確認する
+8. **project_map.mdの更新**: 修正によって行数がズレたり、新しい重要な処理を追加した場合は、必ず `project_map.md` を最新の状態に更新する
 
 ## 注意事項
 

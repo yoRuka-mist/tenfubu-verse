@@ -1,31 +1,28 @@
-# Walkthrough - Card Animation & Effect Refining
+# Walkthrough - UI/Animation & Card Effect Refining
 
 ## Changes
 
-### 1. `game/src/screens/GameScreen.tsx`
+### 1. ターゲット選択機能の改善 (`GameScreen.tsx`)
+- **味方フォロワーの選択**: `handlePlayCard` において、効果タイプ（`GRANT_PASSIVE`, `BUFF_STATS`等）を判定し、味方フォロワーを選択対象（`allowedTargetPlayerId = currentPlayerId`）に設定できるようにしました。
+- **ターゲットUI**: 選択が必要な際、味方なら緑、敵なら赤のグローをフォロワーに表示し、メッセージでも「味方/相手のフォロワーを選択してください」とガイドするようにしました。
 
-#### Use of `instanceId` in `PLAY_CARD`
-- Updated `handlePlayCard` and `handleTargetClick` to include `instanceId` in the `PLAY_CARD` action payload.
-- This ensures that the engine reuses the existing ID from the hand card instead of generating a new one.
-- **Effect**: The `isSpecialSummoning` logic correctly identifies played cards as "from hand" (existing ID) vs "special summon" (new ID), preventing the unwanted fade-in animation for played cards.
+### 2. エンジン・カード効果の修正 (`engine.ts`)
+- **対象選択の共通化**: `engine.ts` に `getBoardCardById` ヘルパーを追加し、味方・敵を問わずインスタンスIDからフォロワーを特定して効果（ダメージ、破壊、バフ付与）を適用できるようにしました。これにより「翼」などの効果が正常に動作します。
+- **「米」のコスト変更**: コストを 1 から 0 に変更しました。
+- **「あじゃ」のステータスバフ修正**: `BUFF_STATS` に名前フィルタリングを追加し、「あじゃ」の超進化バフがつぶまる・ゆうなぎ・なゆたにのみ適用されるように仕様を修正しました。
 
-#### Removal of Destruction `IMPACT` Effect
-- Commented out the `useEffect` block that triggered `playEffect('IMPACT')` when a card enters `isDying` state.
-- **Effect**: Cards now only use the `card-dying` CSS animation (glowing fade-out) when destroyed, as requested.
+### 3. 進化アニメーションの洗練 (`GameScreen.tsx`)
+- **サイズ調整**: 演出中の拡大サイズを 360x480 の 3/4（270x360相当）に縮小し、画面全体のバランスを整えました。
+- **着地サイズの同期**: `scale 1.0` を維持することで、着地時にボード上のカードサイズ（90x120）と正確に一致するようにしました。
+- **盤面カードの即時非表示**: アニメーション開始時に盤面のカードが即座に消えるよう、`transitionProperty: 'none'` を適用して不自然なフェードを排除しました。
 
-#### Evolution Animation Timing
-- In `EvolutionAnimation` component (`WHITE_FADE` phase):
-    - Changed progress increment from `0.035` to `0.025`.
-    - Changed threshold from `1.2` to `1.2`.
-    - **Effect**: The energy charge phase now lasts longer (~1.9s), addressing the user's feedback that it was too short.
-
-### 2. `game/src/core/types.ts`
-
-#### `Card` Interface Update
-- Added `instanceId?: string;` to the `Card` interface.
-- **Reason**: To solve TypeScript errors when accessing `instanceId` on card objects from `player.hand`. While `BoardCard` defines it, `Card` did not, but runtime objects in hand do possess it.
+### 4. カードプレイ演出の改善 (`GameScreen.tsx`, `Card.css`)
+- **着地座標の修正**: `finalY` の計算を修正し、カードがボードのスロット（中央付近）に正確に着地するようにしました。
+- **召喚アニメーションの分離**: `Card.css` のデフォルト transition を削除し、通常プレイではフェードなしで綺麗に繋がり、特殊召喚時のみ `cardSummonAppear` によるフェードインが発生するようにしました。
 
 ## Verification
-- **Card Play**: Playing a Follower from hand should visually transition from the "flying" animation directly to the board slot without a secondary fade-in/flash. Special summons (e.g., from effects) should still fade in.
-- **Destruction**: Destroyed cards should glow and fade out smoothly without an "explosion" sprite overlay.
-- **Evolution**: The white charging phase of evolution should feel weightier and last approx. 0.5s longer than the previous fast version.
+- **味方対象効果**: 「翼」を使用して、自分のフォロワーに[疾走]を付与できることを確認。
+- **進化アニメーション**: カードが手前に来る瞬間に盤面のカードがパッと消え、適切なサイズで演出が行われ、最後に盤面サイズにぴったり収まることを確認。
+- **あじゃの効果**: 超進化時に召喚された特定の3体のみが +1/+1 されることを確認。
+- **米のコスト**: 手札でコスト 0 と表示され、PP消費なしでプレイできることを確認。
+- **着地位置**: プレイヤー・CPU共に、カードプレイ後にカードが正しい位置に留まることを確認。
