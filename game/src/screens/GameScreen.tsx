@@ -3,7 +3,7 @@ import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
-import { canEvolve, canSuperEvolve } from '../core/abilities';
+import { canEvolve } from '../core/abilities';
 
 // Leader Images
 const azyaLeaderImg = '/leaders/azya_leader.png';
@@ -1590,27 +1590,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Only show for current player
         if (gameState.activePlayerId !== currentPlayerId) return;
 
-        // Avoid repeated notifications for the same turn
-        if (notifiedTurn === gameState.turnCount) return;
-
         const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
-        const player = gameState.players[currentPlayerId];
         const turn = gameState.turnCount;
 
-        // Check Super Evolve capability
-        if (canSuperEvolve(player, turn, isFirstPlayer)) {
+        // Evolve: P1 Turn 5, P2 Turn 5 (Adjusted based on USER feedback that it appeared at T3)
+        const evolveTurn = isFirstPlayer ? 5 : 5;
+        // Super Evolve: P1 Turn 7, P2 Turn 7
+        const superEvolveTurn = isFirstPlayer ? 7 : 7;
+
+        // Show ONLY on the turn it becomes available
+        if (turn === superEvolveTurn) {
+            if (notifiedTurn === turn) return; // Already shown for THIS turn (prevents re-notification if state updates)
             setTurnNotification('SUPER_EVOLVE_READY');
             setNotifiedTurn(turn);
             setTimeout(() => setTurnNotification(null), 3000);
-            return;
-        }
-
-        // Check Normal Evolve capability
-        if (canEvolve(player, turn, isFirstPlayer)) {
+        } else if (turn === evolveTurn) {
+            if (notifiedTurn === turn) return;
             setTurnNotification('EVOLVE_READY');
             setNotifiedTurn(turn);
             setTimeout(() => setTurnNotification(null), 3000);
-            return;
         }
     }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId, notifiedTurn]);
 
@@ -4607,20 +4605,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* --- Turn Notification Overlay --- */}
                 {turnNotification && (
                     <div style={{
-                        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                        fontSize: '4rem', fontWeight: 'bold', color: '#fff',
-                        textShadow: '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 140, 0, 0.6)',
-                        zIndex: 9000, pointerEvents: 'none',
-                        animation: 'notificationFade 3s forwards',
-                        whiteSpace: 'nowrap'
+                        position: 'fixed', // Use fixed to ensure it's relative to the viewport
+                        top: '50%',
+                        left: 0,
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        transform: 'translateY(-50%)',
+                        zIndex: 9000,
+                        pointerEvents: 'none',
+                        animation: 'notificationFade 3s forwards'
                     }}>
-                        {turnNotification === 'EVOLVE_READY' ? '進化可能！' : '超進化可能！'}
+                        <div style={{
+                            padding: '24px 100px',
+                            background: 'rgba(0, 0, 0, 0.75)',
+                            backdropFilter: 'blur(12px)',
+                            borderTop: turnNotification === 'EVOLVE_READY' ? '3px solid rgba(255, 215, 0, 0.6)' : '3px solid rgba(180, 0, 255, 0.6)',
+                            borderBottom: turnNotification === 'EVOLVE_READY' ? '3px solid rgba(255, 215, 0, 0.6)' : '3px solid rgba(180, 0, 255, 0.6)',
+                            boxShadow: turnNotification === 'EVOLVE_READY'
+                                ? '0 0 50px rgba(255, 180, 0, 0.4), inset 0 0 30px rgba(255, 215, 0, 0.1)'
+                                : '0 0 50px rgba(180, 0, 255, 0.4), inset 0 0 30px rgba(180, 0, 255, 0.1)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <span style={{
+                                fontSize: '6rem',
+                                fontWeight: '900',
+                                fontFamily: '"Times New Roman", "Yu Mincho", "MS Mincho", serif',
+                                color: '#fff',
+                                letterSpacing: '0.8rem',
+                                textShadow: turnNotification === 'EVOLVE_READY'
+                                    ? '0 0 15px rgba(255, 215, 0, 0.9), 0 0 30px rgba(255, 180, 0, 0.7), 2px 2px 4px rgba(0,0,0,0.8)'
+                                    : '0 0 15px rgba(180, 0, 255, 0.9), 0 0 30px rgba(140, 0, 255, 0.7), 2px 2px 4px rgba(0,0,0,0.8)',
+                                WebkitTextStroke: turnNotification === 'EVOLVE_READY' ? '1.5px #ffd700' : '1.5px #b400ff'
+                            }}>
+                                {turnNotification === 'EVOLVE_READY' ? '進化可能' : '超進化可能'}
+                            </span>
+                        </div>
                         <style>{`
                             @keyframes notificationFade {
-                                0% { opacity: 0; transform: translate(-50%, -40%); }
-                                20% { opacity: 1; transform: translate(-50%, -50%); }
-                                80% { opacity: 1; transform: translate(-50%, -50%); }
-                                100% { opacity: 0; transform: translate(-50%, -60%); }
+                                0% { opacity: 0; transform: translateY(-40%) scale(0.85); filter: blur(10px); }
+                                15% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
+                                85% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
+                                100% { opacity: 0; transform: translateY(-60%) scale(1.1); filter: blur(15px); }
                             }
                         `}</style>
                     </div>
