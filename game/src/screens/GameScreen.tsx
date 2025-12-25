@@ -979,13 +979,25 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
 
 // Simple internal component for Game Over
-const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave }: { winnerId: string, playerId: string, onRematch: () => void, onLeave: () => void }) => {
+interface GameOverScreenProps {
+    winnerId: string;
+    playerId: string;
+    onRematch: () => void;
+    onLeave: () => void;
+    isOnline: boolean;
+    myRematchRequested: boolean;
+    opponentRematchRequested: boolean;
+}
+
+const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
     const [timeLeft, setTimeLeft] = React.useState(15);
-    const [rematchRequested, setRematchRequested] = React.useState(false);
+
+    // For online: stop countdown when either player requests rematch
+    const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : myRematchRequested;
 
     React.useEffect(() => {
-        if (rematchRequested) return;
+        if (shouldStopCountdown) return;
         const timer = setInterval(() => {
             setTimeLeft(prev => {
                 if (prev <= 1) {
@@ -997,7 +1009,58 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave }: { winnerId: 
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, [onLeave, rematchRequested]);
+    }, [onLeave, shouldStopCountdown]);
+
+    // Get rematch button text based on state
+    const getRematchButtonText = () => {
+        if (!isOnline) {
+            return myRematchRequested ? '再戦中...' : '再戦';
+        }
+        if (myRematchRequested && opponentRematchRequested) {
+            return '再戦開始...';
+        }
+        if (myRematchRequested) {
+            return '相手を待機中...';
+        }
+        if (opponentRematchRequested) {
+            return '相手が再戦希望！';
+        }
+        return '再戦';
+    };
+
+    const getRematchButtonStyle = () => {
+        const base = {
+            padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold' as const,
+            border: 'none', borderRadius: 12,
+            cursor: myRematchRequested ? 'default' : 'pointer',
+            transform: 'scale(1)', transition: 'transform 0.1s, background 0.2s'
+        };
+
+        if (opponentRematchRequested && !myRematchRequested) {
+            // Opponent wants rematch - highlight the button
+            return {
+                ...base,
+                background: 'linear-gradient(135deg, #f6e05e, #d69e2e)',
+                color: 'black',
+                boxShadow: '0 4px 15px rgba(246, 224, 94, 0.6)',
+                animation: 'pulse 1s infinite'
+            };
+        }
+        if (myRematchRequested) {
+            return {
+                ...base,
+                background: 'linear-gradient(135deg, #718096, #4a5568)',
+                color: 'white',
+                boxShadow: 'none'
+            };
+        }
+        return {
+            ...base,
+            background: 'linear-gradient(135deg, #48bb78, #38a169)',
+            color: 'white',
+            boxShadow: '0 4px 15px rgba(72, 187, 120, 0.4)'
+        };
+    };
 
     return (
         <div style={{
@@ -1006,6 +1069,12 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave }: { winnerId: 
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             animation: 'fadeIn 0.5s ease-out'
         }} onClick={() => { /* background click */ }}>
+            <style>{`
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                }
+            `}</style>
             <div style={{
                 fontSize: '5rem', fontWeight: 900,
                 color: isVictory ? '#f6e05e' : '#a0aec0',
@@ -1018,18 +1087,13 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave }: { winnerId: 
 
             <div style={{ display: 'flex', gap: 20 }}>
                 <button
-                    onClick={() => { setRematchRequested(true); onRematch(); }}
-                    style={{
-                        padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
-                        background: 'linear-gradient(135deg, #48bb78, #38a169)',
-                        color: 'white', border: 'none', borderRadius: 12,
-                        cursor: 'pointer', boxShadow: '0 4px 15px rgba(72, 187, 120, 0.4)',
-                        transform: 'scale(1)', transition: 'transform 0.1s'
-                    }}
-                    onMouseDown={e => e.currentTarget.style.transform = 'scale(0.95)'}
+                    onClick={() => { if (!myRematchRequested) onRematch(); }}
+                    disabled={myRematchRequested}
+                    style={getRematchButtonStyle()}
+                    onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
                     onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    再戦
+                    {getRematchButtonText()}
                 </button>
                 <button
                     onClick={onLeave}
@@ -1040,7 +1104,7 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave }: { winnerId: 
                         cursor: 'pointer'
                     }}
                 >
-                    タイトルへ ({timeLeft})
+                    タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
                 </button>
             </div>
         </div>
@@ -1093,8 +1157,11 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
 };
 
 export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass }) => {
-    // Use provided adapter from LobbyScreen for online play, or create one for CPU mode (which won't be used)
-    const hookResult = useGameNetwork(gameMode === 'CPU' ? 'CPU' : gameMode, targetRoomId);
+    // For online play, use the adapter passed from LobbyScreen
+    // Only use useGameNetwork hook for CPU mode (where it returns nothing)
+    // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
+    const shouldUseHook = gameMode === 'CPU' || !networkAdapter;
+    const hookResult = useGameNetwork(shouldUseHook ? (gameMode === 'CPU' ? 'CPU' : gameMode) : 'CPU', shouldUseHook ? targetRoomId : undefined);
     const adapter = networkAdapter || hookResult.adapter;
     const connected = networkConnected !== undefined ? networkConnected : hookResult.connected;
 
@@ -1142,18 +1209,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Track if game has been synced (for JOIN)
     const [gameSynced, setGameSynced] = useState(gameMode !== 'JOIN');
 
-    // HOST: Send initial game state when connected
+    // Coin toss and game start animation states - declared early for use in INIT_GAME effect
+    const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
+    const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
+    const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
+
+    // Rematch states for online play
+    const [myRematchRequested, setMyRematchRequested] = React.useState(false);
+    const [opponentRematchRequested, setOpponentRematchRequested] = React.useState(false);
+
+    // HOST: Send initial game state when connected AND coin toss is complete
     const initialStateSentRef = useRef(false);
     useEffect(() => {
-        if (gameMode === 'HOST' && connected && adapter && !initialStateSentRef.current) {
-            console.log('[GameScreen] HOST: Sending initial game state to JOIN');
+        if (gameMode === 'HOST' && connected && adapter && !initialStateSentRef.current && coinTossPhase === 'DONE') {
+            console.log('[GameScreen] HOST: Sending initial game state to JOIN after coin toss');
             // Small delay to ensure JOIN's message handler is ready
             setTimeout(() => {
                 adapter.send({ type: 'INIT_GAME', payload: gameState });
                 initialStateSentRef.current = true;
             }, 500);
         }
-    }, [gameMode, connected, adapter, gameState]);
+    }, [gameMode, connected, adapter, gameState, coinTossPhase]);
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
@@ -1190,6 +1266,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         type: 'LEADER' | 'FOLLOWER';
         index?: number;
         playerId: string;
+        instanceId?: string; // Card instance ID for accurate board lookup
     } | null>(null);
 
     // Special Summon Tracking (for cards appearing not from hand)
@@ -1312,9 +1389,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
     }, [audioSettings]);
     const [showMenu, setShowMenu] = React.useState(false);
-    const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
-    const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
-    const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
+    // coinTossPhase, coinTossResult, isGameStartAnim are declared earlier (near line 1145)
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
     const handJustExpandedRef = React.useRef(false); // 手札を展開した直後かどうか
 
@@ -1399,7 +1474,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         effectTimeoutRef.current = setTimeout(() => {
                             setAnimatingCard(null);
                             setIsProcessingEffect(false);
-                            dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
+                            // CPU mode: process all effects locally
+                            // Online mode: only source player sends RESOLVE_EFFECT to network
+                            if (gameMode === 'CPU' || current.sourcePlayerId === currentPlayerId) {
+                                dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+                            }
                             effectTimeoutRef.current = null;
                         }, 600);
                     }, 1000);
@@ -1479,7 +1558,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const postActionDelay = isDamageOrDestroy ? 1000 : 0;
 
             effectTimeoutRef.current = setTimeout(() => {
-                dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: currentPlayerId });
+                // CPU mode: process all effects locally
+                // Online mode: only source player sends RESOLVE_EFFECT to network
+                if (gameMode === 'CPU' || current.sourcePlayerId === currentPlayerId) {
+                    dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+                }
 
                 if (postActionDelay > 0) {
                     effectTimeoutRef.current = setTimeout(() => {
@@ -1739,15 +1822,61 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }, 300);
     };
 
+    // Helper: Start rematch (shared between CPU and online modes)
+    const startRematch = useCallback(() => {
+        // 1. Reset visual and logic artifacts IMMEDIATELY
+        setDamageNumbers([]);
+        setActiveEffects([]);
+        setAnimatingCard(null);
+        setPlayingCardAnim(null);
+        setEvolveAnimation(null);
+        setDrawAnimation(null);
+        setSummonedCardIds(new Set());
+        aiProcessing.current = false;
+        lastProcessedTurn.current = null;
+
+        // 2. Reset rematch states
+        setMyRematchRequested(false);
+        setOpponentRematchRequested(false);
+
+        // 3. Suppress immediate diff detection by clearing and then resetting the Ref
+        const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+        prevPlayersRef.current = freshState.players;
+        prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
+
+        // 4. Force BGM re-roll and restart
+        setBgmLoadedForClass(null);
+
+        // 5. Reset coin toss for new game
+        setCoinTossPhase('IDLE');
+        setCoinTossResult(null);
+        setIsGameStartAnim(false);
+
+        // 6. For online rematch, HOST needs to send new game state after coin toss completes
+        if (gameMode === 'HOST') {
+            initialStateSentRef.current = false;
+        }
+
+        // 7. Update Game State
+        dispatch({ type: 'SYNC_STATE', payload: freshState });
+    }, [playerClass, opponentClass, opponentType, gameMode]);
+
     // Coin Toss and Game Start Animation Sequence
+    // JOIN mode: Skip coin toss, wait for INIT_GAME from HOST
+    // HOST mode: Wait for JOIN to connect before starting coin toss
     useEffect(() => {
-        if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE') {
-            // Start coin toss animation
+        // CPU: Start immediately
+        // HOST: Wait for connection (so JOIN can see the coin toss)
+        // JOIN: Skip (will receive game state from HOST via INIT_GAME)
+        const canStartCoinToss = gameMode === 'CPU' || (gameMode === 'HOST' && connected);
+
+        if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE' && canStartCoinToss) {
+            // Start coin toss animation (HOST and CPU only)
             setCoinTossPhase('TOSSING');
             playSE('coin.mp3', 0.7); // Coin toss sound
 
-            // Determine result (random for CPU, or based on host status for online)
-            const isFirst = gameMode === 'CPU' ? Math.random() > 0.5 : (gameMode === 'HOST');
+            // Determine result (random for CPU, HOST is always first)
+            const isFirst = gameMode === 'CPU' ? Math.random() > 0.5 : true; // HOST is always first
 
             // After toss animation, show result
             setTimeout(() => {
@@ -1794,7 +1923,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }, 1500);
             }, 800);
         }
-    }, [gameState.phase, coinTossPhase, gameMode, playSE]);
+    }, [gameState.phase, coinTossPhase, gameMode, playSE, connected]);
 
 
     // BGM Auto-Play - Initialize based on player class and game start
@@ -1873,12 +2002,147 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 console.log('[GameScreen] JOIN: Received initial game state from HOST');
                 dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
                 setGameSynced(true);
+
+                // Show coin toss result for JOIN (JOIN is p2, so check who goes first)
+                const isJoinFirst = msg.payload.firstPlayerId === 'p2';
+                setCoinTossResult(isJoinFirst ? 'FIRST' : 'SECOND');
+                setCoinTossPhase('RESULT');
+                playSE('coin.mp3', 0.7);
+
+                // After showing result, transition to GAME START
+                setTimeout(() => {
+                    setCoinTossPhase('DONE');
+                    setIsGameStartAnim(true);
+                    setTimeout(() => {
+                        setIsGameStartAnim(false);
+                    }, 1200);
+                }, 1500);
                 return;
             }
 
             // GAME_STATE: Full state sync (legacy support)
             if (msg.type === 'GAME_STATE') {
                 dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                return;
+            }
+
+            // EVOLVE_ANIM: Remote evolve animation start (before game state changes)
+            if (msg.type === 'EVOLVE_ANIM') {
+                const { playerId, followerIndex, useSep, targetId } = msg.payload;
+                const targetFollower = gameState.players[playerId]?.board[followerIndex];
+                if (targetFollower) {
+                    // Use card's evolvedImageUrl directly, or fallback to definition
+                    const evolvedImageUrl = targetFollower.evolvedImageUrl || getCardDefinition(targetFollower.id)?.evolvedImageUrl;
+
+                    // Get opponent's board element for accurate position
+                    // Since playerId is the remote player, their board is shown as opponentBoard (top of screen)
+                    const cardEl = opponentBoardRefs.current[followerIndex];
+                    const currentScale = scaleInfoRef.current.scale;
+                    const screenCenterY = window.innerHeight / 2;
+
+                    // Fallback position: center of opponent's board area
+                    // Opponent board Y = screenCenterY - 70 * scale (center of card slot)
+                    let startX = window.innerWidth / 2;
+                    let startY = screenCenterY - 70 * currentScale;
+
+                    if (cardEl) {
+                        const rect = cardEl.getBoundingClientRect();
+                        startX = rect.left + rect.width / 2;
+                        startY = rect.top + rect.height / 2;
+                    }
+
+                    setEvolveAnimation({
+                        card: targetFollower,
+                        evolvedImageUrl,
+                        startX,
+                        startY,
+                        phase: 'ZOOM_IN',
+                        followerIndex,
+                        sourcePlayerId: playerId,
+                        useSep: useSep || false,
+                        targetId,
+                        isRemote: true
+                    });
+
+                    playSE('fon.mp3', 0.7);
+                }
+                return;
+            }
+
+            // PLAY_CARD_ANIM: Remote card play animation start
+            if (msg.type === 'PLAY_CARD_ANIM') {
+                const { playerId, card } = msg.payload;
+                if (card) {
+                    // Get opponent's board for final position calculation
+                    const opponentBoard = gameState.players[playerId]?.board || [];
+                    const boardIndex = opponentBoard.filter((c: any) => c !== null).length;
+
+                    // Use screen coordinates with scale
+                    const currentScale = scaleInfoRef.current.scale;
+                    const screenCenterX = window.innerWidth / 2;
+                    const screenCenterY = window.innerHeight / 2;
+
+                    // Start from opponent's hand area (top of screen, scaled with 0.6 transform)
+                    const startX = screenCenterX;
+                    const startY = 80 * currentScale; // Approximate center of opponent's hand
+                    const targetX = screenCenterX;
+                    const targetY = screenCenterY - 100 * currentScale;
+
+                    // Calculate final board position in screen coordinates
+                    // Opponent board is at: top = screenCenterY - CARD_HEIGHT * scale / 2 - 70 * scale
+                    // Center of card = top + CARD_HEIGHT * scale / 2 = screenCenterY - 70 * scale
+                    const boardCount = Math.max(1, boardIndex + 1);
+                    const totalWidth = (boardCount - 1) * CARD_SPACING * currentScale;
+                    const startOffset = -totalWidth / 2;
+                    const offsetX = startOffset + boardIndex * CARD_SPACING * currentScale;
+                    const finalX = screenCenterX + offsetX;
+                    const finalY = screenCenterY - 70 * currentScale; // Opponent's board Y position (center of card)
+
+                    if (card.type === 'SPELL') {
+                        // Spell animation - show card flying to center then fade
+                        setPlayingCardAnim({
+                            card,
+                            startX,
+                            startY,
+                            targetX,
+                            targetY,
+                            onComplete: () => {
+                                setPlayingCardAnim(null);
+                            }
+                        });
+                    } else {
+                        // Follower animation
+                        setPlayingCardAnim({
+                            card,
+                            startX,
+                            startY,
+                            targetX,
+                            targetY,
+                            finalX,
+                            finalY,
+                            onComplete: () => {
+                                playSE('gan.mp3', 0.6);
+                                triggerShake();
+                                setPlayingCardAnim(null);
+                            }
+                        });
+                    }
+                }
+                return;
+            }
+
+            // REMATCH_REQUEST: Opponent wants a rematch
+            if (msg.type === 'REMATCH_REQUEST') {
+                console.log('[GameScreen] Opponent requested rematch');
+                setOpponentRematchRequested(true);
+                return;
+            }
+
+            // REMATCH_ACCEPT: Opponent accepted rematch - start new game
+            if (msg.type === 'REMATCH_ACCEPT') {
+                console.log('[GameScreen] Opponent accepted rematch - starting new game');
+                // Both players agreed - start rematch
+                startRematch();
                 return;
             }
 
@@ -1901,16 +2165,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         playEffect(attackerCard.attackEffectType, targetPid, targetIdx);
                     }
                 } else if (action.type === 'PLAY_CARD') {
-                    // Play sound for opponent's card play
-                    const { playerId, payload } = action;
-                    const playerData = gameState.players[playerId];
-                    const card = playerData?.hand[payload.cardIndex];
-                    if (card && card.type !== 'SPELL') {
-                        playSE('gan.mp3', 0.6);
-                    }
+                    // Note: Animation is now handled by PLAY_CARD_ANIM message
+                    // This just applies the game state change
                 } else if (action.type === 'EVOLVE') {
-                    // Play evolve sound for opponent
-                    playSE('evolve.mp3', 0.7);
+                    // Note: Animation is now handled by EVOLVE_ANIM message
+                    // This just applies the game state change
                 } else if (action.type === 'END_TURN') {
                     console.log('[GameScreen] Remote END_TURN received, turn switching to:',
                         action.playerId === 'p1' ? 'p2' : 'p1');
@@ -2002,6 +2261,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             startY = rect.top + rect.height / 2;
         }
 
+        // Send animation start message to opponent immediately (for sync)
+        if (gameMode !== 'CPU' && connected && adapter) {
+            adapter.send({
+                type: 'EVOLVE_ANIM',
+                payload: { playerId: currentPlayerId, followerIndex, useSep, targetId }
+            });
+        }
+
         setEvolveAnimation({
             card,
             evolvedImageUrl: card.evolvedImageUrl,
@@ -2010,7 +2277,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             phase: 'ZOOM_IN',
             followerIndex,
             useSep,
-            targetId
+            targetId,
+            sourcePlayerId: currentPlayerId
         });
         playSE('fon.mp3', 0.7); // Evolve sound
     };
@@ -2142,6 +2410,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             dispatchAndSend({ type: 'PLAY_CARD', playerId: currentPlayerId, payload: { cardIndex: index, instanceId: card.instanceId } });
             setPlayingCardAnim(null);
         };
+
+        // Send PLAY_CARD_ANIM to opponent for synchronized animation
+        if (gameMode !== 'CPU' && connected && adapter) {
+            adapter.send({
+                type: 'PLAY_CARD_ANIM',
+                payload: { playerId: currentPlayerId, cardIndex: index, card }
+            });
+        }
 
         setPlayingCardAnim({
             card,
@@ -2609,8 +2885,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Hand Click / Drag Start
     const handleHandMouseDown = (e: React.MouseEvent, index: number) => {
-        if (gameState.activePlayerId !== currentPlayerId) return;
-
         // --- PREVENTION: Do not start a new drag if one is active ---
         if (dragStateRef.current) return;
 
@@ -2618,17 +2892,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         e.stopPropagation();
 
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const info = {
-            sourceType: 'HAND' as const,
-            sourceIndex: index,
-            startX: rect.left + rect.width / 2, // Center of Card in screen coords
-            startY: rect.top + rect.height / 2, // Center of Card in screen coords
-            currentX: e.clientX,
-            currentY: e.clientY,
-            offsetX: 0,
-            offsetY: 0,
-            canDrag: isHandExpanded // Only allow drag if already expanded
-        };
+
+        // Always allow hand expansion (even on opponent's turn) for viewing cards
         if (!isHandExpanded) {
             setIsHandExpanded(true);
             setSelectedCard({ card, owner: 'PLAYER' });
@@ -2639,6 +2904,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // If already expanded, update selected card
         setSelectedCard({ card, owner: 'PLAYER' });
+
+        // Only allow drag (to play) on player's turn
+        if (gameState.activePlayerId !== currentPlayerId) return;
+
+        const info = {
+            sourceType: 'HAND' as const,
+            sourceIndex: index,
+            startX: rect.left + rect.width / 2, // Center of Card in screen coords
+            startY: rect.top + rect.height / 2, // Center of Card in screen coords
+            currentX: e.clientX,
+            currentY: e.clientY,
+            offsetX: 0,
+            offsetY: 0,
+            canDrag: true // Already expanded, allow drag
+        };
 
         setDragState(info);
         dragStateRef.current = info;
@@ -2762,12 +3042,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             if (needsTarget) {
                                 setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex });
                                 // Don't collapse hand - only collapse on background click
-                                setSelectedCard(null);
+                                // Keep selected card visible during targeting
                                 ignoreClickRef.current = true; // Prevent quick close
                                 setTimeout(() => { ignoreClickRef.current = false; }, 100);
                             } else {
                                 handlePlayCard(currentDrag.sourceIndex, currentDrag.startX, currentDrag.startY);
                                 // Don't collapse hand - only collapse on background click
+                                // Clear selection after playing a card
                                 setSelectedCard(null);
                                 ignoreClickRef.current = true;
                                 setTimeout(() => { ignoreClickRef.current = false; }, 100);
@@ -2802,11 +3083,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         );
                         let isBlocked = false;
 
+                        // Get actual board index from instanceId (critical for correct targeting)
+                        const getActualBoardIndex = (instanceId?: string): number => {
+                            if (!instanceId) return -1;
+                            return opponent.board.findIndex(c => c && (c as any).instanceId === instanceId);
+                        };
+                        const actualTargetIndex = currentHover.type === 'LEADER' ? -1 : getActualBoardIndex(currentHover.instanceId);
+
                         if (wardUnits.length > 0) {
                             if (currentHover.type === 'LEADER') {
                                 isBlocked = true;
-                            } else if (currentHover.type === 'FOLLOWER' && currentHover.index !== undefined) {
-                                const targetCard = opponent.board[currentHover.index];
+                            } else if (currentHover.type === 'FOLLOWER' && actualTargetIndex >= 0) {
+                                const targetCard = opponent.board[actualTargetIndex];
                                 if (targetCard && !(targetCard as any).passiveAbilities?.includes('WARD')) {
                                     isBlocked = true;
                                 }
@@ -2815,25 +3103,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         if (isBlocked) {
                             console.log("UI: Attack blocked by WARD");
-                            setSelectedCard(null);
+                            // Keep card selected - don't clear selection when blocked
                         } else {
-                            const attackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
+                            // Get actual attacker index from player board using sourceIndex from visual board
+                            const visualAttackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
+                            const actualAttackerIndex = playerRef.current.board.findIndex(
+                                (c: any) => c && c.instanceId === visualAttackerCard?.instanceId
+                            );
+                            const attackerCard = actualAttackerIndex >= 0 ? playerRef.current.board[actualAttackerIndex] as any : null;
+
                             // RUSH Check Logic (UI)
                             const hasRush = attackerCard?.passiveAbilities?.includes('RUSH');
                             const hasStorm = attackerCard?.passiveAbilities?.includes('STORM');
                             const isSummoningSickness = attackerCard?.turnPlayed === gameStateRef.current.turnCount;
                             const targetIsLeader = currentHover.type === 'LEADER';
-                            const targetIndex = currentHover.type === 'LEADER' ? -1 : currentHover.index!;
+                            const targetIndex = actualTargetIndex;
 
                             if (targetIsLeader && hasRush && !hasStorm && isSummoningSickness) {
                                 console.log("UI: Attack blocked by RUSH rule (Cannot attack leader)");
-                                setSelectedCard(null);
+                                // Keep card selected - don't clear selection when blocked by RUSH
                                 // Could add specific visual feedback here
                             } else {
 
+                                // Check if we have valid attacker
+                                if (actualAttackerIndex < 0 || !attackerCard) {
+                                    console.log("UI: Attack blocked - invalid attacker");
+                                    return;
+                                }
+
                                 // Capture attack parameters IMMEDIATELY before any async operations
                                 const attackParams = {
-                                    attackerIndex: currentDrag.sourceIndex,
+                                    attackerIndex: actualAttackerIndex,
                                     targetIndex: targetIsLeader ? -1 : targetIndex,
                                     targetIsLeader: targetIsLeader
                                 };
@@ -2858,15 +3158,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     if (defender && (defender.currentAttack || 0) > 0) {
                                         // Defender (Opponent) attacks Attacker (Player index sourceIndex)
                                         setTimeout(() => {
-                                            playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, currentDrag.sourceIndex);
+                                            playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, actualAttackerIndex);
                                         }, 200);
                                     }
                                 }
                             }
                         }
                     } else {
-                        // If released without selecting a target, reset selection to return to "resting" state
-                        setSelectedCard(null);
+                        // If released without selecting a target, keep card selected
+                        // User can click elsewhere to deselect if needed
                     }
                 }
                 // Evolve Logic
@@ -2939,7 +3239,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // --- Target Selection Handler ---
-    const handleTargetClick = (targetType: 'LEADER' | 'FOLLOWER', targetIndex: number, targetPlayerId: string) => {
+    const handleTargetClick = (targetType: 'LEADER' | 'FOLLOWER', targetIndex: number, targetPlayerId: string, instanceId?: string) => {
         if (!targetingState) return;
 
         // Validating target side
@@ -2948,10 +3248,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return;
         }
 
-        // 1. Get Target ID
+        // 1. Get Target ID - use instanceId if provided for accurate board lookup
         let targetId: string | undefined = undefined;
+        let actualTargetIndex = targetIndex;
         if (targetType === 'FOLLOWER') {
-            const targetValues = gameState.players[targetPlayerId].board[targetIndex];
+            // Get actual board index from instanceId
+            if (instanceId) {
+                actualTargetIndex = gameState.players[targetPlayerId].board.findIndex(
+                    c => c && (c as any).instanceId === instanceId
+                );
+                if (actualTargetIndex < 0) return;
+            }
+            const targetValues = gameState.players[targetPlayerId].board[actualTargetIndex];
             if (!targetValues) return;
             targetId = targetValues.instanceId;
 
@@ -2995,7 +3303,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // --- C_Y Visuals Trigger ---
             if (animCard.id === 'c_y') {
                 // 1. Lightning on Target (Now SUMI)
-                playEffect('SUMI', 'p2', targetIndex);
+                playEffect('SUMI', 'p2', actualTargetIndex);
 
                 // 2. AOE on all OTHER enemies
                 const opponentBoard = gameStateRef.current.players[opponentPlayerId].board; // Safe access via Ref
@@ -3012,7 +3320,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // --- 退職代行 (s_resignation_proxy) Visuals ---
             if (animCard.id === 's_resignation_proxy') {
                 // 1. Target enemy destruction effect
-                playEffect('SUMI', targetPlayerId, targetIndex);
+                playEffect('SUMI', targetPlayerId, actualTargetIndex);
 
                 // 2. Self random destruction effect (Delayed slightly)
                 setTimeout(() => {
@@ -3092,6 +3400,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 finalY = (window.innerHeight / 2) + (70 * scale);
             }
 
+            // Send PLAY_CARD_ANIM to opponent for synchronized animation
+            if (gameMode !== 'CPU' && connected && adapter) {
+                adapter.send({
+                    type: 'PLAY_CARD_ANIM',
+                    payload: { playerId: currentPlayerId, cardIndex: index, card: animCard }
+                });
+            }
+
             setPlayingCardAnim({
                 card: animCard,
                 startX, startY,
@@ -3138,7 +3454,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setSelectedCard(null);
     };
 
+    const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
+    const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
+    const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 5 : 4);
+
+    // Force re-render log
+    console.log("GameScreen Layout Updated: Layer 3 Implemented");
+
+    // Force scroll to top on every render to prevent layout shift
+    useLayoutEffect(() => {
+        if (boardRef.current) {
+            boardRef.current.scrollTop = 0;
+        }
+        window.scrollTo(0, 0);
+    });
+
     // JOIN: Wait for game state sync from HOST
+    // This must be AFTER all hooks to maintain consistent hook order
     if (gameMode === 'JOIN' && !gameSynced) {
         return (
             <div style={{
@@ -3180,21 +3512,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             </div>
         );
     }
-
-    const remainingEvolves = 2 - player.evolutionsUsed;
-    const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
-    const canEvolveUI = player.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 5 : 4);
-
-    // Force re-render log
-    console.log("GameScreen Layout Updated: Layer 3 Implemented");
-
-    // Force scroll to top on every render to prevent layout shift
-    useLayoutEffect(() => {
-        if (boardRef.current) {
-            boardRef.current.scrollTop = 0;
-        }
-        window.scrollTo(0, 0);
-    });
 
     // Scale-adjusted base dimensions for 4K support
     // Now uses independent X/Y scaling to fill entire viewport without black bars
@@ -3504,9 +3821,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 return (
                                     <div key={c?.instanceId || `empty-opp-${i}`}
                                         ref={el => opponentBoardRefs.current[i] = el}
-                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId })}
+                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: c?.instanceId })}
                                         onMouseLeave={() => setHoveredTarget(null)}
-                                        onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
+                                        onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId, c?.instanceId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
                                         style={{
                                             position: 'absolute',
                                             left: '50%',
@@ -3547,7 +3864,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     <div key={c?.instanceId || `empty-plr-${i}`}
                                         ref={el => playerBoardRefs.current[i] = el}
                                         onMouseDown={(e) => handleBoardMouseDown(e, i)}
-                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId })}
+                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: c?.instanceId })}
                                         onMouseLeave={() => setHoveredTarget(null)}
                                         style={{
                                             position: 'absolute',
@@ -4234,31 +4551,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <GameOverScreen
                             winnerId={gameState.winnerId}
                             playerId={currentPlayerId}
+                            isOnline={opponentType === 'ONLINE'}
+                            myRematchRequested={myRematchRequested}
+                            opponentRematchRequested={opponentRematchRequested}
                             onRematch={() => {
-                                // 1. Reset visual and logic artifacts IMMEDIATELY
-                                setDamageNumbers([]);
-                                setActiveEffects([]);
-                                setAnimatingCard(null);
-                                setPlayingCardAnim(null);
-                                setEvolveAnimation(null);
-                                setDrawAnimation(null);
-                                setSummonedCardIds(new Set());
-                                aiProcessing.current = false;
-                                lastProcessedTurn.current = null;
+                                if (opponentType === 'ONLINE') {
+                                    // Online mode: Send rematch request to opponent
+                                    setMyRematchRequested(true);
 
-                                // 2. Suppress immediate diff detection by clearing and then resetting the Ref
-                                const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
-                                prevPlayersRef.current = freshState.players;
-                                prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
-
-                                // 3. Force BGM re-roll and restart
-                                setBgmLoadedForClass(null);
-
-                                // 4. Update Game State
-                                setCoinTossPhase('IDLE');
-                                setCoinTossResult(null);
-                                setIsGameStartAnim(false);
-                                dispatch({ type: 'SYNC_STATE', payload: freshState });
+                                    if (opponentRematchRequested) {
+                                        // Both players want rematch - send accept and start
+                                        adapter?.send({ type: 'REMATCH_ACCEPT' });
+                                        startRematch();
+                                    } else {
+                                        // Only I want rematch - send request and wait
+                                        adapter?.send({ type: 'REMATCH_REQUEST' });
+                                    }
+                                } else {
+                                    // CPU mode: Just start new game immediately
+                                    startRematch();
+                                }
                             }}
                             onLeave={onLeave}
                         />

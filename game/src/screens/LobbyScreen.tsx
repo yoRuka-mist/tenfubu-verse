@@ -98,11 +98,28 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
     const handleCopy = async () => {
         if (myId) {
             try {
-                await navigator.clipboard.writeText(myId);
+                // Try modern Clipboard API first
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(myId);
+                } else {
+                    // Fallback for non-HTTPS or older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = myId;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             } catch (e) {
                 console.error('Failed to copy:', e);
+                // Show ID in alert as last resort
+                alert(`Room ID: ${myId}\n\n(コピーに失敗しました。手動でコピーしてください)`);
             }
         }
     };

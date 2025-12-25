@@ -1,5 +1,6 @@
 
 import { GameState, Player, BoardCard, AbilityEffect, Card, TriggerType } from './types';
+import { getCardDefinition } from './engine';
 
 // Helper to get opponent ID
 const getOpponentId = (playerId: string) => playerId === 'p1' ? 'p2' : 'p1';
@@ -204,66 +205,27 @@ function processSingleEffect(
         }
 
         case 'GENERATE_CARD': {
-            // Add specific card to hand
+            // Add specific card to hand - use card registry lookup
             const tokenCardId = effect.targetCardId;
             if (!tokenCardId) break;
 
-            // Mock lookup - In real app, use Card Registry
-            // For now, construct a simple token generic based on ID request or mock
-            const tokenCard: Card = {
-                id: `${tokenCardId}_${Date.now()}_${Math.random()}`, // Unique Instance ID
-                name: 'Token Card', // Should lookup name based on ID
-                cost: 1, type: 'FOLLOWER',
-                attack: 1, health: 1,
-                description: 'Generated Token',
-                imageUrl: '/cards/senka_finisher.png' // Mock
+            // Lookup card definition from registry
+            const cardDef = getCardDefinition(tokenCardId);
+            if (!cardDef) {
+                console.warn(`[GENERATE_CARD] Card not found: ${tokenCardId}`);
+                break;
+            }
+
+            // Create a new card instance from the definition
+            const generatedCard: Card = {
+                ...cardDef,
+                id: cardDef.id,
+                instanceId: `gen_${tokenCardId}_${Date.now()}_${Math.random()}`
             };
-
-            // If we want to simulate specific tokens easily without a DB:
-            if (tokenCardId === 'FAIRY') { tokenCard.name = 'Fairy'; tokenCard.cost = 1; tokenCard.attack = 1; tokenCard.health = 1; tokenCard.imageUrl = '/cards/senka_finisher.png'; }
-
-            // Three Cats Tokens
-            if (tokenCardId === 'TOKEN_CHATORA') {
-                tokenCard.name = '茶トラ猫の日向ぼっこ';
-                tokenCard.cost = 0;
-                tokenCard.type = 'FOLLOWER';
-                tokenCard.attack = 1;
-                tokenCard.health = 1;
-                tokenCard.description = '';
-                tokenCard.imageUrl = '/cards/chatora.png';
-            }
-            if (tokenCardId === 'TOKEN_SABATORA') {
-                tokenCard.name = 'サバトラ猫の散歩';
-                tokenCard.cost = 1;
-                tokenCard.type = 'FOLLOWER';
-                tokenCard.attack = 1;
-                tokenCard.health = 2;
-                tokenCard.description = '突進';
-                tokenCard.imageUrl = '/cards/sabatora.png';
-                tokenCard.passiveAbilities = ['RUSH'];
-            }
-            if (tokenCardId === 'TOKEN_KIJITORA') {
-                tokenCard.name = 'キジトラ猫のごはん';
-                tokenCard.cost = 3;
-                tokenCard.type = 'FOLLOWER';
-                tokenCard.attack = 2;
-                tokenCard.health = 3;
-                tokenCard.description = '守護';
-                tokenCard.imageUrl = '/cards/kijitora.png';
-                tokenCard.passiveAbilities = ['WARD'];
-            }
-            if (tokenCardId === 'TOKEN_RICE') {
-                tokenCard.name = '米';
-                tokenCard.cost = 1;
-                tokenCard.type = 'SPELL';
-                tokenCard.description = '相手のリーダーの体力を1回復する。';
-                tokenCard.imageUrl = '/cards/rice.png';
-                tokenCard.triggers = [{ trigger: 'FANFARE', effects: [{ type: 'HEAL_LEADER', value: 1, targetType: 'OPPONENT' }] }];
-            }
 
             const p = { ...newState.players[playerId] };
             if (p.hand.length < 9) {
-                p.hand = [...p.hand, tokenCard];
+                p.hand = [...p.hand, generatedCard];
                 newState.players = { ...newState.players, [playerId]: p };
             }
             break;
@@ -296,6 +258,49 @@ function processSingleEffect(
             if (p.board.length < 5) { // MAX_BOARD_SIZE check
                 p.board = [...p.board, tokenCard];
                 newState.players = { ...newState.players, [playerId]: p };
+            }
+            break;
+        }
+
+        case 'SUMMON_CARD': {
+            // Summon an actual card from the card library (not a token)
+            const summonCardId = effect.targetCardId;
+            if (!summonCardId) break;
+
+            const cardDef = getCardDefinition(summonCardId);
+            if (!cardDef || cardDef.type !== 'FOLLOWER') break;
+
+            // Check if the card has RUSH or STORM for canAttack
+            const hasRushOrStorm = cardDef.passiveAbilities?.includes('RUSH') || cardDef.passiveAbilities?.includes('STORM');
+
+            // Create a BoardCard from the card definition
+            const summonedCard: BoardCard = {
+                id: cardDef.id,
+                name: cardDef.name,
+                cost: cardDef.cost,
+                type: 'FOLLOWER',
+                attack: cardDef.attack || 1,
+                health: cardDef.health || 1,
+                currentAttack: cardDef.attack || 1,
+                currentHealth: cardDef.health || 1,
+                maxHealth: cardDef.health || 1,
+                description: cardDef.description || '',
+                imageUrl: cardDef.imageUrl,
+                evolvedImageUrl: cardDef.evolvedImageUrl,
+                canAttack: hasRushOrStorm || false,
+                instanceId: `summon_${summonCardId}_${Date.now()}_${Math.random()}`,
+                attacksMade: 0,
+                turnPlayed: newState.turnCount,
+                triggers: cardDef.triggers,
+                passiveAbilities: cardDef.passiveAbilities ? [...cardDef.passiveAbilities] : [],
+                attackEffectType: cardDef.attackEffectType,
+                tags: cardDef.tags
+            };
+
+            const pSummon = { ...newState.players[playerId] };
+            if (pSummon.board.length < 5) { // MAX_BOARD_SIZE check
+                pSummon.board = [...pSummon.board, summonedCard];
+                newState.players = { ...newState.players, [playerId]: pSummon };
             }
             break;
         }
@@ -417,8 +422,8 @@ function processSingleEffect(
     }
 
     // Check Win Condition Globally
-    if (newState.players[getOpponentId(playerId)].hp === 0) newState.winnerId = playerId;
-    if (newState.players[playerId].hp === 0) newState.winnerId = getOpponentId(playerId);
+    if (newState.players[getOpponentId(playerId)].hp <= 0) newState.winnerId = playerId;
+    if (newState.players[playerId].hp <= 0) newState.winnerId = getOpponentId(playerId);
 
     return newState;
 }
