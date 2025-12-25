@@ -1253,6 +1253,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [dragState, setDragState] = React.useState<{
         sourceType: 'HAND' | 'BOARD' | 'EVOLVE';
         sourceIndex: number;
+        sourceInstanceId?: string; // Add instanceId
         startX: number;
         startY: number;
         currentX: number;
@@ -2927,6 +2928,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const info = {
             sourceType: 'HAND' as const,
             sourceIndex: index,
+            sourceInstanceId: card.instanceId,
             startX: rect.left + rect.width / 2, // Center of Card in screen coords
             startY: rect.top + rect.height / 2, // Center of Card in screen coords
             currentX: e.clientX,
@@ -2954,6 +2956,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const newState = {
                 sourceType: 'BOARD' as const,
                 sourceIndex: index,
+                sourceInstanceId: (card as any).instanceId,
                 startX: startGameCoords.x,
                 startY: startGameCoords.y,
                 currentX: e.clientX,
@@ -3125,10 +3128,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             console.log("UI: Attack blocked by WARD");
                             // Keep card selected - don't clear selection when blocked
                         } else {
-                            // Get actual attacker index from player board using sourceIndex from visual board
-                            const visualAttackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
+                            // Get actual attacker index using sourceInstanceId (reliable)
                             const actualAttackerIndex = playerRef.current.board.findIndex(
-                                (c: any) => c && c.instanceId === visualAttackerCard?.instanceId
+                                (c: any) => c && c.instanceId === currentDrag.sourceInstanceId
                             );
                             const attackerCard = actualAttackerIndex >= 0 ? playerRef.current.board[actualAttackerIndex] as any : null;
 
@@ -3884,6 +3886,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     <div key={c?.instanceId || `empty-plr-${i}`}
                                         ref={el => playerBoardRefs.current[i] = el}
                                         onMouseDown={(e) => handleBoardMouseDown(e, i)}
+                                        onClick={(e) => e.stopPropagation()} // Prevent background click from validating selection
                                         onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: c?.instanceId })}
                                         onMouseLeave={() => setHoveredTarget(null)}
                                         style={{
