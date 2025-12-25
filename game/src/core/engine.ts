@@ -791,7 +791,11 @@ export function createPlayer(id: string, name: string, cls: ClassType, rng: () =
         graveyard: [],
         board: [],
         evolutionsUsed: 0,
-        canEvolveThisTurn: false
+        canEvolveThisTurn: false,
+        // Extra PP (後攻救済システム)
+        extraPpUsedEarly: false,  // 1~5ターン目で使用済みか
+        extraPpUsedLate: false,   // 6ターン目以降で使用済みか
+        extraPpActive: false      // 現在のターンでエクストラPPを有効化しているか
     };
 }
 
@@ -1450,6 +1454,29 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const activePlayerId = state.activePlayerId;
             const currentPlayer = newState.players[activePlayerId];
 
+            // エクストラPP使用時のフラグ更新（ターン終了時に消費を確定）
+            if (currentPlayer.extraPpActive) {
+                // 1~5ターン目か6ターン目以降かで使用済みフラグを更新
+                // turnCountはP1が1から始まり、P2は1ターン目にいる扱い
+                // 後攻(secondPlayer)のターン数は (turnCount * 2) または (turnCount * 2 - 1)
+                // 簡易判定: activePlayerIdのターン数を計算
+                const isSecondPlayer = currentPlayer.id !== state.firstPlayerId;
+                if (isSecondPlayer) {
+                    // 後攻のターン数: 1~5ターン目 = turnCount 1~3 (後攻の1,2,3,4,5ターン目)
+                    // 具体的には後攻の5ターン目はturnCount=3で終了する
+                    // turnCount: 1 → P1の1ターン目、P2の1ターン目
+                    // turnCount: 2 → P1の2ターン目、P2の2ターン目
+                    // turnCount: 3 → P1の3ターン目、P2の3ターン目
+                    // 後攻の5ターン目はturnCount=5の時
+                    if (newState.turnCount <= 5) {
+                        currentPlayer.extraPpUsedEarly = true;
+                    } else {
+                        currentPlayer.extraPpUsedLate = true;
+                    }
+                }
+                currentPlayer.extraPpActive = false;
+            }
+
             // Trigger END_OF_TURN effects
             const newPendingEffects = [...(newState.pendingEffects || [])];
             currentPlayer.board.forEach(c => {
@@ -2047,6 +2074,55 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
         case 'SYNC_STATE': {
             console.log('[Engine] SYNC_STATE received');
             return action.payload;
+        }
+
+        // エクストラPPの有効化/無効化
+        case 'TOGGLE_EXTRA_PP': {
+            const playerId = action.playerId;
+            const player = newState.players[playerId];
+
+            // 後攻プレイヤーのみ使用可能
+            const isSecondPlayer = playerId !== state.firstPlayerId;
+            if (!isSecondPlayer) {
+                console.log('[Engine] TOGGLE_EXTRA_PP: Only second player can use Extra PP');
+                return state;
+            }
+
+            // 自分のターンのみ使用可能
+            if (state.activePlayerId !== playerId) {
+                console.log('[Engine] TOGGLE_EXTRA_PP: Can only toggle on your turn');
+                return state;
+            }
+
+            // 現在オンの場合はオフにする（トグル）
+            if (player.extraPpActive) {
+                player.extraPpActive = false;
+                player.pp = Math.max(0, player.pp - 1); // エクストラPP分を減らす
+                console.log('[Engine] TOGGLE_EXTRA_PP: Deactivated, PP now', player.pp);
+                return newState;
+            }
+
+            // 使用可能かチェック
+            // 1~5ターン目の間
+            if (newState.turnCount <= 5) {
+                if (player.extraPpUsedEarly) {
+                    console.log('[Engine] TOGGLE_EXTRA_PP: Already used in early turns');
+                    return state;
+                }
+            } else {
+                // 6ターン目以降
+                if (player.extraPpUsedLate) {
+                    console.log('[Engine] TOGGLE_EXTRA_PP: Already used in late turns');
+                    return state;
+                }
+            }
+
+            // エクストラPPを有効化
+            player.extraPpActive = true;
+            player.pp += 1; // PP+1
+            console.log('[Engine] TOGGLE_EXTRA_PP: Activated, PP now', player.pp);
+            newState.logs.push(`${player.name} がエクストラPPを使用！ PP+1`);
+            return newState;
         }
 
         default:

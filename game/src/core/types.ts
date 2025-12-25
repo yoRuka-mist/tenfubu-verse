@@ -90,6 +90,12 @@ export interface Player {
     // Evolution tracking
     evolutionsUsed: number; // Number of evolutions used (max 2)
     canEvolveThisTurn: boolean; // Can only evolve once per turn
+
+    // Extra PP (後攻救済システム)
+    // 後攻のみ使用可能: 1~5ターン目に1回、6ターン目以降に1回、計2回まで
+    extraPpUsedEarly: boolean;  // 1~5ターン目で使用済みか
+    extraPpUsedLate: boolean;   // 6ターン目以降で使用済みか
+    extraPpActive: boolean;     // 現在のターンでエクストラPPを有効化しているか
 }
 
 export type GamePhase = 'INIT' | 'MULLIGAN' | 'TURN_START' | 'MAIN' | 'COMBAT' | 'TURN_END' | 'GAME_OVER';
@@ -122,4 +128,5 @@ export type GameAction =
     | { type: 'END_TURN'; playerId: string }
     | { type: 'CONCEDE'; playerId: string }
     | { type: 'SYNC_STATE'; payload: GameState }
-    | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } };
+    | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } }
+    | { type: 'TOGGLE_EXTRA_PP'; playerId: string }; // エクストラPPの有効化/無効化

@@ -4024,9 +4024,88 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160 * scale, height: 160 * scale, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>{player.pp}/{player.maxPp}</div>
-                            <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(10).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.pp ? '#f6e05e' : (i < player.maxPp ? '#744210' : '#2d3748') }} />)}</div>
+                            {/* PP数値表示 - エクストラPP有効時は「PP + 1」表示 */}
+                            <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>
+                                {player.extraPpActive ? (
+                                    <span>{player.pp - 1}/{player.maxPp} <span style={{ color: '#ed8936' }}>+1</span></span>
+                                ) : (
+                                    <span>{player.pp}/{player.maxPp}</span>
+                                )}
+                            </div>
+                            {/* PP丸表示 - エクストラPP分はオレンジで表示 */}
+                            <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center', flexWrap: 'wrap', maxWidth: 150 * scale }}>
+                                {Array(player.extraPpActive ? player.maxPp + 1 : 10).fill(0).map((_, i) => {
+                                    // エクストラPP有効時: 最後の1個はオレンジ
+                                    const isExtraPp = player.extraPpActive && i === player.maxPp;
+                                    const isFilled = i < player.pp;
+                                    const isMax = i < player.maxPp;
+
+                                    let bgColor = '#2d3748'; // 空
+                                    if (isExtraPp && isFilled) {
+                                        bgColor = '#ed8936'; // オレンジ（エクストラPP）
+                                    } else if (isFilled) {
+                                        bgColor = '#f6e05e'; // 黄色（通常PP）
+                                    } else if (isMax) {
+                                        bgColor = '#744210'; // 暗い黄色（最大値内だが未使用）
+                                    }
+
+                                    return (
+                                        <div
+                                            key={i}
+                                            style={{
+                                                width: 12 * scale,
+                                                height: 12 * scale,
+                                                borderRadius: '50%',
+                                                background: bgColor,
+                                                boxShadow: isExtraPp ? '0 0 8px #ed8936' : 'none'
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </div>
                         </div>
+                        {/* Extra PP Button - 後攻プレイヤーのみ表示 */}
+                        {(() => {
+                            const isSecondPlayer = currentPlayerId !== gameState.firstPlayerId;
+                            const isMyTurn = gameState.activePlayerId === currentPlayerId;
+                            const turn = gameState.turnCount;
+                            const canUseEarly = turn <= 5 && !player.extraPpUsedEarly;
+                            const canUseLate = turn >= 6 && !player.extraPpUsedLate;
+                            const canUse = isSecondPlayer && isMyTurn && (canUseEarly || canUseLate);
+                            const isActive = player.extraPpActive;
+
+                            if (!isSecondPlayer) return null;
+
+                            return (
+                                <button
+                                    disabled={!canUse && !isActive}
+                                    onClick={() => dispatchAndSend({ type: 'TOGGLE_EXTRA_PP', playerId: currentPlayerId })}
+                                    style={{
+                                        width: 120 * scale,
+                                        height: 40 * scale,
+                                        borderRadius: 8 * scale,
+                                        border: isActive ? '2px solid #ed8936' : '2px solid rgba(255,255,255,0.2)',
+                                        background: isActive
+                                            ? 'linear-gradient(135deg, #ed8936, #dd6b20)'
+                                            : (canUse ? 'linear-gradient(135deg, #744210, #5a3510)' : '#2d3748'),
+                                        color: isActive ? 'white' : (canUse ? '#f6e05e' : '#718096'),
+                                        fontWeight: 700,
+                                        fontSize: '0.9rem',
+                                        boxShadow: isActive ? '0 0 20px rgba(237, 137, 54, 0.6)' : 'none',
+                                        cursor: (canUse || isActive) ? 'pointer' : 'default',
+                                        transition: 'all 0.3s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 4 * scale
+                                    }}
+                                >
+                                    <span style={{ fontSize: '1.1rem' }}>+1</span>
+                                    <span>PP</span>
+                                    {isActive && <span style={{ fontSize: '0.7rem' }}>ON</span>}
+                                </button>
+                            );
+                        })()}
                     </div>
 
                     {/* ========================================== */}
