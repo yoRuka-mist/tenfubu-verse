@@ -1875,8 +1875,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             setCoinTossPhase('TOSSING');
             playSE('coin.mp3', 0.7); // Coin toss sound
 
-            // Determine result (random for CPU, HOST is always first)
-            const isFirst = gameMode === 'CPU' ? Math.random() > 0.5 : true; // HOST is always first
+            // Determine result (random for all modes)
+            const isFirst = Math.random() > 0.5; // Random coin toss for all modes
 
             // After toss animation, show result
             setTimeout(() => {

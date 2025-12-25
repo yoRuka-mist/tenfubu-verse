@@ -219,7 +219,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3点ダメージ。相手のフォロワー1体を破壊する。相手のフォロワー1体をランダムで手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+1/+1され守護を得る。',
+        description: 'ファンファーレ：相手のリーダーに3点ダメージ。相手のフォロワー1体を破壊する。相手のフォロワー1体をランダムで手札に戻す。超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+2/+2され守護を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -238,7 +238,7 @@ const MOCK_CARDS: Card[] = [
                     { type: 'SUMMON_CARD', targetCardId: 'c_tsubumaru' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
-                    { type: 'BUFF_STATS', value: 1, value2: 1, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
+                    { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             }
         ]
@@ -1739,10 +1739,13 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 follower.maxHealth += 3;
                 follower.canAttack = true; // Rush-like effect (can attack followers)
 
-                // Add Immunity and Rush
+                // Add Immunity and Rush (only if not already having STORM)
                 const passives = follower.passiveAbilities || [];
                 if (!passives.includes('IMMUNE_TO_DAMAGE_MY_TURN')) passives.push('IMMUNE_TO_DAMAGE_MY_TURN');
-                if (!passives.includes('RUSH') && !passives.includes('STORM')) passives.push('RUSH');
+                // Only add RUSH if the follower doesn't have STORM (STORM is superior)
+                if (!passives.includes('STORM') && !passives.includes('RUSH')) {
+                    passives.push('RUSH');
+                }
                 follower.passiveAbilities = passives;
 
                 console.log(`[Engine] Super Evolved ${follower.name}! SEP remaining: ${player.sep}`);
@@ -1772,8 +1775,11 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 follower.maxHealth += 2;
                 follower.canAttack = true;
 
-                if (!follower.passiveAbilities?.includes('RUSH') && !follower.passiveAbilities?.includes('STORM')) {
-                    follower.passiveAbilities = [...(follower.passiveAbilities || []), 'RUSH'];
+                // Only add RUSH if the follower doesn't already have STORM or RUSH
+                // STORM is superior to RUSH, so we don't add RUSH if STORM exists
+                const currentPassives = follower.passiveAbilities || [];
+                if (!currentPassives.includes('STORM') && !currentPassives.includes('RUSH')) {
+                    follower.passiveAbilities = [...currentPassives, 'RUSH'];
                 }
             }
 
