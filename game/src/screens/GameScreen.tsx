@@ -1300,11 +1300,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Here in `playEffect`, it's just visual.
         // We will remove the shake trigger from Spell Play completion in `handlePlayCard`.
 
-        // Use BASE_WIDTH for scaled layout calculations
-        const sidebarWidth = 340;
-        const boardCenterX = sidebarWidth + (BASE_WIDTH - sidebarWidth) / 2;
-        let x = boardCenterX;
-        let y = BASE_HEIGHT / 2;
+        // Use Screen Center as default
+        let x = window.innerWidth / 2;
+        let y = window.innerHeight / 2;
 
         const isOpponentTarget = targetPlayerId === opponentPlayerId;
         const isLeader = targetIndex === undefined || targetIndex === -1;
@@ -4547,8 +4545,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <AttackEffect
                             key={effect.key}
                             type={effect.type}
-                            x={effect.x * scale}
-                            y={effect.y * scale}
+                            x={effect.x}
+                            y={effect.y}
                             onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
                             audioSettings={audioSettings}
                         />
