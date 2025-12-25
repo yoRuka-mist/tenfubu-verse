@@ -1947,6 +1947,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setBgmLoadedForClass(player.class);
     }, [player.class, selectBgm]);
 
+    // BGM Cleanup on Unmount
+    React.useEffect(() => {
+        return () => {
+            if (bgmRef.current) {
+                console.log('[GameScreen] Stopping BGM on unmount');
+                bgmRef.current.pause();
+                bgmRef.current = null;
+            }
+        };
+    }, []);
+
     // BGM Playback Control & Interaction Listeners
     React.useEffect(() => {
         if (!bgmRef.current) return;
