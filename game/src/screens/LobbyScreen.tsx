@@ -7,7 +7,7 @@ interface LobbyScreenProps {
     gameMode: 'HOST' | 'JOIN';
     targetRoomId?: string;
     playerClass: ClassType;
-    onGameStart: (adapter: NetworkAdapter) => void;
+    onGameStart: (adapter: NetworkAdapter, opponentClass?: ClassType) => void;
     onBack: () => void;
 }
 
@@ -23,6 +23,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
     const [connecting, setConnecting] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [opponentClass, setOpponentClass] = useState<ClassType | null>(null);
+    const [classSent, setClassSent] = useState(false);
 
     const adapterRef = useRef<P2PAdapter | null>(null);
 
@@ -36,6 +38,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 const id = await adapter.connect(gameMode === 'JOIN' ? targetRoomId : undefined);
                 setMyId(id);
                 setConnecting(false);
+
+                // Set up message handler for class exchange
+                adapter.onMessage((msg: any) => {
+                    console.log('[LobbyScreen] Received message:', msg);
+                    if (msg.type === 'CLASS_INFO') {
+                        console.log('[LobbyScreen] Received opponent class:', msg.playerClass);
+                        setOpponentClass(msg.playerClass as ClassType);
+                    }
+                });
 
                 // Set up connection callback
                 adapter.onConnection(() => {
@@ -60,16 +71,29 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
         };
     }, [gameMode, targetRoomId]);
 
-    // When connection is established, start the game
+    // Send class info when connected
     useEffect(() => {
-        if (connected && adapterRef.current) {
+        if (connected && adapterRef.current && !classSent) {
+            console.log('[LobbyScreen] Sending class info:', playerClass);
+            // Small delay to ensure both sides have their message handlers ready
+            setTimeout(() => {
+                adapterRef.current?.send({ type: 'CLASS_INFO', playerClass });
+                setClassSent(true);
+            }, 100);
+        }
+    }, [connected, playerClass, classSent]);
+
+    // When connection is established AND class info exchanged, start the game
+    useEffect(() => {
+        if (connected && adapterRef.current && opponentClass) {
             // Short delay to show "Connected!" message before transitioning
             const timer = setTimeout(() => {
-                onGameStart(adapterRef.current!);
+                console.log('[LobbyScreen] Starting game with opponent class:', opponentClass);
+                onGameStart(adapterRef.current!, opponentClass);
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [connected, onGameStart]);
+    }, [connected, onGameStart, opponentClass]);
 
     const handleCopy = async () => {
         if (myId) {

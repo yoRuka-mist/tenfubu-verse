@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback } from 'react';
+﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
 import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
@@ -77,6 +77,7 @@ interface GameScreenProps {
     onLeave: () => void;
     networkAdapter?: any; // NetworkAdapter passed from LobbyScreen
     networkConnected?: boolean;
+    opponentClass?: ClassType; // For online play: opponent's class selection
 }
 
 
@@ -1091,7 +1092,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass }) => {
     // Use provided adapter from LobbyScreen for online play, or create one for CPU mode (which won't be used)
     const hookResult = useGameNetwork(gameMode === 'CPU' ? 'CPU' : gameMode, targetRoomId);
     const adapter = networkAdapter || hookResult.adapter;
@@ -1116,15 +1117,43 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         scaleInfoRef.current = scaleInfo;
     }, [scaleInfo]);
 
+    // === ONLINE PLAY: Player ID assignment ===
+    // HOST is always p1 (goes first in standard rules)
+    // JOIN is always p2
+    const isHost = gameMode === 'HOST' || gameMode === 'CPU';
+    const currentPlayerId = isHost ? 'p1' : 'p2';
+    const opponentPlayerId = isHost ? 'p2' : 'p1';
+
     // CPU対戦時は相手クラスを自分と反対にする
-    const opponentClass: ClassType = playerClass === 'SENKA' ? 'AJA' : 'SENKA';
+    // For online play, use propOpponentClass if provided
+    const opponentClass: ClassType = propOpponentClass || (playerClass === 'SENKA' ? 'AJA' : 'SENKA');
 
-    const [gameState, dispatch] = useReducer(gameReducer, null, () =>
-        initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass)
-    );
+    // Game state initialization
+    // HOST initializes the game, JOIN waits for INIT_GAME message
+    const [gameState, dispatch] = useReducer(gameReducer, null, () => {
+        if (gameMode === 'JOIN') {
+            // JOIN: Create empty placeholder state, will be replaced by SYNC_STATE
+            return initializeGame('Opponent', opponentClass, 'You', playerClass);
+        }
+        // HOST or CPU: Initialize normally (HOST is p1)
+        return initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+    });
 
-    const currentPlayerId = 'p1';
-    const opponentPlayerId = 'p2';
+    // Track if game has been synced (for JOIN)
+    const [gameSynced, setGameSynced] = useState(gameMode !== 'JOIN');
+
+    // HOST: Send initial game state when connected
+    const initialStateSentRef = useRef(false);
+    useEffect(() => {
+        if (gameMode === 'HOST' && connected && adapter && !initialStateSentRef.current) {
+            console.log('[GameScreen] HOST: Sending initial game state to JOIN');
+            // Small delay to ensure JOIN's message handler is ready
+            setTimeout(() => {
+                adapter.send({ type: 'INIT_GAME', payload: gameState });
+                initialStateSentRef.current = true;
+            }, 500);
+        }
+    }, [gameMode, connected, adapter, gameState]);
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
@@ -1835,32 +1864,67 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [audioSettings.bgmEnabled, audioSettings.bgm, bgmLoadedForClass]); // Changed audioSettings.enabled to audioSettings.bgmEnabled
     useEffect(() => {
         if (!adapter) return;
-        adapter.onMessage((msg: any) => {
-            if (msg.type === 'GAME_STATE') dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
-            else if (msg.type === 'ACTION') {
-                dispatch({ ...msg.payload, isRemote: true } as any);
 
-                // Handle Remote Effects
-                if (msg.payload.type === 'ATTACK') {
-                    const { playerId, payload } = msg.payload;
+        const handleMessage = (msg: any) => {
+            console.log('[GameScreen] Received message:', msg.type, msg);
+
+            // INIT_GAME: JOIN receives initial game state from HOST
+            if (msg.type === 'INIT_GAME') {
+                console.log('[GameScreen] JOIN: Received initial game state from HOST');
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                setGameSynced(true);
+                return;
+            }
+
+            // GAME_STATE: Full state sync (legacy support)
+            if (msg.type === 'GAME_STATE') {
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                return;
+            }
+
+            // ACTION: Individual game actions
+            if (msg.type === 'ACTION') {
+                const action = msg.payload;
+                console.log('[GameScreen] Processing remote action:', action.type, 'from player:', action.playerId);
+
+                // Dispatch the action with isRemote flag
+                dispatch({ ...action, isRemote: true } as any);
+
+                // Handle Remote Visual Effects
+                if (action.type === 'ATTACK') {
+                    const { playerId, payload } = action;
                     const attackerPlayer = gameState.players[playerId];
-                    const attackerCard = attackerPlayer.board[payload.attackerIndex];
+                    const attackerCard = attackerPlayer?.board[payload.attackerIndex];
                     const targetIdx = payload.targetIsLeader ? -1 : payload.targetIndex;
                     const targetPid = playerId === 'p1' ? 'p2' : 'p1';
-                    playEffect(attackerCard?.attackEffectType, targetPid, targetIdx);
-                } else if (msg.payload.type === 'PLAY_CARD') {
+                    if (attackerCard) {
+                        playEffect(attackerCard.attackEffectType, targetPid, targetIdx);
+                    }
+                } else if (action.type === 'PLAY_CARD') {
                     // Play sound for opponent's card play
-                    const { playerId, payload } = msg.payload;
-                    const player = gameState.players[playerId];
-                    // Card is in hand at payload.cardIndex
-                    const card = player.hand[payload.cardIndex];
+                    const { playerId, payload } = action;
+                    const playerData = gameState.players[playerId];
+                    const card = playerData?.hand[payload.cardIndex];
                     if (card && card.type !== 'SPELL') {
                         playSE('gan.mp3', 0.6);
                     }
+                } else if (action.type === 'EVOLVE') {
+                    // Play evolve sound for opponent
+                    playSE('evolve.mp3', 0.7);
+                } else if (action.type === 'END_TURN') {
+                    console.log('[GameScreen] Remote END_TURN received, turn switching to:',
+                        action.playerId === 'p1' ? 'p2' : 'p1');
                 }
             }
-        });
-    }, [adapter, connected, gameState, playSE, playEffect]);  // Added dependencies
+        };
+
+        adapter.onMessage(handleMessage);
+
+        // Cleanup: PeerJS doesn't have removeListener, but we can set a new one
+        return () => {
+            // Note: PeerJS replaces the callback when onMessage is called again
+        };
+    }, [adapter, gameState, playSE, playEffect, gameMode]);  // Removed 'connected' from deps to avoid re-registering
 
     // AI Logic State
     const aiProcessing = React.useRef(false);
@@ -3074,7 +3138,48 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setSelectedCard(null);
     };
 
-    if (gameMode !== 'CPU' && !connected && gameMode === 'JOIN') return <div>Connecting... <button onClick={onLeave}>Cancel</button></div>;
+    // JOIN: Wait for game state sync from HOST
+    if (gameMode === 'JOIN' && !gameSynced) {
+        return (
+            <div style={{
+                height: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                color: 'white',
+                gap: '1rem'
+            }}>
+                <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid rgba(233, 69, 96, 0.3)',
+                    borderTop: '4px solid #e94560',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                }} />
+                <p>ゲーム状態を同期中...</p>
+                <button onClick={onLeave} style={{
+                    marginTop: '1rem',
+                    padding: '0.5rem 1rem',
+                    background: 'transparent',
+                    border: '1px solid #888',
+                    color: '#888',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                }}>
+                    キャンセル
+                </button>
+                <style>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        );
+    }
 
     const remainingEvolves = 2 - player.evolutionsUsed;
     const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;

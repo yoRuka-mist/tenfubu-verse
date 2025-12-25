@@ -123,10 +123,23 @@
 
 ## 今後の予定
 - [ ] 各カードのエフェクト定義の整理とクリーンアップ
-- [ ] 通信対戦機能の修復 (Phase 1)
+- [x] 通信対戦機能の修復 (Phase 1)
     - [x] LobbyScreenの実装 (待ち受け画面、接続状態表示)
     - [x] App.tsxの遷移ロジック修正
     - [x] GameScreenへのネットワークアダプタ受け渡し
-- [ ] 通信対戦機能の検証と強化 (Phase 2)
+    - [x] package.jsonに--hostオプション追加（別PC間接続対応）
+- [x] 通信対戦機能の修復 (Phase 2) - プレイヤーID/同期の修正
+    - [x] HOST/JOINでプレイヤーIDを分離（HOST=p1, JOIN=p2）
+    - [x] HOSTがゲーム初期化→JOINへINIT_GAMEで同期
+    - [x] クラス情報の交換（CLASS_INFOメッセージ）
+    - [x] JOINの待機画面（gameSynced状態管理）
+    - [x] dispatchAndSendによるアクション同期（END_TURN, PLAY_CARD, ATTACK, EVOLVE）
+    - [x] リモートアクションのビジュアルエフェクト対応
+- [ ] 通信対戦機能の検証と強化 (Phase 3)
     - [ ] 動作検証
     - [ ] 切断時の再接続ハンドリング (必要であれば)
+- [ ] Web公開・デプロイ計画
+    - [ ] GitHub Pagesまたは Vercel/Netlifyへのデプロイ
+    - [ ] PeerJS公開シグナリングサーバーの利用確認
+    - [ ] HTTPS対応（WebRTCはHTTPSが必要）
+    - [ ] NAT越え対策（TURN サーバーの検討）

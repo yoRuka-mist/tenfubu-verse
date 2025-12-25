@@ -4,7 +4,9 @@ import { GameAction, GameState, ClassType } from '../core/types';
 export type NetworkMessage =
     | { type: 'HANDSHAKE'; payload: { name: string; class: ClassType } }
     | { type: 'GAME_STATE'; payload: GameState }
-    | { type: 'ACTION'; payload: GameAction };
+    | { type: 'ACTION'; payload: GameAction }
+    | { type: 'CLASS_INFO'; playerClass: ClassType }
+    | { type: 'INIT_GAME'; payload: GameState };
 
 export interface NetworkAdapter {
     isHost: boolean;

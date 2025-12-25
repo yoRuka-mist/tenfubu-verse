@@ -14,6 +14,7 @@ function App() {
     const [selectedClass, setSelectedClass] = useState<ClassType>('SENKA');
     const [gameMode, setGameMode] = useState<GameMode>('CPU');
     const [roomId, setRoomId] = useState<string>('');
+    const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
 
     // Shared network adapter for online play
     const networkAdapterRef = useRef<NetworkAdapter | null>(null);
@@ -36,9 +37,10 @@ function App() {
         }
     };
 
-    const handleLobbyGameStart = (adapter: NetworkAdapter) => {
+    const handleLobbyGameStart = (adapter: NetworkAdapter, oppClass?: ClassType) => {
         networkAdapterRef.current = adapter;
         setNetworkConnected(true);
+        if (oppClass) setOpponentClass(oppClass);
         setCurrentScreen('GAME');
     };
 
@@ -53,6 +55,7 @@ function App() {
         // Reset state
         setRoomId('');
         setGameMode('CPU');
+        setOpponentClass(undefined);
     };
 
     return (
@@ -77,6 +80,7 @@ function App() {
                     onLeave={backToTitle}
                     networkAdapter={networkAdapterRef.current}
                     networkConnected={networkConnected}
+                    opponentClass={opponentClass}
                 />
             )}
         </div>
