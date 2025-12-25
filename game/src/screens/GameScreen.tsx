@@ -2179,11 +2179,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         adapter.onMessage(handleMessage);
 
+        adapter.onClose(() => {
+            alert('相手との接続が切断されました。\nタイトルに戻ります。');
+            onLeave();
+        });
+
         // Cleanup: PeerJS doesn't have removeListener, but we can set a new one
         return () => {
             // Note: PeerJS replaces the callback when onMessage is called again
         };
-    }, [adapter, gameState, playSE, playEffect, gameMode]);  // Removed 'connected' from deps to avoid re-registering
+    }, [adapter, gameState, playSE, playEffect, gameMode, onLeave]);  // Removed 'connected' from deps to avoid re-registering
 
     // AI Logic State
     const aiProcessing = React.useRef(false);

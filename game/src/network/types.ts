@@ -18,6 +18,7 @@ export interface NetworkAdapter {
     send(message: NetworkMessage): void;
     onMessage(callback: (msg: NetworkMessage) => void): void;
     onConnection(callback: () => void): void; // Called when connection is established
+    onClose(callback: () => void): void; // Called when connection is closed
     isConnected(): boolean;
     disconnect(): void;
 }

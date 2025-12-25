@@ -65,11 +65,24 @@ export class P2PAdapter implements NetworkAdapter {
             }
         });
 
+        conn.on('close', () => {
+            console.log('Connection closed');
+            if (this.closeCallback) {
+                this.closeCallback();
+            }
+        });
+
         conn.on('error', (err) => console.error('Connection Error:', err));
     }
 
+    private closeCallback: (() => void) | null = null;
+
     onConnection(callback: () => void): void {
         this.connectionCallback = callback;
+    }
+
+    onClose(callback: () => void): void {
+        this.closeCallback = callback;
     }
 
     isConnected(): boolean {
