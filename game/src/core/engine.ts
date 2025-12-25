@@ -1519,6 +1519,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
             });
 
+            // Reset Evolution Rights
+            nextPlayer.canEvolveThisTurn = true;
+
             newState.activePlayerId = nextPlayerId;
             newState.pendingEffects = newPendingEffects;
 
@@ -1749,6 +1752,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
 
                 player.sep = Math.max(0, player.sep - 1);
+                player.canEvolveThisTurn = false; // Consume turn evolution right (shared with normal evolve)
+
                 // player.evolutionsUsed += 1; // Super Evolve doesn't consume EP
 
 
@@ -1789,6 +1794,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
 
                 player.evolutionsUsed += 1;
+                player.canEvolveThisTurn = false; // Consume turn evolution right
                 follower.hasEvolved = true;
                 follower.currentAttack += 2;
                 follower.currentHealth += 2;

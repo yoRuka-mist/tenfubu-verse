@@ -1239,6 +1239,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Effect Processing State
     const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
+    const [turnNotification, setTurnNotification] = React.useState<string | null>(null); // Notification State
     const processingHandledRef = React.useRef<any>(null);
 
     // Generic Card Animation (e.g. Draw, Generate)
@@ -1582,6 +1583,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         }
     }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId]);
+
+    // Turn Notification Check
+    React.useEffect(() => {
+        // Only show for current player
+        if (gameState.activePlayerId !== currentPlayerId) return;
+
+        const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
+        const turn = gameState.turnCount;
+
+        // Evolve: P1 Turn 5, P2 Turn 4
+        const evolveTurn = isFirstPlayer ? 5 : 4;
+        // Super Evolve: P1 Turn 7, P2 Turn 6
+        const superEvolveTurn = isFirstPlayer ? 7 : 6;
+
+        if (turn === superEvolveTurn) {
+            setTurnNotification('SUPER_EVOLVE_READY');
+            setTimeout(() => setTurnNotification(null), 3000);
+        } else if (turn === evolveTurn) {
+            setTurnNotification('EVOLVE_READY');
+            setTimeout(() => setTurnNotification(null), 3000);
+        }
+    }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
@@ -4571,6 +4594,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )
                 }
 
+
+
+                {/* --- Turn Notification Overlay --- */}
+                {turnNotification && (
+                    <div style={{
+                        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                        fontSize: '4rem', fontWeight: 'bold', color: '#fff',
+                        textShadow: '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 140, 0, 0.6)',
+                        zIndex: 9000, pointerEvents: 'none',
+                        animation: 'notificationFade 3s forwards',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {turnNotification === 'EVOLVE_READY' ? '進化可能！' : '超進化可能！'}
+                        <style>{`
+                            @keyframes notificationFade {
+                                0% { opacity: 0; transform: translate(-50%, -40%); }
+                                20% { opacity: 1; transform: translate(-50%, -50%); }
+                                80% { opacity: 1; transform: translate(-50%, -50%); }
+                                100% { opacity: 0; transform: translate(-50%, -60%); }
+                            }
+                        `}</style>
+                    </div>
+                )}
 
                 {/* --- Game Over Overlay --- */}
                 {

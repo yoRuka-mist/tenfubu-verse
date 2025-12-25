@@ -539,11 +539,26 @@ export function isValidAttackTarget(
 }
 
 export function canEvolve(player: Player, turnCount: number, isFirstPlayer: boolean): boolean {
+    // 1. One evolve per turn limit
+    if (!player.canEvolveThisTurn) return false;
+
+    // 2. Max evolutions limit (EP Check - assuming max 2 for P1, 3 for P2, but usually engine uses EP count)
     if (player.evolutionsUsed >= 2) return false;
 
-    // Logic: P1 Turn 5+, P2 Turn 4+
+    // 3. Turn Requirements: P1 >= 5, P2 >= 4
     const minTurn = isFirstPlayer ? 5 : 4;
 
+    if (turnCount < minTurn) return false;
+
+    return true;
+}
+
+export function canSuperEvolve(player: Player, turnCount: number, isFirstPlayer: boolean): boolean {
+    if (!player.canEvolveThisTurn) return false;
+    if (player.sep <= 0) return false;
+
+    // Turn Requirements: P1 >= 7, P2 >= 6
+    const minTurn = isFirstPlayer ? 7 : 6;
     if (turnCount < minTurn) return false;
 
     return true;
