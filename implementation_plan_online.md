@@ -1,34 +1,40 @@
-# 通信対戦機能 実装計画
+# 実装計画書 - 通信対戦機能の修復
 
-## 現状分析
-- P2PAdapterはPeerJSを使用したP2P通信の基本実装あり
-- hooksでuseGameNetworkがあるが、HOST時の接続完了検知が不完全
-- GameScreenでは接続状態に応じた画面表示が不足
+## 現状の問題
 
-## 実装内容
+1. **待機画面がない**: HOST/JOIN モードでも即座に `GameScreen` が表示され、接続を待たずにゲームが初期化されてしまう。
+2. **Room ID 表示がない**: HOST モードでの部屋 ID 表示・コピー機能が欠落している（または無効化されている）。
+3. **接続待ちのフローがない**: `connected` の状態を見て待機するロジックが `GameScreen` にない。
 
-### 1. P2PAdapterの改善
-- 接続完了時のコールバック追加
-- HOST側で相手が接続した時の通知機能
-- クラス選択情報の送受信（HANDSHAKE）
+## 解決策
 
-### 2. useGameNetworkフックの改善
-- HOST側で接続待ち→接続完了の状態遷移
-- myIdの返却（ルームID表示用）
-- 相手のクラス情報の受信
+### Phase 1: 待機画面 (LobbyScreen) の作成と統合
 
-### 3. GameScreenの改善
-- HOST/JOINモードでの接続待ち画面表示
-- HOSTモードでルームIDを表示
-- 接続完了後のゲーム開始処理
-- 対人戦用のターン管理修正
+1.  `LobbyScreen.tsx` を新規作成
+    - HOST モード: 「Room ID: XXXX」と「Copy to Clipboard」ボタンを表示。「Waiting for opponent...」メッセージ。
+    - JOIN モード: 「Connecting to Room...」メッセージ。
+    - 接続完了時に `onGameStart()` コールバックを呼び出す。
+    - エラー発生時にはエラーメッセージを表示し、タイトルへ戻るボタンを提供。
 
-### 4. 対人戦の仕様調整
-- 自分のターンのみ操作可能に
-- 相手のアクションの同期処理
-- ゲーム状態の同期
+2.  `App.tsx` の画面遷移を修正
+    - `GAME` 画面の前に `LOBBY` 画面を挟む。
+    - CPU モードは `LOBBY` をスキップして直接 `GAME` へ。
+    - HOST/JOIN モードは `LOBBY` に遷移し、接続完了後に `GAME` へ。
 
-## ファイル変更
-1. `src/network/P2PAdapter.ts` - 接続コールバック追加
-2. `src/network/hooks.ts` - 状態管理改善
-3. `src/screens/GameScreen.tsx` - 待機画面・対人戦ロジック
+3.  `GameScreen.tsx` の修正
+    - `opponentType === 'ONLINE'` の場合、初期化時に相手の情報を受け取る（または待機する）ロジックを追加。
+    - AI ターンのロジックが `gameMode === 'CPU'` 以外で実行されないようガードを確認（現状で実装済み）。
+
+### Phase 2: 別 PC 間の対戦対応の確認
+
+- PeerJS はデフォルトで公式のシグナリングサーバー (`0.peerjs.com`) を使用します。これはインターネット経由での接続をサポートしていますが、ファイアウォールやNAT環境によっては接続できない場合があります。
+- まず基本機能が動くことを確認し、必要であれば TURN サーバーの設定を追加することを検討します（PeerJS の `config.iceServers` オプション）。
+
+## 作業手順
+
+1.  `LobbyScreen.tsx` の作成
+2.  `App.tsx` の画面遷移ロジックの修正
+3.  `hooks.ts` (`useGameNetwork`) から `myId`, `connecting`, `error` を正しく取得できるよう確認
+4.  動作確認（同一PC/ブラウザでのテスト）
+5.  Gitにコミット
+6.  動作確認（別PC間でのテスト - 可能であれば）

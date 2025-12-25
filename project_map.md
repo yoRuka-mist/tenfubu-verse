@@ -48,6 +48,12 @@
 ### TitleScreen.tsx / ClassSelectScreen.tsx
 ゲーム開始前の画面。構成はシンプル。
 
+### LobbyScreen.tsx (通信対戦待機画面)
+HOST/JOINモードでの接続待ち画面。
+- ルームIDの表示とクリップボードコピー機能（HOSTモード）
+- 接続状態の表示（接続中、待機中、接続完了）
+- エラーハンドリング
+
 ---
 
 ## 3. コンポーネント (game/src/components)

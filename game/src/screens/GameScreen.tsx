@@ -75,6 +75,8 @@ interface GameScreenProps {
     gameMode: 'CPU' | 'HOST' | 'JOIN';
     targetRoomId?: string;
     onLeave: () => void;
+    networkAdapter?: any; // NetworkAdapter passed from LobbyScreen
+    networkConnected?: boolean;
 }
 
 
@@ -1089,8 +1091,11 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave }) => {
-    const { adapter, connected } = useGameNetwork(gameMode, targetRoomId);
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected }) => {
+    // Use provided adapter from LobbyScreen for online play, or create one for CPU mode (which won't be used)
+    const hookResult = useGameNetwork(gameMode === 'CPU' ? 'CPU' : gameMode, targetRoomId);
+    const adapter = networkAdapter || hookResult.adapter;
+    const connected = networkConnected !== undefined ? networkConnected : hookResult.connected;
 
     // 4K/Multi-resolution scaling - now returns uniform scale
     const scaleInfo = useScaleFactor();
@@ -1830,7 +1835,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [audioSettings.bgmEnabled, audioSettings.bgm, bgmLoadedForClass]); // Changed audioSettings.enabled to audioSettings.bgmEnabled
     useEffect(() => {
         if (!adapter) return;
-        adapter.onMessage((msg) => {
+        adapter.onMessage((msg: any) => {
             if (msg.type === 'GAME_STATE') dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
             else if (msg.type === 'ACTION') {
                 dispatch({ ...msg.payload, isRemote: true } as any);
