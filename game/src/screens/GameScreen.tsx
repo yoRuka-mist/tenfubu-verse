@@ -4027,7 +4027,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             {/* PP数値表示 - エクストラPP有効時は「PP + 1」表示 */}
                             <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>
                                 {player.extraPpActive ? (
-                                    <span>{player.pp - 1}/{player.maxPp} <span style={{ color: '#ed8936' }}>+1</span></span>
+                                    <span>{Math.max(0, player.pp - 1)}/{player.maxPp} <span style={{ color: '#ed8936' }}>+1</span></span>
                                 ) : (
                                     <span>{player.pp}/{player.maxPp}</span>
                                 )}
@@ -4035,18 +4035,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             {/* PP丸表示 - エクストラPP分はオレンジで表示 */}
                             <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center', flexWrap: 'wrap', maxWidth: 150 * scale }}>
                                 {Array(player.extraPpActive ? player.maxPp + 1 : 10).fill(0).map((_, i) => {
-                                    // エクストラPP有効時: 最後の1個はオレンジ
-                                    const isExtraPp = player.extraPpActive && i === player.maxPp;
+                                    // エクストラPP有効時: 最後の1個（maxPp番目）はオレンジ
+                                    const isExtraPpSlot = player.extraPpActive && i === player.maxPp;
                                     const isFilled = i < player.pp;
                                     const isMax = i < player.maxPp;
 
                                     let bgColor = '#2d3748'; // 空
-                                    if (isExtraPp && isFilled) {
+                                    if (isExtraPpSlot && isFilled) {
                                         bgColor = '#ed8936'; // オレンジ（エクストラPP）
                                     } else if (isFilled) {
                                         bgColor = '#f6e05e'; // 黄色（通常PP）
-                                    } else if (isMax) {
-                                        bgColor = '#744210'; // 暗い黄色（最大値内だが未使用）
+                                    } else if (isMax || isExtraPpSlot) {
+                                        bgColor = isExtraPpSlot ? '#744210' : '#744210'; // 暗い色（未使用枠）
                                     }
 
                                     return (
@@ -4057,7 +4057,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                 height: 12 * scale,
                                                 borderRadius: '50%',
                                                 background: bgColor,
-                                                boxShadow: isExtraPp ? '0 0 8px #ed8936' : 'none'
+                                                boxShadow: isExtraPpSlot && isFilled ? '0 0 8px #ed8936' : 'none'
                                             }}
                                         />
                                     );
@@ -4071,15 +4071,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             const turn = gameState.turnCount;
                             const canUseEarly = turn <= 5 && !player.extraPpUsedEarly;
                             const canUseLate = turn >= 6 && !player.extraPpUsedLate;
-                            const canUse = isSecondPlayer && isMyTurn && (canUseEarly || canUseLate);
+                            // エクストラPPがアクティブでない場合のみ新たに使用可能
+                            const canUse = isSecondPlayer && isMyTurn && !player.extraPpActive && (canUseEarly || canUseLate);
                             const isActive = player.extraPpActive;
 
                             if (!isSecondPlayer) return null;
 
+                            // 使用済み（Early/Late両方使用済みか、現ターンの条件を満たさない）かつ非アクティブなら完全に非活性
+                            const isFullyUsed = (turn <= 5 && player.extraPpUsedEarly) || (turn >= 6 && player.extraPpUsedLate);
+                            const isDisabled = !canUse && !isActive;
+
                             return (
                                 <button
-                                    disabled={!canUse && !isActive}
-                                    onClick={() => dispatchAndSend({ type: 'TOGGLE_EXTRA_PP', playerId: currentPlayerId })}
+                                    disabled={isDisabled}
+                                    onClick={() => {
+                                        if (!isDisabled) {
+                                            dispatchAndSend({ type: 'TOGGLE_EXTRA_PP', playerId: currentPlayerId });
+                                        }
+                                    }}
                                     style={{
                                         width: 120 * scale,
                                         height: 40 * scale,
@@ -4092,17 +4101,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         fontWeight: 700,
                                         fontSize: '0.9rem',
                                         boxShadow: isActive ? '0 0 20px rgba(237, 137, 54, 0.6)' : 'none',
-                                        cursor: (canUse || isActive) ? 'pointer' : 'default',
+                                        cursor: isDisabled ? 'default' : 'pointer',
                                         transition: 'all 0.3s',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: 4 * scale
+                                        gap: 4 * scale,
+                                        opacity: isFullyUsed && !isActive ? 0.5 : 1
                                     }}
                                 >
                                     <span style={{ fontSize: '1.1rem' }}>+1</span>
                                     <span>PP</span>
                                     {isActive && <span style={{ fontSize: '0.7rem' }}>ON</span>}
+                                    {isFullyUsed && !isActive && <span style={{ fontSize: '0.6rem', marginLeft: 2 }}>済</span>}
                                 </button>
                             );
                         })()}

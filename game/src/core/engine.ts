@@ -1629,7 +1629,34 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (card.type === 'FOLLOWER' && actualBoardCount >= 5) return newState;
 
             // Pay Cost
+            const ppBeforeCost = player.pp;
             player.pp -= card.cost;
+
+            // エクストラPP消費チェック: エクストラPPがアクティブで、通常PPだけでは払えなかった場合
+            // つまり、エクストラPP分（+1）を使った場合は使用済みフラグを立てる
+            if (player.extraPpActive) {
+                // エクストラPP有効化前の実PP = ppBeforeCost - 1
+                const normalPpBefore = ppBeforeCost - 1;
+
+                // エクストラPP分を使用した = 通常PPだけでは足りなかった
+                if (normalPpBefore < card.cost) {
+                    // エクストラPPを消費した！使用済みフラグを立てる
+                    const isSecondPlayer = player.id !== state.firstPlayerId;
+                    if (isSecondPlayer) {
+                        if (newState.turnCount <= 5) {
+                            player.extraPpUsedEarly = true;
+                        } else {
+                            player.extraPpUsedLate = true;
+                        }
+                    }
+                    player.extraPpActive = false;
+                    // PPを0にする（マイナスにならないように）
+                    if (player.pp < 0) {
+                        player.pp = 0;
+                    }
+                    console.log('[Engine] PLAY_CARD: Extra PP consumed, marked as used');
+                }
+            }
             player.hand.splice(cardIndex, 1);
 
             let sourceCard: BoardCard | Card = card;
