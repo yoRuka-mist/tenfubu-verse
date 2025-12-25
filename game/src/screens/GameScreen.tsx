@@ -1587,30 +1587,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Turn Notification Check
     React.useEffect(() => {
-        // Only show for current player
+        // Only show when it's the current local player's turn to act
         if (gameState.activePlayerId !== currentPlayerId) return;
 
         const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
         const turn = gameState.turnCount;
 
-        // Evolve: P1 Turn 5, P2 Turn 5 (Adjusted based on USER feedback that it appeared at T3)
-        const evolveTurn = isFirstPlayer ? 5 : 5;
-        // Super Evolve: P1 Turn 7, P2 Turn 7
-        const superEvolveTurn = isFirstPlayer ? 7 : 7;
+        // Shadowverse standard:
+        // First Player (P1): Evolve Turn 5, Super Evolve Turn 7
+        // Second Player (P2): Evolve Turn 4, Super Evolve Turn 6
+        const unlockEvolveTurn = isFirstPlayer ? 5 : 4;
+        const unlockSuperEvolveTurn = isFirstPlayer ? 7 : 6;
 
-        // Show ONLY on the turn it becomes available
-        if (turn === superEvolveTurn) {
-            if (notifiedTurn === turn) return; // Already shown for THIS turn (prevents re-notification if state updates)
+        // Show ONLY on the exact turn it becomes available
+        if (turn === unlockSuperEvolveTurn) {
+            if (notifiedTurn === turn) return;
             setTurnNotification('SUPER_EVOLVE_READY');
             setNotifiedTurn(turn);
-            setTimeout(() => setTurnNotification(null), 3000);
-        } else if (turn === evolveTurn) {
+            setTimeout(() => setTurnNotification(null), 3500);
+        } else if (turn === unlockEvolveTurn) {
             if (notifiedTurn === turn) return;
             setTurnNotification('EVOLVE_READY');
             setNotifiedTurn(turn);
-            setTimeout(() => setTurnNotification(null), 3000);
+            setTimeout(() => setTurnNotification(null), 3500);
         }
-    }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId, notifiedTurn]);
+    }, [gameState.turnCount, gameState.activePlayerId, currentPlayerId, notifiedTurn, gameState.firstPlayerId]);
 
     const prevPlayersRef = React.useRef<Record<string, Player>>(gameState.players); // Initial State
 
@@ -2452,6 +2453,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 triggerShake(); // Trigger Shake on Land ONLY if not Spell
             }
             // Dispatch only once
+            // Note: targetId should be retrieved from the current interaction state if applicable
             dispatchAndSend({ type: 'PLAY_CARD', playerId: currentPlayerId, payload: { cardIndex: index, instanceId: card.instanceId } });
             setPlayingCardAnim(null);
         };
@@ -3229,9 +3231,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const followerIndex = currentHover.index!;
                     const card = playerRef.current.board[followerIndex];
 
-                    // Check for Target Selection Requirement (Evolve Trigger)
+                    // Check for Target Selection Requirement (Evolve or Super Evolve Trigger)
+                    const isSuper = (currentDrag as any).useSep;
                     const needsTarget = card?.triggerAbilities?.EVOLVE?.targetType === 'SELECT_FOLLOWER' ||
-                        card?.triggers?.some(t => t.trigger === 'EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER'));
+                        card?.triggers?.some(t => t.trigger === 'EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER')) ||
+                        (isSuper && card?.triggers?.some(t => t.trigger === 'SUPER_EVOLVE' && t.effects.some(e => e.targetType === 'SELECT_FOLLOWER')));
 
                     // Check valid targets
                     const opponentBoard = gameStateRef.current.players[opponentPlayerId].board;
@@ -3242,7 +3246,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     );
 
                     if (needsTarget && hasValidTargets) {
-                        setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex, useSep: (currentDrag as any).useSep });
+                        setTargetingState({ type: 'EVOLVE', sourceIndex: followerIndex, useSep: (currentDrag as any).useSep, allowedTargetPlayerId: opponentPlayerId });
                         ignoreClickRef.current = true;
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     } else {
@@ -4605,52 +4609,55 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* --- Turn Notification Overlay --- */}
                 {turnNotification && (
                     <div style={{
-                        position: 'fixed', // Use fixed to ensure it's relative to the viewport
-                        top: '50%',
-                        left: 0,
-                        width: '100%',
+                        position: 'fixed',
+                        top: '45%', // Slightly higher
+                        // Offset by log pane width (340px * scale) to center in the board area
+                        left: `${340 * scale}px`,
+                        width: `calc(100% - ${340 * scale}px)`,
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
                         transform: 'translateY(-50%)',
                         zIndex: 9000,
                         pointerEvents: 'none',
-                        animation: 'notificationFade 3s forwards'
+                        animation: 'notificationFade 3.5s forwards'
                     }}>
                         <div style={{
-                            padding: '24px 100px',
+                            padding: '30px 140px',
                             background: 'rgba(0, 0, 0, 0.75)',
-                            backdropFilter: 'blur(12px)',
-                            borderTop: turnNotification === 'EVOLVE_READY' ? '3px solid rgba(255, 215, 0, 0.6)' : '3px solid rgba(180, 0, 255, 0.6)',
-                            borderBottom: turnNotification === 'EVOLVE_READY' ? '3px solid rgba(255, 215, 0, 0.6)' : '3px solid rgba(180, 0, 255, 0.6)',
+                            backdropFilter: 'blur(16px)',
+                            borderTop: turnNotification === 'EVOLVE_READY' ? '4px solid rgba(255, 215, 0, 0.7)' : '4px solid rgba(180, 0, 255, 0.7)',
+                            borderBottom: turnNotification === 'EVOLVE_READY' ? '4px solid rgba(255, 215, 0, 0.7)' : '4px solid rgba(180, 0, 255, 0.7)',
                             boxShadow: turnNotification === 'EVOLVE_READY'
-                                ? '0 0 50px rgba(255, 180, 0, 0.4), inset 0 0 30px rgba(255, 215, 0, 0.1)'
-                                : '0 0 50px rgba(180, 0, 255, 0.4), inset 0 0 30px rgba(180, 0, 255, 0.1)',
+                                ? '0 0 70px rgba(255, 180, 0, 0.5), inset 0 0 40px rgba(255, 215, 0, 0.2)'
+                                : '0 0 70px rgba(180, 0, 255, 0.5), inset 0 0 40px rgba(180, 0, 255, 0.2)',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            justifyContent: 'center'
+                            justifyContent: 'center',
+                            borderRadius: '4px'
                         }}>
                             <span style={{
-                                fontSize: '6rem',
+                                fontSize: '8rem', // Larger font
                                 fontWeight: '900',
-                                fontFamily: '"Times New Roman", "Yu Mincho", "MS Mincho", serif',
+                                fontFamily: '"YuMincho", "Hiragino Mincho ProN", "MS Mincho", serif',
                                 color: '#fff',
-                                letterSpacing: '0.8rem',
+                                letterSpacing: '1.2rem',
+                                whiteSpace: 'nowrap',
                                 textShadow: turnNotification === 'EVOLVE_READY'
-                                    ? '0 0 15px rgba(255, 215, 0, 0.9), 0 0 30px rgba(255, 180, 0, 0.7), 2px 2px 4px rgba(0,0,0,0.8)'
-                                    : '0 0 15px rgba(180, 0, 255, 0.9), 0 0 30px rgba(140, 0, 255, 0.7), 2px 2px 4px rgba(0,0,0,0.8)',
-                                WebkitTextStroke: turnNotification === 'EVOLVE_READY' ? '1.5px #ffd700' : '1.5px #b400ff'
+                                    ? '0 0 20px rgba(255, 215, 0, 1), 0 0 40px rgba(255, 180, 0, 0.8), 3px 3px 6px rgba(0,0,0,0.9)'
+                                    : '0 0 20px rgba(180, 0, 255, 1), 0 0 40px rgba(140, 0, 255, 0.8), 3px 3px 6px rgba(0,0,0,0.9)',
+                                WebkitTextStroke: turnNotification === 'EVOLVE_READY' ? '2px #ffd700' : '2px #b400ff'
                             }}>
                                 {turnNotification === 'EVOLVE_READY' ? '進化可能' : '超進化可能'}
                             </span>
                         </div>
                         <style>{`
                             @keyframes notificationFade {
-                                0% { opacity: 0; transform: translateY(-40%) scale(0.85); filter: blur(10px); }
-                                15% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
-                                85% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
-                                100% { opacity: 0; transform: translateY(-60%) scale(1.1); filter: blur(15px); }
+                                0% { opacity: 0; transform: translateY(-40%) scale(0.8); filter: blur(15px); }
+                                10% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
+                                90% { opacity: 1; transform: translateY(-50%) scale(1); filter: blur(0px); }
+                                100% { opacity: 0; transform: translateY(-60%) scale(1.15); filter: blur(20px); }
                             }
                         `}</style>
                     </div>
