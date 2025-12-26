@@ -467,6 +467,7 @@ const MOCK_CARDS: Card[] = [
         attack: 4, health: 6,
         description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「すみませんが、これで終わりです。」を手札に加える。超進化時：相手のフォロワー1体を破壊する。',
         imageUrl: '/cards/sara.png',
+        evolvedImageUrl: '/cards/sara_2.png',
         attackEffectType: 'SHOT',
         triggers: [
             {
@@ -1353,7 +1354,8 @@ function processSingleEffect(
                         }
                     }
                 }
-            } else if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
+            } else if ((effect.targetType === 'SELECT_FOLLOWER' || effect.targetType === 'SELECT_ALLY_FOLLOWER') && targetId) {
+                // SELECT_ALLY_FOLLOWER: 翼の効果など味方フォロワーへのパッシブ付与
                 const targetInfo = getBoardCardById(targetId);
                 if (targetInfo) {
                     const { card: boardCard } = targetInfo;

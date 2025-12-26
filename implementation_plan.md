@@ -7,9 +7,14 @@
 - `game/src/core/engine.ts`: カード定義（MOCK_CARDS）の更新
 
 ## 修正内容
+### ルイ・ユー
 1. `MOCK_CARDS` 配列内の `id: 'c_ruiyu'` を持つオブジェクトを特定する。
 2. `attack` プロパティを `4` から `5` に変更する。
 3. `health` プロパティを `4` から `5` に変更する。
+
+### sara
+1. `MOCK_CARDS` 配列内の `id: 'c_sara'` を持つオブジェクトを特定する。
+2. `evolvedImageUrl` プロパティを追加または更新し、`'/cards/sara_2.png'` に設定する。
 
 ## 確認事項
 - スタッツの変更が正しく反映されているか、コード上で確認する。

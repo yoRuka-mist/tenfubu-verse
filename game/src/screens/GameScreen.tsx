@@ -2315,12 +2315,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const playingCardAnimRef = React.useRef(playingCardAnim);
     const evolveAnimationRef = React.useRef(evolveAnimation);
 
+    // --- Visual Board Ref for accurate instanceId lookup during animations ---
+    const visualPlayerBoardRef = React.useRef(visualPlayerBoard);
+
     useEffect(() => {
         activeEffectsRef.current = activeEffects;
         animatingCardRef.current = animatingCard;
         playingCardAnimRef.current = playingCardAnim;
         evolveAnimationRef.current = evolveAnimation;
     }, [activeEffects, animatingCard, playingCardAnim, evolveAnimation]);
+
+    useEffect(() => {
+        visualPlayerBoardRef.current = visualPlayerBoard;
+    }, [visualPlayerBoard]);
 
     // Handle Evolve with Animation
     // CRITICAL: Use instanceId to ensure animation and processing target the same card
@@ -3388,7 +3395,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Evolve Logic
                 else if (currentDrag.sourceType === 'EVOLVE' && currentHover && currentHover.type === 'FOLLOWER' && currentHover.playerId === currentPlayerId) {
                     const visualFollowerIndex = currentHover.index!;
-                    const followerInstanceId = currentHover.instanceId;
+
+                    // CRITICAL FIX: Get instanceId from visual board at the hovered index
+                    // This ensures we target the card the user is visually seeing, not the stale hover state
+                    // During card slide animations, hoveredTarget.instanceId may be outdated
+                    const visualBoard = visualPlayerBoardRef.current;
+                    const visualCard = visualBoard[visualFollowerIndex];
+                    const followerInstanceId = visualCard?.instanceId || currentHover.instanceId;
 
                     // CRITICAL: Find actual board index using instanceId for consistent processing
                     const playerBoard = playerRef.current.board;
