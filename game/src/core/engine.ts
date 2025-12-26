@@ -58,7 +58,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 7, type: 'FOLLOWER',
-        attack: 4, health: 4,
+        attack: 5, health: 5,
         description: 'ファンファーレ：自分のリーダーを4回復する。さらに「cyoriena」1体を場に出す。進化時：自分のリーダーを4回復する。',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
@@ -956,9 +956,21 @@ function processSingleEffect(
             const damage = effect.value || 0;
             if (effect.targetType === 'ALL_FOLLOWERS') {
                 const oppBoard = newState.players[opponentId].board;
+
+                // CRITICAL: Use pre-calculated targetIds if available
+                // This ensures we only hit targets that existed when the effect was triggered
+                const targetsToHit = targetIds && targetIds.length > 0
+                    ? new Set(targetIds)
+                    : null; // null means hit all current followers (fallback for legacy)
+
                 // Deal Damage
                 oppBoard.forEach(c => {
                     if (c) {
+                        // If targetIds was provided, only hit those specific units
+                        if (targetsToHit && !targetsToHit.has(c.instanceId)) {
+                            return; // Skip units not in the original target list
+                        }
+
                         if (c.hasBarrier) {
                             c.hasBarrier = false;
                             newState.logs.push(`${c.name} のバリアが範囲ダメージを無効化した！`);
@@ -1236,6 +1248,18 @@ function processSingleEffect(
                         hasBarrier: template.passiveAbilities?.includes('BARRIER'),
                         passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined
                     };
+
+                    // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
+                    const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                    if (hasSenkaOnBoard && newCard.tags?.includes('Knuckler') && newCard.id !== 'c_senka_knuckler') {
+                        if (!newCard.passiveAbilities) newCard.passiveAbilities = [];
+                        if (!newCard.passiveAbilities.includes('STORM')) {
+                            newCard.passiveAbilities.push('STORM');
+                            newCard.canAttack = true;
+                            newState.logs.push(`${newCard.name} はせんかの効果で疾走を得た`);
+                        }
+                    }
+
                     player.board.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を場に出した`);
                 }
@@ -1349,6 +1373,7 @@ function processSingleEffect(
                 }
             } else if (effect.targetType === 'ALL_FOLLOWERS') {
                 const p = newState.players[sourcePlayerId];
+                let count = 0;
                 p.board.forEach(c => {
                     if (c) {
                         // Check conditions (e.g. tag: 'Knuckler')
@@ -1356,15 +1381,23 @@ function processSingleEffect(
 
                         if (passive === 'BARRIER') {
                             c.hasBarrier = true;
+                            count++;
                         } else {
                             if (!c.passiveAbilities) c.passiveAbilities = [];
                             if (!c.passiveAbilities.includes(passive)) {
                                 c.passiveAbilities.push(passive);
+                                count++;
+                                // CRITICAL: Enable attack for STORM/RUSH
+                                if (passive === 'STORM' || passive === 'RUSH') {
+                                    c.canAttack = true;
+                                }
                             }
                         }
                     }
                 });
-                newState.logs.push(`味方のフォロワーに ${passive} を付与した`);
+                if (count > 0) {
+                    newState.logs.push(`味方のフォロワー${count}体に ${passive} を付与した`);
+                }
             }
             break;
         }
@@ -1731,6 +1764,19 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 if (card.passiveAbilities?.includes('STORM') || card.passiveAbilities?.includes('RUSH')) {
                     newFollower.canAttack = true;
                 }
+
+                // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
+                const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                if (hasSenkaOnBoard && newFollower.tags?.includes('Knuckler') && newFollower.id !== 'c_senka_knuckler') {
+                    // Grant STORM if not already present
+                    if (!newFollower.passiveAbilities) newFollower.passiveAbilities = [];
+                    if (!newFollower.passiveAbilities.includes('STORM')) {
+                        newFollower.passiveAbilities.push('STORM');
+                        newFollower.canAttack = true;
+                        newState.logs.push(`${newFollower.name} はせんかの効果で疾走を得た`);
+                    }
+                }
+
                 player.board.push(newFollower);
                 sourceCard = newFollower;
             } else {
@@ -1755,37 +1801,40 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 let resolvedTargetIds: string[] | undefined = undefined;
 
                 if (e.targetType === 'OPPONENT' || e.targetType === 'SELF' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE') {
-                    // Pre-calculate targets for visualization
-                    // Note: This logic duplicates processSingleEffect partially but is needed for UI cues
-                    // Determine target player based on effect targetType
-                    const targetPid = e.targetType === 'SELF' ? action.playerId : (action.playerId === 'p1' ? 'p2' : 'p1');
-                    const targetBoard = newState.players[targetPid].board;
+                    // Pre-calculate targets for visualization and to snapshot the board state at effect queue time
+                    // This ensures effects hit the targets that existed when the effect was triggered, not when resolved
+                    const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
+                    const selfPid = action.playerId;
 
                     if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                        const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
+                        const targetBoard = newState.players[targetPid].board;
                         const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
-                        // Use a temp RNG to predict (or effectively decide) targets
-                        // IMPORTANT: To keep it deterministic and sync with processSingleEffect, 
-                        // we should probably Pass these targets TO processSingleEffect via the queue.
-                        // However, processSingleEffect currently re-rolls. 
-                        // We will updated processSingleEffect to use provided targetIds if available.
 
                         const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
-                        // Shuffle (using current rng state - effectively advancing it? No, checking state)
-                        // To avoid messing up the main RNG flow, we might need to rely on the fact that processSingleEffect
-                        //  will be called next. 
-                        // Ideally: Decide HERE, save to pendingEffect, and let processSingleEffect USE it.
-
-                        // Let's implement deciding HERE.
-                        // We need a mutable copy of RNG or just consume it? 
-                        // If we consume it here, processSingleEffect must NOT consume it again or use the same seed.
-                        // Actually, 'rng' variable is available in this scope.
-
                         for (let i = validIndices.length - 1; i > 0; i--) {
                             const j = Math.floor(rng() * (i + 1));
                             [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
                         }
                         const selectedIndices = validIndices.slice(0, count);
                         resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                    }
+                    // CRITICAL: Pre-calculate ALL_FOLLOWERS and ALL_OTHER_FOLLOWERS targets at queue time
+                    // This ensures effects only hit units that existed when the effect was triggered
+                    else if (e.targetType === 'ALL_FOLLOWERS' || e.type === 'AOE_DAMAGE') {
+                        // ALL_FOLLOWERS targets ALL enemy followers
+                        const targetBoard = newState.players[opponentPid].board;
+                        resolvedTargetIds = targetBoard
+                            .filter(c => c !== null)
+                            .map(c => c!.instanceId);
+                        console.log(`[Engine] Pre-calculated ALL_FOLLOWERS targets: ${resolvedTargetIds.length} units`);
+                    }
+                    else if (e.targetType === 'ALL_OTHER_FOLLOWERS') {
+                        // ALL_OTHER_FOLLOWERS targets all own followers except the source
+                        const targetBoard = newState.players[selfPid].board;
+                        resolvedTargetIds = targetBoard
+                            .filter(c => c !== null && c.instanceId !== sourceCard.instanceId)
+                            .map(c => c!.instanceId);
                     }
                 }
 
@@ -1953,12 +2002,14 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 if (e.conditions) {
                     if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
                 }
-                // Resolution of RANDOM targets for visualization (EVOLVE)
+                // Resolution of targets for visualization (EVOLVE)
+                // CRITICAL: Pre-calculate targets at queue time for consistent effect application
                 let resolvedTargetIds: string[] | undefined = undefined;
+                const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
+                const selfPid = action.playerId;
 
                 if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
-                    // Determine target player based on effect targetType
-                    const targetPid = e.targetType === 'SELF' ? action.playerId : (action.playerId === 'p1' ? 'p2' : 'p1');
+                    const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
                     const targetBoard = newState.players[targetPid].board;
                     const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
 
@@ -1969,6 +2020,20 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     }
                     const selectedIndices = validIndices.slice(0, count);
                     resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                }
+                // CRITICAL: Pre-calculate ALL_FOLLOWERS targets at queue time
+                else if (e.targetType === 'ALL_FOLLOWERS' || e.type === 'AOE_DAMAGE') {
+                    const targetBoard = newState.players[opponentPid].board;
+                    resolvedTargetIds = targetBoard
+                        .filter(c => c !== null)
+                        .map(c => c!.instanceId);
+                    console.log(`[Engine EVOLVE] Pre-calculated ALL_FOLLOWERS targets: ${resolvedTargetIds.length} units`);
+                }
+                else if (e.targetType === 'ALL_OTHER_FOLLOWERS') {
+                    const targetBoard = newState.players[selfPid].board;
+                    resolvedTargetIds = targetBoard
+                        .filter(c => c !== null && c.instanceId !== follower.instanceId)
+                        .map(c => c!.instanceId);
                 }
 
                 newPendingEffects.push({

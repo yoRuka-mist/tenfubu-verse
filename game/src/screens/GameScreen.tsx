@@ -2305,6 +2305,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         sourcePlayerId?: string;
     } | null>(null);
 
+    // --- Card Play Lock to prevent double play ---
+    const cardPlayLockRef = React.useRef(false);
+    const lastPlayedInstanceIdRef = React.useRef<string | null>(null);
+
     // --- State Refs for AI Timing (Moved here to ensure access to all states) ---
     const activeEffectsRef = React.useRef(activeEffects);
     const animatingCardRef = React.useRef(animatingCard);
@@ -2424,6 +2428,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currentPlayer = playerRef.current;
         const card = currentPlayer.hand[index];
 
+        // CRITICAL: Prevent double card play
+        if (!card) {
+            console.warn('[handlePlayCard] Card not found at index:', index);
+            return;
+        }
+
+        // Check if this exact card was already played (using instanceId)
+        if (card.instanceId && lastPlayedInstanceIdRef.current === card.instanceId) {
+            console.warn('[handlePlayCard] Duplicate play blocked for instanceId:', card.instanceId);
+            return;
+        }
+
+        // Check card play lock
+        if (cardPlayLockRef.current) {
+            console.warn('[handlePlayCard] Card play locked, ignoring duplicate call');
+            return;
+        }
+
+        // Set lock and track played card
+        cardPlayLockRef.current = true;
+        lastPlayedInstanceIdRef.current = card.instanceId || null;
+
         // Check if card needs a target and identify which side
         const fanfareTrigger = card.triggers?.find(t => t.trigger === 'FANFARE');
         const firstEffect = fanfareTrigger?.effects[0];
@@ -2502,6 +2528,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // Note: targetId should be retrieved from the current interaction state if applicable
             dispatchAndSend({ type: 'PLAY_CARD', playerId: currentPlayerId, payload: { cardIndex: index, instanceId: card.instanceId } });
             setPlayingCardAnim(null);
+
+            // Release card play lock after processing
+            setTimeout(() => {
+                cardPlayLockRef.current = false;
+            }, 100); // Small delay to prevent rapid re-triggering
         };
 
         // Send PLAY_CARD_ANIM to opponent for synchronized animation
@@ -2600,6 +2631,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [player.hand.length, opponent.hand.length, audioSettings, playSE]);
 
     // --- AI Logic (Restored) ---
+
+    // Reset card play lock when turn changes to player's turn
+    useEffect(() => {
+        if (gameState.activePlayerId === currentPlayerId) {
+            // Reset locks at the start of player's turn
+            cardPlayLockRef.current = false;
+            lastPlayedInstanceIdRef.current = null;
+        }
+    }, [gameState.activePlayerId, gameState.turnCount, currentPlayerId]);
 
     useEffect(() => {
         if (gameMode !== 'CPU') return;
@@ -2986,6 +3026,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // --- PREVENTION: Do not start a new drag if one is active ---
         if (dragStateRef.current || playingCardAnim || animatingCard) return;
 
+        // --- PREVENTION: Block if card play is in progress ---
+        if (cardPlayLockRef.current) {
+            console.warn('[handleHandMouseDown] Card play in progress, blocking drag start');
+            return;
+        }
+
         const card = player.hand[index];
         e.stopPropagation();
 
@@ -3146,6 +3192,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (currentDrag) {
                 // Hand Drag Logic (Arrow to Board)
                 if (currentDrag.sourceType === 'HAND') {
+                    // CRITICAL: Block if card play is already in progress
+                    if (cardPlayLockRef.current) {
+                        console.warn('[handleGlobalMouseUp] Card play in progress, cancelling drag');
+                        dragStateRef.current = null;
+                        setDragState(null);
+                        return;
+                    }
+
                     const dragDistanceTotal = Math.sqrt(Math.pow(currentDrag.startX - currentDrag.currentX, 2) + Math.pow(currentDrag.startY - currentDrag.currentY, 2));
 
                     // Use "Board Rect" detection (Basic: Y < handY and not too far left/right? Or just "Is Y < 60% of screen")
@@ -3168,11 +3222,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             if (needsTarget) {
                                 // Determine which player's board to target
                                 const allowedTargetPlayerId = (needsAllyTarget || needsOtherAllyTarget) ? currentPlayerId : opponentPlayerId;
-                                setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex, allowedTargetPlayerId });
-                                // Don't collapse hand - only collapse on background click
-                                // Keep selected card visible during targeting
-                                ignoreClickRef.current = true; // Prevent quick close
-                                setTimeout(() => { ignoreClickRef.current = false; }, 100);
+
+                                // Check if there are valid targets on the target board
+                                const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
+                                const hasValidTargets = targetBoard.some(c => {
+                                    if (!c) return false;
+                                    // For enemy targets, check STEALTH and AURA
+                                    if (allowedTargetPlayerId !== currentPlayerId) {
+                                        if ((c as any).passiveAbilities?.includes('STEALTH') || (c as any).passiveAbilities?.includes('AURA')) {
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                });
+
+                                if (hasValidTargets) {
+                                    // CRITICAL: Set lock when entering targeting mode to prevent other cards from being played
+                                    cardPlayLockRef.current = true;
+                                    lastPlayedInstanceIdRef.current = card.instanceId || null;
+                                    setTargetingState({ type: 'PLAY', sourceIndex: currentDrag.sourceIndex, sourceInstanceId: card.instanceId, allowedTargetPlayerId });
+                                    // Don't collapse hand - only collapse on background click
+                                    // Keep selected card visible during targeting
+                                    ignoreClickRef.current = true; // Prevent quick close
+                                    setTimeout(() => { ignoreClickRef.current = false; }, 100);
+                                } else {
+                                    // No valid targets - skip target selection and play card directly
+                                    console.log('[handleGlobalMouseUp] No valid targets, skipping target selection');
+                                    handlePlayCard(currentDrag.sourceIndex, currentDrag.startX, currentDrag.startY);
+                                    setSelectedCard(null);
+                                    ignoreClickRef.current = true;
+                                    setTimeout(() => { ignoreClickRef.current = false; }, 100);
+                                }
                             } else {
                                 handlePlayCard(currentDrag.sourceIndex, currentDrag.startX, currentDrag.startY);
                                 // Don't collapse hand - only collapse on background click
@@ -3321,7 +3401,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     // Check for Target Selection Requirement (Evolve or Super Evolve Trigger)
                     const isSuper = (currentDrag as any).useSep;
-                    const triggerToCheck = isSuper ? 'SUPER_EVOLVE' : 'EVOLVE';
+                    // When super evolving, check both SUPER_EVOLVE and EVOLVE triggers (engine fires both)
+                    const triggersToCheck = isSuper ? ['SUPER_EVOLVE', 'EVOLVE'] : ['EVOLVE'];
 
                     // Check which target type is needed
                     const getTargetTypeFromTrigger = () => {
@@ -3329,7 +3410,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         if (legacyType) return legacyType;
 
                         for (const trigger of card?.triggers || []) {
-                            if (trigger.trigger === triggerToCheck) {
+                            if (triggersToCheck.includes(trigger.trigger)) {
                                 for (const effect of trigger.effects) {
                                     if (effect.targetType && ['SELECT_FOLLOWER', 'SELECT_ALLY_FOLLOWER', 'SELECT_OTHER_ALLY_FOLLOWER'].includes(effect.targetType)) {
                                         return effect.targetType;
@@ -3396,6 +3477,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const handleBackgroundClick = () => {
         if (ignoreClickRef.current) return;
         if (targetingState) {
+            // Release card play lock if targeting was for PLAY
+            if (targetingState.type === 'PLAY') {
+                cardPlayLockRef.current = false;
+                // Don't clear lastPlayedInstanceIdRef - keep it to prevent re-play
+            }
             setTargetingState(null);
             return;
         }
@@ -3424,6 +3510,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Target Selection Handler ---
     const handleTargetClick = (targetType: 'LEADER' | 'FOLLOWER', targetIndex: number, targetPlayerId: string, instanceId?: string) => {
         if (!targetingState) return;
+
+        // Note: cardPlayLockRef is intentionally set when entering targeting mode,
+        // so we should NOT block here. The lock prevents NEW card plays, not target selection.
 
         // Validating target side
         if (targetingState.allowedTargetPlayerId && targetingState.allowedTargetPlayerId !== targetPlayerId) {
@@ -3500,8 +3589,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (!animCard) {
                 console.error('[handleTargetClick] Card not found at index:', index);
                 setTargetingState(null);
+                cardPlayLockRef.current = false;
                 return;
             }
+
+            // Note: We don't check lastPlayedInstanceIdRef here because:
+            // 1. The card was already validated when entering targeting mode
+            // 2. lastPlayedInstanceIdRef was set when entering targeting mode
+            // The lock is already held, so we can proceed with the play
+
+            // Ensure lock is set (should already be set from entering targeting mode)
+            cardPlayLockRef.current = true;
+            // Update lastPlayedInstanceIdRef to confirm this card is being played
+            lastPlayedInstanceIdRef.current = animCard.instanceId || null;
 
             // --- C_Y Visuals Trigger ---
             if (animCard.id === 'c_y') {
@@ -3598,6 +3698,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // (Moved to before onComplete to avoid duplicate effects)
 
                 setPlayingCardAnim(null);
+
+                // Release card play lock after processing
+                setTimeout(() => {
+                    cardPlayLockRef.current = false;
+                }, 100);
             };
 
             let finalX: number | undefined;
@@ -3662,6 +3767,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Use Button Handler ---
     const handleUseButtonClick = () => {
         if (!selectedCard || selectedCard.owner !== 'PLAYER') return;
+
+        // CRITICAL: Block if card play is in progress
+        if (cardPlayLockRef.current) {
+            console.warn('[handleUseButtonClick] Card play in progress, ignoring');
+            return;
+        }
+
         const cardIndex = player.hand.findIndex(c => c.id === selectedCard.card.id);
         if (cardIndex === -1) return;
 
@@ -3674,6 +3786,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         handlePlayCard(cardIndex, startX, startY);
         // Don't collapse hand - only collapse on background click
         setSelectedCard(null);
+    };
+
+    // --- End Turn Handler with Wait ---
+    const [isEndingTurn, setIsEndingTurn] = React.useState(false);
+
+    const handleEndTurn = async () => {
+        if (gameState.activePlayerId !== currentPlayerId) return;
+        if (isEndingTurn) return; // Already ending turn
+
+        setIsEndingTurn(true);
+
+        // Wait for all animations and effects to complete
+        const waitForAllProcessing = async () => {
+            const checkIdle = () => {
+                const state = gameStateRef.current;
+                const hasPending = state.pendingEffects && state.pendingEffects.length > 0;
+                const hasActiveEffects = activeEffectsRef.current.length > 0;
+                const isAnimatingCard = animatingCardRef.current !== null;
+                const isPlayingCard = playingCardAnimRef.current !== null;
+                const isEvolving = evolveAnimationRef.current !== null;
+                const isProcessing = isProcessingEffect;
+                const hasCardLock = cardPlayLockRef.current;
+
+                return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving && !isProcessing && !hasCardLock;
+            };
+
+            // Wait up to 10 seconds for processing to complete
+            const maxWait = 10000;
+            const checkInterval = 100;
+            let waited = 0;
+
+            while (!checkIdle() && waited < maxWait) {
+                await new Promise(r => setTimeout(r, checkInterval));
+                waited += checkInterval;
+            }
+
+            if (waited >= maxWait) {
+                console.warn('[handleEndTurn] Timeout waiting for processing to complete');
+            }
+        };
+
+        await waitForAllProcessing();
+
+        // Now dispatch END_TURN
+        dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId });
+        setIsEndingTurn(false);
     };
 
     const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
@@ -4185,7 +4343,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10 * scale, height: 10 * scale, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
                         </div>
                         {/* End Turn Button */}
-                        <button disabled={gameState.activePlayerId !== currentPlayerId} onClick={() => dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId })} style={{ width: 160 * scale, height: 160 * scale, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', background: gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748', color: 'white', fontWeight: 900, fontSize: '1.6rem', boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none', cursor: gameState.activePlayerId === currentPlayerId ? 'pointer' : 'default', transition: 'all 0.3s' }}>ターン<br />終了</button>
+                        <button
+                            disabled={gameState.activePlayerId !== currentPlayerId || isEndingTurn}
+                            onClick={handleEndTurn}
+                            style={{
+                                width: 160 * scale,
+                                height: 160 * scale,
+                                borderRadius: '50%',
+                                border: '4px solid rgba(255,255,255,0.2)',
+                                background: isEndingTurn
+                                    ? 'linear-gradient(135deg, #805ad5, #6b46c1)'
+                                    : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
+                                color: 'white',
+                                fontWeight: 900,
+                                fontSize: '1.6rem',
+                                boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none',
+                                cursor: (gameState.activePlayerId === currentPlayerId && !isEndingTurn) ? 'pointer' : 'default',
+                                transition: 'all 0.3s'
+                            }}
+                        >
+                            {isEndingTurn ? '処理中...' : 'ターン\n終了'}
+                        </button>
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
                             {/* PP数値表示 - エクストラPP有効時は「PP + 1」表示 */}
@@ -4564,9 +4742,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         })}
                     </div>
 
-                    {/* Play Button - Left side, above hand count badge */}
+                    {/* Play Button - Left side, below hand count badge */}
                     {selectedCard && selectedCard.owner === 'PLAYER' && isHandExpanded && (
-                        <div style={{ position: 'absolute', left: 15, bottom: 290 * scale, zIndex: 600, pointerEvents: 'auto' }}>
+                        <div style={{ position: 'absolute', left: 15, bottom: 155 * scale, zIndex: 600, pointerEvents: 'auto' }}>
                             <button
                                 disabled={player.pp < selectedCard.card.cost}
                                 onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
