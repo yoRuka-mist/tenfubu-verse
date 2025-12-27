@@ -2,6 +2,14 @@ import React from 'react';
 import { Card as CardType } from '../core/types';
 import './Card.css';
 
+// Helper function to resolve asset paths with base URL for GitHub Pages deployment
+const getAssetUrl = (path: string): string => {
+    const base = import.meta.env.BASE_URL || '/';
+    // Remove leading slash from path if base already ends with /
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${base}${cleanPath}`;
+};
+
 interface CardProps {
     card: CardType;
     onClick?: () => void;
@@ -46,7 +54,9 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     // Determine which image to show (evolved or base)
     const hasEvolved = 'hasEvolved' in card ? (card as any).hasEvolved : false;
     const evolvedImageUrl = 'evolvedImageUrl' in card ? (card as any).evolvedImageUrl : undefined;
-    const displayImageUrl = (hasEvolved && evolvedImageUrl) ? evolvedImageUrl : card.imageUrl;
+    const rawImageUrl = (hasEvolved && evolvedImageUrl) ? evolvedImageUrl : card.imageUrl;
+    // Apply base URL for GitHub Pages deployment
+    const displayImageUrl = rawImageUrl ? getAssetUrl(rawImageUrl) : undefined;
 
     // Determine Glow Color
     let glowColor = style?.boxShadow;

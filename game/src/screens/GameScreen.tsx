@@ -5,9 +5,17 @@ import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 
+// Helper function to resolve asset paths with base URL for GitHub Pages deployment
+const getAssetUrl = (path: string): string => {
+    const base = import.meta.env.BASE_URL || '/';
+    // Remove leading slash from path if base already ends with /
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${base}${cleanPath}`;
+};
+
 // Leader Images
-const azyaLeaderImg = '/leaders/azya_leader.png';
-const senkaLeaderImg = '/leaders/senka_leader.png';
+const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
+const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 
 // --- Scale Factor Hook for 4K/Multi-resolution Support ---
 // Base resolution: 1920x1080 (Full HD)
@@ -176,7 +184,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
         const playSE = (file: string, volume: number = 0.5, delay: number = 0) => {
             setTimeout(() => {
-                const audio = new Audio(`/se/${file}`);
+                const audio = new Audio(getAssetUrl(`/se/${file}`));
                 audio.volume = (audioSettings.se || 0.5) * volume;
                 audio.play().catch(e => console.warn("SE Play prevented", e));
             }, delay);
@@ -225,16 +233,16 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
     if (isSpriteType) {
         // Map Type to Image
-        let bgImage = '/effects/thunder.png';
-        if (type === 'IMPACT') bgImage = '/effects/impact.png';
-        if (type === 'SUMI') bgImage = '/effects/sumi.png';
-        if (type === 'SHOT') bgImage = '/effects/shot.png';
-        if (type === 'ICE') bgImage = '/effects/ice.png';
-        if (type === 'WATER') bgImage = '/effects/water.png';
-        if (type === 'RAY') bgImage = '/effects/ray.png';
-        if (type === 'FIRE') bgImage = '/effects/fire.png';
-        if (type === 'SLASH') bgImage = '/effects/slash.png';
-        if (type === 'BLUE_FIRE') bgImage = '/effects/blue_fire.png';
+        let bgImage = getAssetUrl('/effects/thunder.png');
+        if (type === 'IMPACT') bgImage = getAssetUrl('/effects/impact.png');
+        if (type === 'SUMI') bgImage = getAssetUrl('/effects/sumi.png');
+        if (type === 'SHOT') bgImage = getAssetUrl('/effects/shot.png');
+        if (type === 'ICE') bgImage = getAssetUrl('/effects/ice.png');
+        if (type === 'WATER') bgImage = getAssetUrl('/effects/water.png');
+        if (type === 'RAY') bgImage = getAssetUrl('/effects/ray.png');
+        if (type === 'FIRE') bgImage = getAssetUrl('/effects/fire.png');
+        if (type === 'SLASH') bgImage = getAssetUrl('/effects/slash.png');
+        if (type === 'BLUE_FIRE') bgImage = getAssetUrl('/effects/blue_fire.png');
 
         const steps = spriteConfig.cols * spriteConfig.rows;
 
@@ -270,7 +278,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     let animation = '';
 
     if (type === 'FIREBALL') {
-        imgSrc = '/effects/fireball.png';
+        imgSrc = getAssetUrl('/effects/fireball.png');
         animation = 'explode 0.5s ease-out forwards';
     } else if (type === 'BEAM') {
         return (
@@ -899,7 +907,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         opacity: totalRotateY <= 90 ? 1 : 0, // Explicit visibility toggle
                     }}>
                         <img
-                            src={card.imageUrl}
+                            src={getAssetUrl(card.imageUrl || '')}
                             alt={card.name}
                             style={{
                                 width: '100%', height: '100%', objectFit: 'cover',
@@ -926,7 +934,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         opacity: totalRotateY > 90 ? 1 : 0, // Explicit visibility toggle
                     }}>
                         <img
-                            src={(evolvedImageUrl && evolvedImageUrl !== '') ? evolvedImageUrl : card.imageUrl}
+                            src={getAssetUrl((evolvedImageUrl && evolvedImageUrl !== '') ? evolvedImageUrl : (card.imageUrl || ''))}
                             alt={`${card.name} Evolved`}
                             style={{
                                 width: '100%', height: '100%', objectFit: 'cover',
@@ -1392,7 +1400,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     const playSE = React.useCallback((file: string, volume: number = 0.5) => {
         if (!audioSettings.seEnabled) return;
-        const audio = new Audio(`/se/${file}`);
+        const audio = new Audio(getAssetUrl(`/se/${file}`));
         audio.volume = audioSettings.se * volume;
         audio.play().catch(e => console.warn("SE Play prevented", e));
     }, [audioSettings]);
@@ -1448,8 +1456,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const lastBgmKey = 'lastPlayedBgm';
     const selectBgm = React.useCallback((className: string) => {
         const bgmPools: Record<string, string[]> = {
-            'AJA': ['/bgm/Green Misty Mountains.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3', '/bgm/kingetsu.mp3'],
-            'SENKA': ['/bgm/ouka.mp3', '/bgm/Jade Moon.mp3', '/bgm/amaama.mp3', '/bgm/kingetsu.mp3']
+            'AJA': [getAssetUrl('/bgm/Green Misty Mountains.mp3'), getAssetUrl('/bgm/Jade Moon.mp3'), getAssetUrl('/bgm/amaama.mp3'), getAssetUrl('/bgm/kingetsu.mp3')],
+            'SENKA': [getAssetUrl('/bgm/ouka.mp3'), getAssetUrl('/bgm/Jade Moon.mp3'), getAssetUrl('/bgm/amaama.mp3'), getAssetUrl('/bgm/kingetsu.mp3')]
         };
         const currentPool = bgmPools[className] || bgmPools['SENKA'];
         const lastPlayed = sessionStorage.getItem(lastBgmKey);

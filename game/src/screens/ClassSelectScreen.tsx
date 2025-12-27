@@ -1,9 +1,17 @@
 import React from 'react';
 import { ClassType } from '../core/types';
 
+// Helper function to resolve asset paths with base URL for GitHub Pages deployment
+const getAssetUrl = (path: string): string => {
+    const base = import.meta.env.BASE_URL || '/';
+    // Remove leading slash from path if base already ends with /
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${base}${cleanPath}`;
+};
+
 // Leader Images
-const azyaLeaderImg = '/leaders/azya_leader.png';
-const senkaLeaderImg = '/leaders/senka_leader.png';
+const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
+const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 
 interface ClassSelectScreenProps {
     onSelectClass: (cls: ClassType) => void;
