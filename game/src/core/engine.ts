@@ -950,6 +950,12 @@ function processSingleEffect(
                 const opponent = newState.players[opponentId];
                 opponent.hp -= damage;
                 newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えました`);
+
+                // CRITICAL FIX: Check for win condition after leader damage from card effects
+                if (opponent.hp <= 0) {
+                    newState.winnerId = sourcePlayerId;
+                    newState.logs.push(`${opponent.name} のリーダーが倒れた！`);
+                }
             }
             break;
         }
@@ -1076,7 +1082,15 @@ function processSingleEffect(
             const template = MOCK_CARDS.find(c => c.id === targetCardId);
             if (template) {
                 const player = newState.players[sourcePlayerId];
-                const newCard = { ...template, id: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}` }; // Instantiate
+                // CRITICAL FIX: Generate unique instanceId for generated cards
+                // This prevents the bug where multiple generated cards share no instanceId,
+                // causing the wrong card to be removed when one is played
+                const uniqueInstanceId = `gen_${newState.rngSeed}_${Date.now()}_${Math.floor(rng() * 10000)}`;
+                const newCard = {
+                    ...template,
+                    id: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
+                    instanceId: uniqueInstanceId  // CRITICAL: Add instanceId
+                };
                 if (player.hand.length < 9) {
                     player.hand.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を手札に加えた`);
@@ -1286,14 +1300,24 @@ function processSingleEffect(
 
                 // Add to hand if space
                 const opponent = newState.players[opponentId];
-                // Convert back to Card (strip board props)
-                const { currentHealth, maxHealth, canAttack, attacksMade, ...baseCard } = card;
+                // Convert back to Card (strip board props AND reset evolution state)
+                // CRITICAL FIX: Reset hasEvolved, evolvedImageUrl display, and restore base stats
+                const originalDef = getCardDefinition(card.id.split('_')[0]) || MOCK_CARDS.find(c => card.name === c.name);
+                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, ...baseCard } = card;
+
+                // Reset to base state - remove evolution status and restore original stats
+                const resetCard = {
+                    ...baseCard,
+                    attack: originalDef?.attack ?? baseCard.attack,
+                    health: originalDef?.health ?? baseCard.health,
+                    // hasEvolved is stripped out, so it returns to false (undefined)
+                } as Card;
 
                 if (opponent.hand.length < 9) {
-                    opponent.hand.push(baseCard as Card);
+                    opponent.hand.push(resetCard);
                     newState.logs.push(`${card.name} は手札に戻された`);
                 } else {
-                    opponent.graveyard.push(baseCard as Card);
+                    opponent.graveyard.push(resetCard);
                     newState.logs.push(`${card.name} は手札がいっぱいで消滅した（墓地へ）`);
                 }
             }
@@ -1317,13 +1341,22 @@ function processSingleEffect(
 
                 // Add to opponent's hand if space
                 const opponent = newState.players[opponentId];
-                const { currentHealth, maxHealth, canAttack, attacksMade, ...baseCard } = card;
+                // CRITICAL FIX: Reset hasEvolved, evolvedImageUrl display, and restore base stats
+                const originalDef = getCardDefinition(card.id.split('_')[0]) || MOCK_CARDS.find(c => card.name === c.name);
+                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, ...baseCard } = card;
+
+                // Reset to base state - remove evolution status and restore original stats
+                const resetCard = {
+                    ...baseCard,
+                    attack: originalDef?.attack ?? baseCard.attack,
+                    health: originalDef?.health ?? baseCard.health,
+                } as Card;
 
                 if (opponent.hand.length < 9) {
-                    opponent.hand.push(baseCard as Card);
+                    opponent.hand.push(resetCard);
                     newState.logs.push(`${card.name} は手札に戻された`);
                 } else {
-                    opponent.graveyard.push(baseCard as Card);
+                    opponent.graveyard.push(resetCard);
                     newState.logs.push(`${card.name} は手札がいっぱいで消滅した（墓地へ）`);
                 }
             }

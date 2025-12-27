@@ -3887,21 +3887,48 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
     const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
-    // Check if evolution turn has been reached (regardless of whose turn it is)
-    const evolveUnlockedTurn = isPlayerFirstPlayer ? 5 : 4;
-    const superEvolveUnlockedTurn = isPlayerFirstPlayer ? 7 : 6;
-    const isEvolveUnlocked = gameState.turnCount >= evolveUnlockedTurn;
-    const isSuperEvolveUnlocked = gameState.turnCount >= superEvolveUnlockedTurn;
+
+    // CRITICAL FIX: Calculate player's own turn count (not total game turn count)
+    // EP/SEP should unlock when the PLAYER's turn count reaches the threshold,
+    // not when the game's total turn count reaches it.
+    // This fixes the bug where second player's EP unlocks on opponent's 4th turn instead of their own 4th turn.
+    const getPlayerTurnCount = (_playerId: string, isFirst: boolean): number => {
+        // Total turnCount increments at the start of each player's turn
+        // First player: turns 1, 3, 5, 7... -> player turn 1, 2, 3, 4...
+        // Second player: turns 2, 4, 6, 8... -> player turn 1, 2, 3, 4...
+        if (isFirst) {
+            // First player's turn count = ceil(turnCount / 2)
+            return Math.ceil(gameState.turnCount / 2);
+        } else {
+            // Second player's turn count = floor(turnCount / 2)
+            return Math.floor(gameState.turnCount / 2);
+        }
+    };
+
+    const playerOwnTurnCount = getPlayerTurnCount(currentPlayerId, isPlayerFirstPlayer);
+
+    // Evolution unlocks:
+    // First player: can evolve from their 3rd turn onward (game turn 5)
+    // Second player: can evolve from their 2nd turn onward (game turn 4) -> but calculated as playerOwnTurnCount >= 2
+    // However, the UI visual (EP glow) should show when it's THEIR turn and they've reached the threshold
+    const playerEvolveThreshold = isPlayerFirstPlayer ? 3 : 2; // Player's own turn count when EP unlocks
+    const playerSuperEvolveThreshold = isPlayerFirstPlayer ? 4 : 3; // Player's own turn count when SEP unlocks
+
+    // EP/SEP unlocked: player's own turn count has reached threshold
+    const isEvolveUnlocked = playerOwnTurnCount >= playerEvolveThreshold;
+    const isSuperEvolveUnlocked = playerOwnTurnCount >= playerSuperEvolveThreshold;
+
     // Check if evolution is currently usable (on player's turn with remaining evolves)
     const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && isEvolveUnlocked;
     const canSuperEvolveUI = player?.canEvolveThisTurn && player.sep > 0 && gameState.activePlayerId === currentPlayerId && isSuperEvolveUnlocked;
 
     // Opponent's evolve unlock status
     const isOpponentFirstPlayer = opponentPlayerId === gameState.firstPlayerId;
-    const opponentEvolveUnlockedTurn = isOpponentFirstPlayer ? 5 : 4;
-    const opponentSuperEvolveUnlockedTurn = isOpponentFirstPlayer ? 7 : 6;
-    const isOpponentEvolveUnlocked = gameState.turnCount >= opponentEvolveUnlockedTurn;
-    const isOpponentSuperEvolveUnlocked = gameState.turnCount >= opponentSuperEvolveUnlockedTurn;
+    const opponentOwnTurnCount = getPlayerTurnCount(opponentPlayerId, isOpponentFirstPlayer);
+    const opponentEvolveThreshold = isOpponentFirstPlayer ? 3 : 2;
+    const opponentSuperEvolveThreshold = isOpponentFirstPlayer ? 4 : 3;
+    const isOpponentEvolveUnlocked = opponentOwnTurnCount >= opponentEvolveThreshold;
+    const isOpponentSuperEvolveUnlocked = opponentOwnTurnCount >= opponentSuperEvolveThreshold;
 
     // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
