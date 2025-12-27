@@ -16,6 +16,15 @@
 1. `MOCK_CARDS` 配列内の `id: 'c_sara'` を持つオブジェクトを特定する。
 2. `evolvedImageUrl` プロパティを追加または更新し、`'/cards/sara_2.png'` に設定する。
 
+### BLUE_FIREエフェクト
+1. `game/src/core/types.ts`: `AttackEffectType` に `'BLUE_FIRE'` を追加。
+2. `game/src/screens/GameScreen.tsx`: 
+    - `AttackEffect` コンポーネント内のスプライト判定リストに `'BLUE_FIRE'` を追加。
+    - `AttackEffect` コンポーネント内のSE再生処理に `'BLUE_FIRE'` を追加（`fire.mp3`を使用）。
+    - `AttackEffect` コンポーネント内の画像マッピングに `'/effects/blue_fire.png'` を追加。
+    - `ActiveEffectState` 型定義に `'BLUE_FIRE'` を追加。
+3. `game/src/core/engine.ts`: ルイ・ユー（`c_ruiyu`）の `attackEffectType` を `'BLUE_FIRE'` に変更。
+
 ## 確認事項
 - スタッツの変更が正しく反映されているか、コード上で確認する。
 - 他のカードに影響を与えていないことを確認する。

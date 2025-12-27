@@ -41,7 +41,7 @@ export interface Card {
     attack?: number; // For followers
     health?: number; // For followers
     description: string;
-    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE' | 'THUNDER' | 'FIRE';
+    attackEffectType?: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'WATER' | 'RAY' | 'ICE' | 'THUNDER' | 'FIRE' | 'BLUE_FIRE';
     tags?: string[]; // e.g. 'Knuckler'
 
     // New ability system

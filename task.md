@@ -8,3 +8,5 @@
 - [x] 「sara」の進化時イラスト修正 (game/src/core/engine.ts)
 - [x] walkthrough.md の追記
 - [x] 変更内容のコミット
+- [x] BLUE_FIREエフェクトの実装
+- [x] ルイ・ユーのエフェクト変更

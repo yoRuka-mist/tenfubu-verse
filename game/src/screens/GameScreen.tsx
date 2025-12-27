@@ -161,7 +161,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
     React.useEffect(() => {
         // Duration based on animation type
-        const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH'].includes(type);
+        const isSprite = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH', 'BLUE_FIRE'].includes(type);
         const duration = isSprite
             ? (spriteConfig.cols * spriteConfig.rows) / spriteConfig.fps * 1000
             : (type === 'FIREBALL' ? 500 : (type === 'HEAL' ? 2000 : 400)); // Snappy for FLASH/BEAM/SLASH, Long for HEAL
@@ -206,6 +206,8 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
             playSE('yami.mp3', 0.6);
         } else if (type === 'HEAL') {
             playSE('water.mp3', 0.6);
+        } else if (type === 'BLUE_FIRE') {
+            playSE('fire.mp3', 0.5);
         }
     }, [type, audioSettings]);
 
@@ -219,7 +221,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
-    const isSpriteType = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH'].includes(type);
+    const isSpriteType = ['LIGHTNING', 'THUNDER', 'IMPACT', 'SUMI', 'SHOT', 'ICE', 'WATER', 'RAY', 'FIRE', 'SLASH', 'BLUE_FIRE'].includes(type);
 
     if (isSpriteType) {
         // Map Type to Image
@@ -232,6 +234,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         if (type === 'RAY') bgImage = '/effects/ray.png';
         if (type === 'FIRE') bgImage = '/effects/fire.png';
         if (type === 'SLASH') bgImage = '/effects/slash.png';
+        if (type === 'BLUE_FIRE') bgImage = '/effects/blue_fire.png';
 
         const steps = spriteConfig.cols * spriteConfig.rows;
 
@@ -1237,8 +1240,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || []);
     const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || []);
 
+    // --- Visual Board Refs (declared early for use in playEffect) ---
+    const visualPlayerBoardRef = React.useRef(visualPlayerBoard);
+    const visualOpponentBoardRef = React.useRef(visualOpponentBoard);
+
     // Effect Processing State
     const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
+    const isProcessingEffectRef = React.useRef(false); // Ref for stable access in async functions
     const [turnNotification, setTurnNotification] = React.useState<string | null>(null);
     const [notifiedTurn, setNotifiedTurn] = React.useState<number>(-1); // Track notified turn
     const processingHandledRef = React.useRef<any>(null);
@@ -1281,7 +1289,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     } | null>(null);
 
     interface ActiveEffectState {
-        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER';
+        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE';
         x: number;
         y: number;
         key: number;
@@ -1324,7 +1332,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         } else if (targetIndex !== undefined && targetIndex >= 0) {
             const refs = isOpponentTarget ? opponentBoardRefs : playerBoardRefs;
-            const visualBoard = isOpponentTarget ? visualOpponentBoard : visualPlayerBoard;
+            // CRITICAL: Use refs to get the latest visual board state for accurate positioning
+            const visualBoard = isOpponentTarget ? visualOpponentBoardRef.current : visualPlayerBoardRef.current;
 
             // CRITICAL: Find visual index using instanceId if provided, otherwise use targetIndex
             // This ensures effect plays on the correct visual card position
@@ -1471,6 +1480,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             processingHandledRef.current = current;
 
             setIsProcessingEffect(true);
+            isProcessingEffectRef.current = true;
 
             // case A: GENERATE_CARD with animation
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
@@ -1492,6 +1502,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         effectTimeoutRef.current = setTimeout(() => {
                             setAnimatingCard(null);
                             setIsProcessingEffect(false);
+                            isProcessingEffectRef.current = false;
                             // CPU mode: process all effects locally
                             // Online mode: only source player sends RESOLVE_EFFECT to network
                             if (gameMode === 'CPU' || current.sourcePlayerId === currentPlayerId) {
@@ -1532,6 +1543,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
                         if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                     });
+                } else if (current.effect.targetType === 'OPPONENT') {
+                    // OPPONENT targets the enemy leader - play effect on leader
+                    playEffect(effectType, targetPid, -1); // -1 indicates leader
+                    triggerShake();
                 } else if (current.targetId) {
                     const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
                     if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
@@ -1585,10 +1600,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 if (postActionDelay > 0) {
                     effectTimeoutRef.current = setTimeout(() => {
                         setIsProcessingEffect(false);
+                        isProcessingEffectRef.current = false;
                         effectTimeoutRef.current = null;
                     }, postActionDelay);
                 } else {
                     setIsProcessingEffect(false);
+                    isProcessingEffectRef.current = false;
                     effectTimeoutRef.current = null;
                 }
             }, stateUpdateDelay);
@@ -2315,9 +2332,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const playingCardAnimRef = React.useRef(playingCardAnim);
     const evolveAnimationRef = React.useRef(evolveAnimation);
 
-    // --- Visual Board Ref for accurate instanceId lookup during animations ---
-    const visualPlayerBoardRef = React.useRef(visualPlayerBoard);
-
     useEffect(() => {
         activeEffectsRef.current = activeEffects;
         animatingCardRef.current = animatingCard;
@@ -2327,7 +2341,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     useEffect(() => {
         visualPlayerBoardRef.current = visualPlayerBoard;
-    }, [visualPlayerBoard]);
+        visualOpponentBoardRef.current = visualOpponentBoard;
+    }, [visualPlayerBoard, visualOpponentBoard]);
 
     // Handle Evolve with Animation
     // CRITICAL: Use instanceId to ensure animation and processing target the same card
@@ -3819,24 +3834,39 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const isAnimatingCard = animatingCardRef.current !== null;
                 const isPlayingCard = playingCardAnimRef.current !== null;
                 const isEvolving = evolveAnimationRef.current !== null;
-                const isProcessing = isProcessingEffect;
+                // CRITICAL: Use ref instead of state to get current value in async context
+                const isProcessing = isProcessingEffectRef.current;
                 const hasCardLock = cardPlayLockRef.current;
 
-                return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving && !isProcessing && !hasCardLock;
+                // Debug log to help identify what's blocking
+                if (!hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving && !isProcessing && !hasCardLock) {
+                    return true; // All idle
+                }
+                return false;
             };
 
-            // Wait up to 10 seconds for processing to complete
-            const maxWait = 10000;
-            const checkInterval = 100;
+            // Wait up to 3 seconds for processing to complete (reduced from 10)
+            const maxWait = 3000;
+            const checkInterval = 50; // Check more frequently
             let waited = 0;
+            let consecutiveIdleCount = 0;
 
-            while (!checkIdle() && waited < maxWait) {
+            while (waited < maxWait) {
+                if (checkIdle()) {
+                    consecutiveIdleCount++;
+                    // Require 2 consecutive idle checks to confirm processing is done
+                    if (consecutiveIdleCount >= 2) {
+                        break;
+                    }
+                } else {
+                    consecutiveIdleCount = 0;
+                }
                 await new Promise(r => setTimeout(r, checkInterval));
                 waited += checkInterval;
             }
 
             if (waited >= maxWait) {
-                console.warn('[handleEndTurn] Timeout waiting for processing to complete');
+                console.warn('[handleEndTurn] Timeout waiting for processing to complete - forcing end turn');
             }
         };
 
@@ -4358,7 +4388,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* End Turn Button */}
                         <button
                             disabled={gameState.activePlayerId !== currentPlayerId || isEndingTurn}
-                            onClick={handleEndTurn}
+                            onClick={(e) => { e.stopPropagation(); handleEndTurn(); }}
                             style={{
                                 width: 160 * scale,
                                 height: 160 * scale,

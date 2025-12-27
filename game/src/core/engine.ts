@@ -62,7 +62,7 @@ const MOCK_CARDS: Card[] = [
         description: 'ファンファーレ：自分のリーダーを4回復する。さらに「cyoriena」1体を場に出す。進化時：自分のリーダーを4回復する。',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
-        attackEffectType: 'WATER',
+        attackEffectType: 'BLUE_FIRE',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -1840,11 +1840,17 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     }
                 }
 
+                // CRITICAL: Only set targetId for effects that require target selection
+                // Effects like OPPONENT (leader damage) should not inherit the selected follower's targetId
+                const requiresTargetSelection = e.targetType === 'SELECT_FOLLOWER' ||
+                    e.targetType === 'SELECT_ALLY_FOLLOWER' ||
+                    e.targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+
                 newPendingEffects.push({
                     sourceCard: sourceCard,
                     effect: e,
                     sourcePlayerId: action.playerId,
-                    targetId: targetId,
+                    targetId: requiresTargetSelection ? targetId : undefined,
                     targetIds: resolvedTargetIds
                 });
             });
