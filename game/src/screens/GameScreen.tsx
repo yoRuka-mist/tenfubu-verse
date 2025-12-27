@@ -3879,19 +3879,42 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
     const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
-    const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 5 : 4);
-    const canSuperEvolveUI = player?.canEvolveThisTurn && player.sep > 0 && gameState.activePlayerId === currentPlayerId && gameState.turnCount >= (isPlayerFirstPlayer ? 7 : 6);
+    // Check if evolution turn has been reached (regardless of whose turn it is)
+    const evolveUnlockedTurn = isPlayerFirstPlayer ? 5 : 4;
+    const superEvolveUnlockedTurn = isPlayerFirstPlayer ? 7 : 6;
+    const isEvolveUnlocked = gameState.turnCount >= evolveUnlockedTurn;
+    const isSuperEvolveUnlocked = gameState.turnCount >= superEvolveUnlockedTurn;
+    // Check if evolution is currently usable (on player's turn with remaining evolves)
+    const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && isEvolveUnlocked;
+    const canSuperEvolveUI = player?.canEvolveThisTurn && player.sep > 0 && gameState.activePlayerId === currentPlayerId && isSuperEvolveUnlocked;
 
-    // Force re-render log
-    console.log("GameScreen Layout Updated: Layer 3 Implemented");
+    // Opponent's evolve unlock status
+    const isOpponentFirstPlayer = opponentPlayerId === gameState.firstPlayerId;
+    const opponentEvolveUnlockedTurn = isOpponentFirstPlayer ? 5 : 4;
+    const opponentSuperEvolveUnlockedTurn = isOpponentFirstPlayer ? 7 : 6;
+    const isOpponentEvolveUnlocked = gameState.turnCount >= opponentEvolveUnlockedTurn;
+    const isOpponentSuperEvolveUnlocked = gameState.turnCount >= opponentSuperEvolveUnlockedTurn;
 
-    // Force scroll to top on every render to prevent layout shift
+    // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
+        // Initial scroll reset
+        window.scrollTo(0, 0);
         if (boardRef.current) {
             boardRef.current.scrollTop = 0;
         }
-        window.scrollTo(0, 0);
-    });
+
+        // Prevent any scroll events from moving the page
+        const preventScroll = () => {
+            window.scrollTo(0, 0);
+        };
+
+        // Listen for scroll events and immediately reset
+        window.addEventListener('scroll', preventScroll, { passive: false });
+
+        return () => {
+            window.removeEventListener('scroll', preventScroll);
+        };
+    }, []); // Only run once on mount
 
     // JOIN: Wait for game state sync from HOST
     // This must be AFTER all hooks to maintain consistent hook order
@@ -3971,7 +3994,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 onClick={handleBackgroundClick} // Close hand on bg click
             >
                 <style>{`
-                    html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+                    html, body {
+                        margin: 0; padding: 0; height: 100%; background: #000;
+                        overflow: hidden !important;
+                        position: fixed !important;
+                        width: 100% !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                    }
                     * { box-sizing: border-box; }
                     .shake-target { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; }
                     @keyframes shake {
@@ -4186,10 +4216,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{
                             position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
+                            opacity: isOpponentEvolveUnlocked ? 1 : 0.5, filter: isOpponentEvolveUnlocked ? 'none' : 'grayscale(0.8)'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < (2 - opponent.evolutionsUsed) ? '#ecc94b' : '#2d3748', boxShadow: i < (2 - opponent.evolutionsUsed) ? '0 0 5px #ecc94b' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                                {Array(2).fill(0).map((_, i) => {
+                                    const hasEP = i < (2 - opponent.evolutionsUsed);
+                                    return <div key={i} style={{
+                                        width: 12 * scale, height: 12 * scale, borderRadius: '50%',
+                                        background: hasEP ? '#ecc94b' : '#2d3748',
+                                        boxShadow: hasEP && isOpponentEvolveUnlocked ? '0 0 8px #ecc94b, 0 0 15px #ecc94b' : 'none',
+                                        border: '2px solid rgba(0,0,0,0.5)'
+                                    }} />;
+                                })}
                             </div>
                         </div>
 
@@ -4197,10 +4236,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{
                             position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
+                            opacity: isOpponentSuperEvolveUnlocked ? 1 : 0.5, filter: isOpponentSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < opponent.sep ? '#9f7aea' : '#2d3748', boxShadow: i < opponent.sep ? '0 0 5px #9f7aea' : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                                {Array(2).fill(0).map((_, i) => {
+                                    const hasSEP = i < opponent.sep;
+                                    return <div key={i} style={{
+                                        width: 12 * scale, height: 12 * scale, borderRadius: '50%',
+                                        background: hasSEP ? '#9f7aea' : '#2d3748',
+                                        boxShadow: hasSEP && isOpponentSuperEvolveUnlocked ? '0 0 8px #9f7aea, 0 0 15px #9f7aea' : 'none',
+                                        border: '2px solid rgba(0,0,0,0.5)'
+                                    }} />;
+                                })}
                             </div>
                         </div>
                     </div>
@@ -4639,10 +4687,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10
+                            cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10,
+                            opacity: isEvolveUnlocked ? 1 : 0.5, filter: isEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s, filter 0.3s'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < remainingEvolves ? '#ecc94b' : '#2d3748', boxShadow: i < remainingEvolves ? (canEvolveUI ? '0 0 10px #ecc94b, 0 0 20px #ecc94b' : '0 0 5px #ecc94b') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                                {Array(2).fill(0).map((_, i) => {
+                                    const hasEP = i < remainingEvolves;
+                                    // グレーアウト時は光らない、アンロック後は光る（アクティブ時はより強く光る）
+                                    let glowStyle = 'none';
+                                    if (hasEP && isEvolveUnlocked) {
+                                        glowStyle = canEvolveUI
+                                            ? '0 0 12px #ecc94b, 0 0 25px #ecc94b, 0 0 35px #ecc94b'
+                                            : '0 0 8px #ecc94b, 0 0 15px #ecc94b';
+                                    }
+                                    return <div key={i} style={{
+                                        width: 12 * scale, height: 12 * scale, borderRadius: '50%',
+                                        background: hasEP ? '#ecc94b' : '#2d3748',
+                                        boxShadow: glowStyle,
+                                        border: '2px solid rgba(0,0,0,0.5)',
+                                        transition: 'box-shadow 0.3s'
+                                    }} />;
+                                })}
                             </div>
                         </div>
 
@@ -4651,10 +4717,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            zIndex: 10, cursor: canSuperEvolveUI ? 'grab' : 'default'
+                            zIndex: 10, cursor: canSuperEvolveUI ? 'grab' : 'default',
+                            opacity: isSuperEvolveUnlocked ? 1 : 0.5, filter: isSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s, filter 0.3s'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
-                                {Array(2).fill(0).map((_, i) => <div key={i} style={{ width: 12 * scale, height: 12 * scale, borderRadius: '50%', background: i < player.sep ? '#9f7aea' : '#2d3748', boxShadow: i < player.sep ? (canSuperEvolveUI ? '0 0 10px #9f7aea, 0 0 20px #9f7aea' : '0 0 5px #9f7aea') : 'none', border: '2px solid rgba(0,0,0,0.5)' }} />)}
+                                {Array(2).fill(0).map((_, i) => {
+                                    const hasSEP = i < player.sep;
+                                    // グレーアウト時は光らない、アンロック後は光る（アクティブ時はより強く光る）
+                                    let glowStyle = 'none';
+                                    if (hasSEP && isSuperEvolveUnlocked) {
+                                        glowStyle = canSuperEvolveUI
+                                            ? '0 0 12px #9f7aea, 0 0 25px #9f7aea, 0 0 35px #9f7aea'
+                                            : '0 0 8px #9f7aea, 0 0 15px #9f7aea';
+                                    }
+                                    return <div key={i} style={{
+                                        width: 12 * scale, height: 12 * scale, borderRadius: '50%',
+                                        background: hasSEP ? '#9f7aea' : '#2d3748',
+                                        boxShadow: glowStyle,
+                                        border: '2px solid rgba(0,0,0,0.5)',
+                                        transition: 'box-shadow 0.3s'
+                                    }} />;
+                                })}
                             </div>
                         </div>
                     </div>
