@@ -34,9 +34,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
     }, []);
 
     // Scaled sizes
-    const logoSize = 180 * scale;
-    const titleFontSize = 5.5 * scale;
-    const verseFontSize = 2.5 * scale;
+    const logoSize = 500 * scale; // 3x larger logo
+    const titleFontSize = 9 * scale; // Much larger title
+    const verseFontSize = 4.5 * scale; // Much larger verse
     const buttonWidth = 300 * scale;
     const buttonFontSize = 1.2 * scale;
     const buttonPadding = `${1 * scale}rem 0`;
@@ -102,48 +102,41 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
-                {/* Title Logo Area */}
+                {/* Title Logo Area - Logo behind text, centered between 下 and 布 */}
                 <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: `${2 * scale}rem`,
-                    position: 'relative'
+                    position: 'relative',
+                    marginBottom: `${1 * scale}rem`
                 }}>
-                    {/* 天下 */}
-                    <span style={{
-                        fontFamily: 'Tamanegi, sans-serif',
-                        fontSize: `${titleFontSize}rem`,
-                        color: '#fff',
-                        textShadow: '0 0 20px rgba(233, 69, 96, 0.8), 0 0 40px rgba(233, 69, 96, 0.4), 2px 2px 4px rgba(0,0,0,0.8)',
-                        letterSpacing: `${0.1 * scale}rem`
-                    }}>
-                        天下
-                    </span>
-
-                    {/* Logo - positioned between 下 and 布 */}
+                    {/* Logo - positioned absolutely behind text, centered between 下 and 布 */}
                     <img
                         src={getAssetUrl('/title/logo.png')}
                         alt="Logo"
                         style={{
+                            position: 'absolute',
                             width: logoSize,
                             height: logoSize,
                             objectFit: 'contain',
-                            margin: `0 ${-0.5 * scale}rem`,
-                            filter: 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.5))'
+                            left: '50%',
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            filter: 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.6))',
+                            zIndex: 0
                         }}
                     />
 
-                    {/* 布舞 */}
-                    <span style={{
+                    {/* 天下布舞 - equal spacing, on top of logo */}
+                    <div style={{
+                        position: 'relative',
+                        zIndex: 1,
                         fontFamily: 'Tamanegi, sans-serif',
                         fontSize: `${titleFontSize}rem`,
                         color: '#fff',
-                        textShadow: '0 0 20px rgba(233, 69, 96, 0.8), 0 0 40px rgba(233, 69, 96, 0.4), 2px 2px 4px rgba(0,0,0,0.8)',
-                        letterSpacing: `${0.1 * scale}rem`
+                        textShadow: '0 0 30px rgba(233, 69, 96, 0.9), 0 0 60px rgba(233, 69, 96, 0.5), 3px 3px 6px rgba(0,0,0,0.9)',
+                        letterSpacing: `${0.5 * scale}rem`,
+                        whiteSpace: 'nowrap'
                     }}>
-                        布舞
-                    </span>
+                        天下布舞
+                    </div>
                 </div>
 
                 {/* verse subtitle */}
@@ -151,10 +144,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
                     fontFamily: 'Tamanegi, sans-serif',
                     fontSize: `${verseFontSize}rem`,
                     color: '#e94560',
-                    textShadow: '0 0 10px rgba(233, 69, 96, 0.6), 2px 2px 4px rgba(0,0,0,0.8)',
-                    letterSpacing: `${0.3 * scale}rem`,
-                    marginTop: `${-1 * scale}rem`,
-                    marginBottom: `${3 * scale}rem`
+                    textShadow: '0 0 20px rgba(233, 69, 96, 0.8), 0 0 40px rgba(233, 69, 96, 0.4), 3px 3px 6px rgba(0,0,0,0.9)',
+                    letterSpacing: `${0.8 * scale}rem`,
+                    marginTop: `${0.5 * scale}rem`,
+                    marginBottom: `${2.5 * scale}rem`
                 }}>
                     verse
                 </div>
