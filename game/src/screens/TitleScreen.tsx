@@ -18,7 +18,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
             background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
             color: 'white'
         }}>
-            <h1 style={{ fontSize: '4rem', marginBottom: '3rem', textShadow: '0 0 10px #e94560', fontFamily: 'Impact, sans-serif', letterSpacing: '2px' }}>
+            <h1 style={{ fontSize: '4rem', marginBottom: '3rem', textShadow: '0 0 10px #e94560', fontFamily: 'Tamanegi, Impact, sans-serif', letterSpacing: '2px' }}>
                 DIGITAL<br />CARD<br />GAME
             </h1>
 

@@ -1,8 +1,17 @@
+/* Custom Font */
+@font-face {
+  font-family: 'Tamanegi';
+  src: url('/fonts/tamanegi.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --bg-color: #1a1a2e;
   --card-bg: #16213e;
   --accent: #e94560;
   --text: #ffffff;
+  --font-tamanegi: 'Tamanegi', sans-serif;
 }
 
 * {
