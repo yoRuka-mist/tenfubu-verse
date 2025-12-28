@@ -75,28 +75,38 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
         glowColor = '0 0 10px #48bb78'; // Green for Playable
         borderColor = '2px solid #48bb78';
     } else if (isReady && isMyTurn) {
-        // Check for Storm (Green) vs Rush (Yellow)
-        // Assume Green mostly, but Yellow if RUSH is present and NO STORM
+        // Determine if can attack leader (Green) or followers only (Yellow)
+        // Green (Leader + Followers): STORM ability
+        // Yellow (Followers only): RUSH, or evolved/super-evolved this turn without STORM
         const hasStorm = abilities.includes('STORM');
-        const isRushOnly = abilities.includes('RUSH') && !hasStorm;
+        const hasRush = abilities.includes('RUSH');
+        const isPlayedThisTurn = turnCount !== undefined && turnPlayed !== undefined && turnPlayed === turnCount;
 
         // Logic:
         // Storm -> Always Green (Can attack leader)
-        // Rush Only -> Yellow IF played this turn (Cannot attack leader). Green if played previous turn.
+        // Rush Only (this turn) -> Yellow (Cannot attack leader this turn)
+        // Evolved this turn (no STORM) -> Yellow (Cannot attack leader, like Rush)
+        // Previous turns (no STORM) -> Green (Can attack leader after the first turn)
 
         let showYellow = false;
-        if (isRushOnly) {
-            if (turnCount !== undefined && turnPlayed !== undefined && turnPlayed === turnCount) {
+        if (!hasStorm) {
+            // If no STORM:
+            // - RUSH on the turn played = Yellow (followers only)
+            // - Evolved on the turn played (hasEvolved && isPlayedThisTurn) = Yellow (followers only)
+            // - Otherwise = Green (can attack leader)
+            if (isPlayedThisTurn) {
+                // Played this turn without STORM: can only attack followers (Yellow)
                 showYellow = true;
             } else if (turnCount === undefined || turnPlayed === undefined) {
-                showYellow = true; // Default to yellow if unknown
+                // Unknown state: default to Yellow if has RUSH
+                showYellow = hasRush;
             }
         }
 
         if (showYellow) {
-            glowColor = '0 0 10px #f6e05e'; // Yellow
+            glowColor = '0 0 10px #f6e05e'; // Yellow - Followers only
         } else {
-            glowColor = '0 0 10px #48bb78'; // Green
+            glowColor = '0 0 10px #48bb78'; // Green - Leader + Followers
         }
     }
 

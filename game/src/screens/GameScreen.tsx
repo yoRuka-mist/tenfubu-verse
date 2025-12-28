@@ -453,9 +453,9 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                 <section style={{ marginBottom: 25 }}>
                     <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>基本ルール</h3>
                     <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
-                        <li>相手リーダーの体力を0にすると勝利です</li>
+                        <li>相手リーダーの体力を0にすると勝利となります</li>
                         <li>毎ターン開始時にカードを1枚ドローし、PP（プレイポイント）が1増加します（最大10）</li>
-                        <li>PPを消費してカードをプレイし、フォロワーを場に出したり、スペルを使用します</li>
+                        <li>PPを消費してカードをプレイし、フォロワーを場に出したり、スペルを使用したりします</li>
                         <li>フォロワーは出したターンには攻撃できません（疾走・突進・進化・超進化を除く）</li>
                         <li>場に同時に出せるフォロワーは最大5体までです</li>
                         <li>手札は最大9枚で、10枚目以降の手札は自動的に墓地へ送られます</li>
@@ -471,9 +471,9 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                         <div><span style={{ color: '#4299e1', fontWeight: 'bold' }}>[突進]</span>：場に出たターンからフォロワーにのみ攻撃できます（リーダーは不可）</div>
                         <div><span style={{ color: '#9f7aea', fontWeight: 'bold' }}>[必殺]</span>：攻撃で相手フォロワーにダメージを与えると、そのフォロワーを破壊します</div>
                         <div><span style={{ color: '#f56565', fontWeight: 'bold' }}>[ダブル]</span>：1ターンに2回攻撃できます</div>
-                        <div><span style={{ color: '#38b2ac', fontWeight: 'bold' }}>[バリア]</span>：最初に受けるダメージを1回だけ無効化します。破壊効果や手札に戻す効果は無効化できない</div>
-                        <div><span style={{ color: '#718096', fontWeight: 'bold' }}>[隠密]</span>：カードの効果および攻撃対象に選択することができない（ランダム対象の効果やAoEダメージは適用される）。隠密状態のカードが一度攻撃を行うと、選択不可の効果は解除される。また、相手の守護を無視して攻撃することができる</div>
-                        <div><span style={{ color: '#d69e2e', fontWeight: 'bold' }}>[オーラ]</span>：相手のカードの効果で選択することができない（ランダム対象の効果やAoEダメージは適用される）。攻撃対象に選択することは可能</div>
+                        <div><span style={{ color: '#38b2ac', fontWeight: 'bold' }}>[バリア]</span>：最初に受けるダメージを1回だけ無効化します。破壊効果や手札に戻す効果は無効化できません</div>
+                        <div><span style={{ color: '#718096', fontWeight: 'bold' }}>[隠密]</span>：カードの効果および攻撃対象に選択することができません（ランダム対象の効果やAoEダメージは適用されます）。隠密状態のカードが一度攻撃を行うと、選択不可の効果は解除されます。また、相手の守護を無視して攻撃することができます</div>
+                        <div><span style={{ color: '#d69e2e', fontWeight: 'bold' }}>[オーラ]</span>：相手のカードの効果で選択することができません（ランダム対象の効果やAoEダメージは適用されます）。攻撃対象に選択することは可能です</div>
                     </div>
                 </section>
 
@@ -481,11 +481,11 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                 <section style={{ marginBottom: 25 }}>
                     <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>トリガー効果（発動条件）</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div><span style={{ color: '#63b3ed', fontWeight: 'bold' }}>ファンファーレ</span>：カードを手札からプレイした時に発動</div>
-                        <div><span style={{ color: '#f687b3', fontWeight: 'bold' }}>ラストワード</span>：フォロワーが破壊された時に発動</div>
-                        <div><span style={{ color: '#faf089', fontWeight: 'bold' }}>進化時</span>：EPを使用してフォロワーを進化させた時に発動</div>
-                        <div><span style={{ color: '#b794f4', fontWeight: 'bold' }}>超進化時</span>：SEPを使用してフォロワーを超進化させた時に発動</div>
-                        <div><span style={{ color: '#68d391', fontWeight: 'bold' }}>ターン終了時</span>：自分のターン終了時に発動</div>
+                        <div><span style={{ color: '#63b3ed', fontWeight: 'bold' }}>ファンファーレ</span>：カードを手札からプレイした時に発動します</div>
+                        <div><span style={{ color: '#f687b3', fontWeight: 'bold' }}>ラストワード</span>：フォロワーが破壊された時に発動します</div>
+                        <div><span style={{ color: '#faf089', fontWeight: 'bold' }}>進化時</span>：EPを使用してフォロワーを進化させた時に発動します</div>
+                        <div><span style={{ color: '#b794f4', fontWeight: 'bold' }}>超進化時</span>：SEPを使用してフォロワーを超進化させた時に発動します</div>
+                        <div><span style={{ color: '#68d391', fontWeight: 'bold' }}>ターン終了時</span>：自分のターン終了時に発動します</div>
                     </div>
                 </section>
 
@@ -493,8 +493,9 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                 <section style={{ marginBottom: 25 }}>
                     <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>進化システム</h3>
                     <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
-                        <li><span style={{ color: '#faf089' }}>EP（進化ポイント）</span>：先攻は5ターン目から、後攻は4ターン目から使用可能。1ターンに1回、フォロワーを進化できます（最大2回）</li>
-                        <li><span style={{ color: '#b794f4' }}>SEP（超進化ポイント）</span>：先攻は7ターン目から、後攻は6ターン目から使用可能。1回だけ超進化が使用できます</li>
+                        <li><span style={{ color: '#faf089' }}>EP（進化ポイント）</span>：先攻は5ターン目から、後攻は4ターン目から使用可能です。1ターンに1回、フォロワーを進化できます（最大2回）</li>
+                        <li><span style={{ color: '#b794f4' }}>SEP（超進化ポイント）</span>：先攻は7ターン目から、後攻は6ターン目から使用可能です。1ターンに1回、フォロワーを超進化できます（最大2回）</li>
+                        <li>進化および超進化は、1ターンにどちらか1回までです。どちらも1ターンに1回ずつ行うということはできません</li>
                         <li>進化するとフォロワーのステータスが+2/+2され、突進と同じく即座にフォロワーに攻撃可能になります</li>
                         <li>超進化するとフォロワーのステータスが+3/+3され、突進と同じく即座にフォロワーに攻撃可能になります。また、自分のターン中は超進化したフォロワーはダメージを受けず、破壊もされません（必殺や自分で破壊する効果も無効）</li>
                     </ul>
@@ -504,7 +505,7 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                 <section>
                     <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>後攻救済システム</h3>
                     <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
-                        <li><span style={{ color: '#ed8936' }}>エクストラPP</span>：後攻プレイヤーのみ使用可能</li>
+                        <li><span style={{ color: '#ed8936' }}>エクストラPP</span>：後攻プレイヤーのみ使用可能です</li>
                         <li>1〜5ターン目に1回、6ターン目以降に1回、計2回まで+1 PPを獲得できます</li>
                     </ul>
                 </section>
