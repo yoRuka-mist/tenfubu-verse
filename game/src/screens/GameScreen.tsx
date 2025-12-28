@@ -3076,8 +3076,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const isFirstPlayer = opponentPlayerId === state.firstPlayerId;
                     const turnCount = state.turnCount;
 
+                    // Check if CPU can super evolve (uses same rules as player: P1 >= 7, P2 >= 6)
+                    const canSuperEvolveCheck = canSuperEvolve(aiPlayer, turnCount, isFirstPlayer);
                     const canEvolveCheck = canEvolve(aiPlayer, turnCount, isFirstPlayer);
-                    if (canEvolveCheck && aiPlayer.board.length > 0) {
+
+                    if ((canEvolveCheck || canSuperEvolveCheck) && aiPlayer.board.length > 0) {
                         const candidates = aiPlayer.board
                             .map((c, i) => ({ c, i }))
                             .filter(({ c }) => c && c.type === 'FOLLOWER' && !c.hasEvolved);
@@ -3096,8 +3099,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 targetId = validTargets[0]!.instanceId;
                             }
 
-                            // Trigger Animation for AI
-                            const useSuper = (aiPlayer.sep > 0 && turnCount >= 6);
+                            // Trigger Animation for AI - use super evolve only if canSuperEvolveCheck passes
+                            const useSuper = canSuperEvolveCheck;
                             const cardRect = opponentBoardRefs.current[target.i]?.getBoundingClientRect();
 
                             if (cardRect) {
@@ -4836,13 +4839,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* ========================================== */}
                     {/* BATTLE LOG & HELP BUTTON - Centered */}
                     {/* ========================================== */}
-                    {/* Help Button - Above Battle Log */}
+                    {/* Help Button - Above Battle Log (fixed position above log's max height) */}
                     <button
                         onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
                         style={{
                             position: 'absolute',
                             left: 15,
-                            top: 'calc(50% - 150px)',
+                            top: 'calc(50% - 175px)', // バトルログの上端（50% - 125px）よりさらに50px上
                             width: 36,
                             height: 36,
                             borderRadius: '50%',

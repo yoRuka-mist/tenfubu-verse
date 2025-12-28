@@ -262,7 +262,7 @@ const MOCK_CARDS: Card[] = [
         ]
     },
     {
-        id: 'c_white_tsubaki', name: '無敵の闘士　白ツバキ', cost: 4, type: 'FOLLOWER',
+        id: 'c_white_tsubaki', name: '白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
         description: '[突進] 相手のターン中、このフォロワーはフォロワーからのダメージを受けない。進化時：「しゑこ」1体を出す。',
         imageUrl: '/cards/white_tsubaki.png',
@@ -562,7 +562,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 's_crazy_knucklers', name: 'クレイジー・ナックラーズ', cost: 5, type: 'SPELL',
-        description: '「無敵の闘士 白ツバキ」1体と「しゑこ」1体を出す。',
+        description: '「白ツバキ」1体と「しゑこ」1体を出す。',
         imageUrl: '/cards/crazy_knucklers.png',
         triggers: [{
             trigger: 'FANFARE',
@@ -739,7 +739,7 @@ export function calculateStateHash(state: GameState): string {
 const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_senka_knuckler', count: 3 },  // せんか
     { cardId: 'c_yuki', count: 3 },             // ユキ
-    { cardId: 'c_white_tsubaki', count: 3 },    // 無敵の闘士　白ツバキ
+    { cardId: 'c_white_tsubaki', count: 3 },    // 白ツバキ
     { cardId: 'c_shieko', count: 3 },           // しゑこ
     { cardId: 's_samurai_tea', count: 3 },      // 侍茶
     { cardId: 'c_bucchi', count: 3 },           // ぶっちー
