@@ -437,11 +437,15 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '[守護]',
+        description: '[ファンファーレ] カードを1枚引く。[守護]',
         imageUrl: '/cards/potechi.png',
         evolvedImageUrl: '/cards/potechi_2.png',
         passiveAbilities: ['WARD'],
-        attackEffectType: 'SHOT'
+        attackEffectType: 'SHOT',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [{ type: 'DRAW', value: 1 }]
+        }]
     },
     {
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
