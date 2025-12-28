@@ -54,6 +54,7 @@ export interface Card {
 
     imageUrl?: string;
     evolvedImageUrl?: string; // 進化後の画像URL
+    flavorText?: string; // フレーバーテキスト（カードの世界観説明）
 
     // Instance ID for cards in hand/deck (runtime)
     instanceId?: string;

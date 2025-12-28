@@ -401,8 +401,123 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
     );
 };
 
+// --- Help Modal Component ---
+const HelpModal = ({ onClose }: { onClose: () => void }) => {
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                background: 'rgba(0,0,0,0.8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10000,
+            }}
+            onClick={onClose}
+        >
+            <div
+                style={{
+                    background: 'linear-gradient(135deg, #1a202c 0%, #2d3748 100%)',
+                    borderRadius: 16,
+                    padding: 30,
+                    maxWidth: 700,
+                    maxHeight: '80vh',
+                    overflowY: 'auto',
+                    color: '#fff',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                    border: '1px solid #4a5568',
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h2 style={{ margin: 0, color: '#63b3ed' }}>ゲームヘルプ</h2>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#a0aec0',
+                            fontSize: '1.5rem',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* 基本ルール */}
+                <section style={{ marginBottom: 25 }}>
+                    <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>基本ルール</h3>
+                    <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
+                        <li>相手リーダーの体力を0にすると勝利です</li>
+                        <li>毎ターン開始時にカードを1枚ドローし、PP（プレイポイント）が1増加します（最大10）</li>
+                        <li>PPを消費してカードをプレイし、フォロワーを場に出したり、スペルを使用します</li>
+                        <li>フォロワーは出したターンには攻撃できません（疾走・突進を除く）</li>
+                        <li>場に出せるフォロワーは最大5体までです</li>
+                    </ul>
+                </section>
+
+                {/* パッシブ効果 */}
+                <section style={{ marginBottom: 25 }}>
+                    <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>パッシブ効果（常時効果）</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div><span style={{ color: '#48bb78', fontWeight: 'bold' }}>[守護]</span>：守護を持つフォロワーがいる間、他のフォロワーやリーダーを攻撃できません</div>
+                        <div><span style={{ color: '#ed8936', fontWeight: 'bold' }}>[疾走]</span>：場に出たターンからリーダーとフォロワーに攻撃できます</div>
+                        <div><span style={{ color: '#4299e1', fontWeight: 'bold' }}>[突進]</span>：場に出たターンからフォロワーにのみ攻撃できます（リーダーは不可）</div>
+                        <div><span style={{ color: '#9f7aea', fontWeight: 'bold' }}>[必殺]</span>：攻撃で相手フォロワーにダメージを与えると、そのフォロワーを破壊します</div>
+                        <div><span style={{ color: '#f56565', fontWeight: 'bold' }}>[ダブルアタック]</span>：1ターンに2回攻撃できます</div>
+                        <div><span style={{ color: '#38b2ac', fontWeight: 'bold' }}>[バリア]</span>：最初に受けるダメージを1回だけ無効化します</div>
+                        <div><span style={{ color: '#718096', fontWeight: 'bold' }}>[隠密]</span>：攻撃対象に選べません（AOEダメージは受けます）</div>
+                        <div><span style={{ color: '#d69e2e', fontWeight: 'bold' }}>[オーラ]</span>：自分のターン終了時にバリアを獲得します</div>
+                    </div>
+                </section>
+
+                {/* トリガー効果 */}
+                <section style={{ marginBottom: 25 }}>
+                    <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>トリガー効果（発動条件）</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div><span style={{ color: '#63b3ed', fontWeight: 'bold' }}>ファンファーレ</span>：カードを手札からプレイした時に発動</div>
+                        <div><span style={{ color: '#f687b3', fontWeight: 'bold' }}>ラストワード</span>：フォロワーが破壊された時に発動</div>
+                        <div><span style={{ color: '#faf089', fontWeight: 'bold' }}>進化時</span>：フォロワーを進化させた時に発動</div>
+                        <div><span style={{ color: '#b794f4', fontWeight: 'bold' }}>超進化時</span>：SEPを使用して超進化させた時に発動</div>
+                        <div><span style={{ color: '#68d391', fontWeight: 'bold' }}>ターン終了時</span>：自分のターン終了時に発動</div>
+                    </div>
+                </section>
+
+                {/* 進化システム */}
+                <section style={{ marginBottom: 25 }}>
+                    <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>進化システム</h3>
+                    <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
+                        <li><span style={{ color: '#faf089' }}>EP（進化ポイント）</span>：先攻は3ターン目、後攻は2ターン目から使用可能。1ターンに1回、フォロワーを進化できます（最大2回）</li>
+                        <li><span style={{ color: '#b794f4' }}>SEP（超進化ポイント）</span>：先攻は4ターン目、後攻は3ターン目から使用可能。1回だけ超進化が使用できます</li>
+                        <li>進化するとフォロワーのステータスが+2/+2され、即座に攻撃可能になります</li>
+                    </ul>
+                </section>
+
+                {/* 後攻救済 */}
+                <section>
+                    <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>後攻救済システム</h3>
+                    <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
+                        <li><span style={{ color: '#ed8936' }}>エクストラPP</span>：後攻プレイヤーのみ使用可能</li>
+                        <li>1〜5ターン目に1回、6ターン目以降に1回、計2回まで+1 PPを獲得できます</li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    );
+};
+
 // --- Battle Log Component ---
-const BattleLog = ({ logs }: { logs: string[] }) => {
+interface BattleLogProps {
+    logs: string[];
+    onCardNameClick?: (cardName: string) => void;
+}
+
+const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         // Scroll to bottom of container without affecting parent elements
@@ -410,6 +525,82 @@ const BattleLog = ({ logs }: { logs: string[] }) => {
             containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
     }, [logs.length]); // Scroll on length change
+
+    // カード名を検出してクリック可能にする
+    const renderLogWithCardLinks = (log: string, _index: number) => {
+        // カード名パターン: 「」で囲まれた部分、または「は」「を」「に」の前の名前
+        // 複雑なパターンマッチングの代わりに、"は"の前の部分をカード名候補とする
+        const parts: React.ReactNode[] = [];
+        let remaining = log;
+        let key = 0;
+
+        // パターン: 「XXX」形式のカード名を検出
+        const bracketPattern = /「([^」]+)」/g;
+        let match;
+        let lastIndex = 0;
+
+        while ((match = bracketPattern.exec(remaining)) !== null) {
+            // マッチ前のテキスト
+            if (match.index > lastIndex) {
+                parts.push(<span key={key++}>{remaining.slice(lastIndex, match.index)}</span>);
+            }
+            // カード名（クリック可能）
+            const cardName = match[1];
+            parts.push(
+                <span
+                    key={key++}
+                    style={{
+                        color: '#63b3ed',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textDecorationStyle: 'dotted',
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCardNameClick?.(cardName);
+                    }}
+                >
+                    「{cardName}」
+                </span>
+            );
+            lastIndex = match.index + match[0].length;
+        }
+
+        // 残りのテキスト
+        if (lastIndex < remaining.length) {
+            parts.push(<span key={key++}>{remaining.slice(lastIndex)}</span>);
+        }
+
+        // パターンマッチがなければ、"は"の前をカード名として扱う
+        if (parts.length === 0) {
+            const haMatch = log.match(/^(.+?) は /);
+            if (haMatch && onCardNameClick) {
+                const cardName = haMatch[1];
+                parts.push(
+                    <span
+                        key={key++}
+                        style={{
+                            color: '#63b3ed',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            textDecorationStyle: 'dotted',
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onCardNameClick(cardName);
+                        }}
+                    >
+                        {cardName}
+                    </span>
+                );
+                parts.push(<span key={key++}>{log.slice(haMatch[1].length)}</span>);
+            } else {
+                parts.push(<span key={key++}>{log}</span>);
+            }
+        }
+
+        return <>{parts}</>;
+    };
 
     return (
         <div
@@ -433,6 +624,7 @@ const BattleLog = ({ logs }: { logs: string[] }) => {
                 scrollbarWidth: 'thin',
             }}
             onMouseDown={e => e.stopPropagation()} // Prevent drag triggering
+            onClick={e => e.stopPropagation()} // Prevent hand collapse
         >
             <div style={{
                 fontWeight: 'bold', marginBottom: 5, color: '#a0aec0',
@@ -449,7 +641,7 @@ const BattleLog = ({ logs }: { logs: string[] }) => {
                         textShadow: '0 1px 2px black',
                         animation: 'fadeIn 0.3s ease-out'
                     }}>
-                        {log}
+                        {renderLogWithCardLinks(log, i)}
                     </div>
                 ))}
             </div>
@@ -1298,6 +1490,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         owner: 'PLAYER' | 'OPPONENT';
     } | null>(null);
 
+    // バトルログからカード名をクリックした時にカード情報を表示
+    const handleCardNameClickFromLog = React.useCallback((cardName: string) => {
+        // カード名からカード定義を検索
+        const cardDef = getCardDefinition(cardName);
+        if (cardDef) {
+            setSelectedCard({ card: cardDef, owner: 'OPPONENT' }); // バトルログからは相手カードとして扱う
+        }
+    }, []);
+
     interface ActiveEffectState {
         type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE';
         x: number;
@@ -1423,6 +1624,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
     }, [audioSettings]);
     const [showMenu, setShowMenu] = React.useState(false);
+    const [showHelp, setShowHelp] = React.useState(false);
     // coinTossPhase, coinTossResult, isGameStartAnim are declared earlier (near line 1145)
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
     const handJustExpandedRef = React.useRef(false); // 手札を展開した直後かどうか
@@ -4069,9 +4271,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
                 )}
 
-
-
-
+                {/* --- Help Modal --- */}
+                {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
                 {/* --- Menu Overlay --- */}
                 {showMenu && (
@@ -4214,6 +4415,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             <div style={{ fontSize: '0.9rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
                                 {selectedCard.card.description}
                             </div>
+
+                            {/* Flavor Text */}
+                            {selectedCard.card.flavorText && (
+                                <div style={{
+                                    fontSize: '0.8rem',
+                                    color: '#718096',
+                                    lineHeight: '1.6',
+                                    fontStyle: 'italic',
+                                    marginTop: 15,
+                                    paddingTop: 10,
+                                    borderTop: '1px dashed #4a5568',
+                                }}>
+                                    {selectedCard.card.flavorText}
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic' }}>カードを選択して詳細を表示</div>
@@ -4502,32 +4718,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     <span>{player.pp}/{player.maxPp}</span>
                                 )}
                             </div>
-                            {/* PP丸表示 - エクストラPP分はオレンジで表示 */}
-                            <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center', flexWrap: 'wrap', maxWidth: 150 * scale }}>
-                                {Array(player.extraPpActive ? player.maxPp + 1 : 10).fill(0).map((_, i) => {
-                                    // エクストラPP有効時: 最後の1個（maxPp番目）はオレンジ
-                                    const isExtraPpSlot = player.extraPpActive && i === player.maxPp;
+                            {/* PP丸表示 - 常に10個を1行で表示 */}
+                            <div style={{ display: 'flex', gap: 3 * scale, justifyContent: 'center' }}>
+                                {Array(10).fill(0).map((_, i) => {
                                     const isFilled = i < player.pp;
-                                    const isMax = i < player.maxPp;
+                                    const isUnlocked = i < player.maxPp; // 解放済み枠
 
-                                    let bgColor = '#2d3748'; // 空
-                                    if (isExtraPpSlot && isFilled) {
-                                        bgColor = '#ed8936'; // オレンジ（エクストラPP）
-                                    } else if (isFilled) {
-                                        bgColor = '#f6e05e'; // 黄色（通常PP）
-                                    } else if (isMax || isExtraPpSlot) {
-                                        bgColor = isExtraPpSlot ? '#744210' : '#744210'; // 暗い色（未使用枠）
+                                    let bgColor: string;
+                                    if (isFilled) {
+                                        bgColor = '#f6e05e'; // 黄色（使用可能PP）
+                                    } else if (isUnlocked) {
+                                        bgColor = '#744210'; // 濃いオレンジ（使用済みPP）
+                                    } else {
+                                        bgColor = '#2d3748'; // 暗い灰色（未解放枠）
                                     }
 
                                     return (
                                         <div
                                             key={i}
                                             style={{
-                                                width: 12 * scale,
-                                                height: 12 * scale,
+                                                width: 11 * scale,
+                                                height: 11 * scale,
                                                 borderRadius: '50%',
                                                 background: bgColor,
-                                                boxShadow: isExtraPpSlot && isFilled ? '0 0 8px #ed8936' : 'none'
                                             }}
                                         />
                                     );
@@ -4554,7 +4767,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             return (
                                 <button
                                     disabled={isDisabled}
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // 手札折りたたみを防止
                                         if (!isDisabled) {
                                             dispatchAndSend({ type: 'TOGGLE_EXTRA_PP', playerId: currentPlayerId });
                                         }
@@ -4590,9 +4804,43 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
 
                     {/* ========================================== */}
-                    {/* BATTLE LOG & GAME START - Centered */}
+                    {/* BATTLE LOG & HELP BUTTON - Centered */}
                     {/* ========================================== */}
-                    <BattleLog logs={gameState.logs || []} />
+                    {/* Help Button - Above Battle Log */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
+                        style={{
+                            position: 'absolute',
+                            left: 15,
+                            top: 'calc(50% - 150px)',
+                            width: 36,
+                            height: 36,
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
+                            border: '2px solid #63b3ed',
+                            color: '#63b3ed',
+                            fontSize: '1.2rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 16,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                            transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = '0 0 15px rgba(99, 179, 237, 0.5)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+                        }}
+                    >
+                        ?
+                    </button>
+                    <BattleLog logs={gameState.logs || []} onCardNameClick={handleCardNameClickFromLog} />
 
                     {/* Coin Toss Overlay */}
                     {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (

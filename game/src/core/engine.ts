@@ -770,9 +770,13 @@ const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_amandava', count: 3 },         // amandava
 ];
 
-// Helper to get card definition by ID
-export function getCardDefinition(cardId: string): Card | undefined {
-    return MOCK_CARDS.find(c => c.id === cardId);
+// Helper to get card definition by ID or Name
+export function getCardDefinition(cardIdOrName: string): Card | undefined {
+    // First try to find by ID
+    const byId = MOCK_CARDS.find(c => c.id === cardIdOrName);
+    if (byId) return byId;
+    // Then try to find by name
+    return MOCK_CARDS.find(c => c.name === cardIdOrName);
 }
 
 // Build deck from template
