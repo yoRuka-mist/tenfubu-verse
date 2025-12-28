@@ -1,4 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+// Helper function to resolve asset paths with base URL for GitHub Pages deployment
+const getAssetUrl = (path: string): string => {
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${base}${cleanPath}`;
+};
+
+// Base dimensions for scaling
+const BASE_WIDTH = 1280;
+const BASE_HEIGHT = 720;
 
 interface TitleScreenProps {
     onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN', roomId?: string) => void;
@@ -8,96 +19,211 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
 
+    // Responsive scaling
+    const [scale, setScale] = useState(1);
+
+    useEffect(() => {
+        const updateScale = () => {
+            const scaleX = window.innerWidth / BASE_WIDTH;
+            const scaleY = window.innerHeight / BASE_HEIGHT;
+            setScale(Math.min(scaleX, scaleY));
+        };
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, []);
+
+    // Scaled sizes
+    const logoSize = 180 * scale;
+    const titleFontSize = 5.5 * scale;
+    const verseFontSize = 2.5 * scale;
+    const buttonWidth = 300 * scale;
+    const buttonFontSize = 1.2 * scale;
+    const buttonPadding = `${1 * scale}rem 0`;
+
+    const btnStyle: React.CSSProperties = {
+        fontSize: `${buttonFontSize}rem`,
+        padding: buttonPadding,
+        background: 'transparent',
+        border: '2px solid #e94560',
+        color: '#fff',
+        cursor: 'pointer',
+        transition: 'all 0.3s',
+        borderRadius: 4 * scale,
+        fontWeight: 'bold',
+        letterSpacing: '1px',
+        width: '100%'
+    };
+
     return (
         <div className="screen title-screen" style={{
             height: '100vh',
+            width: '100vw',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            position: 'relative',
+            overflow: 'hidden',
             color: 'white'
         }}>
-            <h1 style={{ fontSize: '4rem', marginBottom: '3rem', textShadow: '0 0 10px #e94560', fontFamily: 'Tamanegi, Impact, sans-serif', letterSpacing: '2px' }}>
-                DIGITAL<br />CARD<br />GAME
-            </h1>
+            {/* Background Layer - will show background image when added */}
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `url(${getAssetUrl('/title/background.png')})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                zIndex: 0
+            }} />
 
-            {!showJoinInput ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: 300 }}>
-                    <button
-                        onClick={() => onStartConfig('CPU')}
-                        style={btnStyle}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        SOLO PLAY (CPU)
-                    </button>
+            {/* Fallback gradient background */}
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                zIndex: -1
+            }} />
 
-                    <button
-                        onClick={() => onStartConfig('HOST')}
-                        style={btnStyle}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        CREATE ROOM (HOST)
-                    </button>
+            {/* Dark overlay for readability */}
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.3)',
+                zIndex: 1
+            }} />
 
-                    <button
-                        onClick={() => setShowJoinInput(true)}
-                        style={btnStyle}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        JOIN ROOM
-                    </button>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: 300 }}>
-                    <input
-                        type="text"
-                        placeholder="Enter Room ID"
-                        value={joinId}
-                        onChange={(e) => setJoinId(e.target.value)}
+            {/* Content */}
+            <div style={{
+                position: 'relative',
+                zIndex: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                {/* Title Logo Area */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: `${2 * scale}rem`,
+                    position: 'relative'
+                }}>
+                    {/* 天下 */}
+                    <span style={{
+                        fontFamily: 'Tamanegi, sans-serif',
+                        fontSize: `${titleFontSize}rem`,
+                        color: '#fff',
+                        textShadow: '0 0 20px rgba(233, 69, 96, 0.8), 0 0 40px rgba(233, 69, 96, 0.4), 2px 2px 4px rgba(0,0,0,0.8)',
+                        letterSpacing: `${0.1 * scale}rem`
+                    }}>
+                        天下
+                    </span>
+
+                    {/* Logo - positioned between 下 and 布 */}
+                    <img
+                        src={getAssetUrl('/title/logo.png')}
+                        alt="Logo"
                         style={{
-                            padding: '1rem',
-                            fontSize: '1.2rem',
-                            background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid #444',
-                            color: 'white',
-                            borderRadius: 4,
-                            textAlign: 'center'
+                            width: logoSize,
+                            height: logoSize,
+                            objectFit: 'contain',
+                            margin: `0 ${-0.5 * scale}rem`,
+                            filter: 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.5))'
                         }}
                     />
-                    <button
-                        onClick={() => onStartConfig('JOIN', joinId)}
-                        disabled={!joinId}
-                        style={{ ...btnStyle, opacity: joinId ? 1 : 0.5 }}
-                    >
-                        CONNECT
-                    </button>
-                    <button
-                        onClick={() => setShowJoinInput(false)}
-                        style={{ ...btnStyle, border: 'none', fontSize: '1rem', color: '#888' }}
-                    >
-                        BACK
-                    </button>
-                </div>
-            )}
 
-            <p style={{ marginTop: '3rem', opacity: 0.5, fontSize: '0.8rem' }}>Ver 0.2.0 P2P Alpha</p>
+                    {/* 布舞 */}
+                    <span style={{
+                        fontFamily: 'Tamanegi, sans-serif',
+                        fontSize: `${titleFontSize}rem`,
+                        color: '#fff',
+                        textShadow: '0 0 20px rgba(233, 69, 96, 0.8), 0 0 40px rgba(233, 69, 96, 0.4), 2px 2px 4px rgba(0,0,0,0.8)',
+                        letterSpacing: `${0.1 * scale}rem`
+                    }}>
+                        布舞
+                    </span>
+                </div>
+
+                {/* verse subtitle */}
+                <div style={{
+                    fontFamily: 'Tamanegi, sans-serif',
+                    fontSize: `${verseFontSize}rem`,
+                    color: '#e94560',
+                    textShadow: '0 0 10px rgba(233, 69, 96, 0.6), 2px 2px 4px rgba(0,0,0,0.8)',
+                    letterSpacing: `${0.3 * scale}rem`,
+                    marginTop: `${-1 * scale}rem`,
+                    marginBottom: `${3 * scale}rem`
+                }}>
+                    verse
+                </div>
+
+                {/* Menu Buttons */}
+                {!showJoinInput ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: `${1.5 * scale}rem`, width: buttonWidth }}>
+                        <button
+                            onClick={() => onStartConfig('CPU')}
+                            style={btnStyle}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                            ひとりで遊ぶ
+                        </button>
+
+                        <button
+                            onClick={() => onStartConfig('HOST')}
+                            style={btnStyle}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                            部屋を作る
+                        </button>
+
+                        <button
+                            onClick={() => setShowJoinInput(true)}
+                            style={btnStyle}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                            部屋に入る
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * scale}rem`, width: buttonWidth }}>
+                        <input
+                            type="text"
+                            placeholder="ルームIDを入力"
+                            value={joinId}
+                            onChange={(e) => setJoinId(e.target.value)}
+                            style={{
+                                padding: `${1 * scale}rem`,
+                                fontSize: `${1.2 * scale}rem`,
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1px solid #444',
+                                color: 'white',
+                                borderRadius: 4 * scale,
+                                textAlign: 'center'
+                            }}
+                        />
+                        <button
+                            onClick={() => onStartConfig('JOIN', joinId)}
+                            disabled={!joinId}
+                            style={{ ...btnStyle, opacity: joinId ? 1 : 0.5 }}
+                        >
+                            接続
+                        </button>
+                        <button
+                            onClick={() => setShowJoinInput(false)}
+                            style={{ ...btnStyle, border: 'none', fontSize: `${1 * scale}rem`, color: '#888' }}
+                        >
+                            戻る
+                        </button>
+                    </div>
+                )}
+
+                <p style={{ marginTop: `${3 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 0.2.0 P2P Alpha</p>
+            </div>
         </div>
     );
-};
-
-const btnStyle: React.CSSProperties = {
-    fontSize: '1.2rem',
-    padding: '1rem 0',
-    background: 'transparent',
-    border: '2px solid #e94560',
-    color: '#fff',
-    cursor: 'pointer',
-    transition: 'all 0.3s',
-    borderRadius: 4,
-    fontWeight: 'bold',
-    letterSpacing: '1px'
 };
