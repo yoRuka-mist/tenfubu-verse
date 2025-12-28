@@ -33,7 +33,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_senka_knuckler', name: 'せんか', cost: 8, type: 'FOLLOWER',
         attack: 3, health: 5,
-        description: '[疾走] [2回攻撃] ファンファーレ：手札のナックラーすべてのコストを2軽減する。自分のナックラーすべては[疾走]を得る。超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
+        description: '[疾走] [ダブル] ファンファーレ：手札のナックラーすべてのコストを2軽減する。自分のナックラーすべては[疾走]を得る。超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
         imageUrl: '/cards/senka.png',
         evolvedImageUrl: '/cards/senka_2.png',
         tags: ['Knuckler'],
@@ -1042,13 +1042,30 @@ function processSingleEffect(
             break;
         }
         case 'DESTROY': {
-            if (effect.targetType === 'ALL_OTHER_FOLLOWERS') {
-                // Destroy Opponent's Board (ALL)
-                const oppBoard = newState.players[opponentId].board;
-                oppBoard.forEach(c => c && newState.players[opponentId].graveyard.push(c));
-                newState.players[opponentId].board = [];
+            // Helper: Check if follower is immune to destruction (super-evolved on their owner's turn)
+            const isImmuneToDestruction = (follower: BoardCard, ownerId: string): boolean => {
+                // Super-evolved followers are immune to destruction on their owner's turn
+                return follower.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') === true &&
+                       newState.activePlayerId === ownerId;
+            };
 
-                // Destroy Self Board (Except Source)
+            if (effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                // Destroy Opponent's Board (ALL) - Skip immune followers
+                const oppBoard = newState.players[opponentId].board;
+                const newOppBoard: (BoardCard | null)[] = [];
+                oppBoard.forEach(c => {
+                    if (c) {
+                        if (isImmuneToDestruction(c, opponentId)) {
+                            newOppBoard.push(c);
+                            newState.logs.push(`${c.name} は破壊を無効化しました！`);
+                        } else {
+                            newState.players[opponentId].graveyard.push(c);
+                        }
+                    }
+                });
+                newState.players[opponentId].board = newOppBoard;
+
+                // Destroy Self Board (Except Source) - Skip immune followers
                 const selfBoard = newState.players[sourcePlayerId].board;
                 const newSelfBoard: (BoardCard | null)[] = [];
                 const sourceInstanceId = (sourceCard as any).instanceId;
@@ -1057,6 +1074,9 @@ function processSingleEffect(
                     if (c) {
                         if (sourceInstanceId && c.instanceId === sourceInstanceId) {
                             newSelfBoard.push(c);
+                        } else if (isImmuneToDestruction(c, sourcePlayerId)) {
+                            newSelfBoard.push(c);
+                            newState.logs.push(`${c.name} は破壊を無効化しました！`);
                         } else {
                             newState.players[sourcePlayerId].graveyard.push(c);
                         }
@@ -1069,10 +1089,17 @@ function processSingleEffect(
                 const targetInfo = getBoardCardById(targetId);
                 if (targetInfo) {
                     const { card, player: targetOwner, index: idx } = targetInfo;
-                    card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
-                    targetOwner.graveyard.push(card);
-                    targetOwner.board[idx] = null;
-                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                    const ownerId = Object.keys(newState.players).find(pid => newState.players[pid].board.includes(card)) || '';
+
+                    // Check if immune to destruction
+                    if (isImmuneToDestruction(card, ownerId)) {
+                        newState.logs.push(`${card.name} は破壊を無効化しました！`);
+                    } else {
+                        card.currentHealth = 1; // Mark as DESTROYED (non-damage death)
+                        targetOwner.graveyard.push(card);
+                        targetOwner.board[idx] = null;
+                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                    }
                 }
             }
             break;
@@ -1106,6 +1133,12 @@ function processSingleEffect(
             break;
         }
         case 'RANDOM_DESTROY': {
+            // Helper: Check if follower is immune to destruction (super-evolved on their owner's turn)
+            const isImmuneToDestruction = (follower: BoardCard, ownerId: string): boolean => {
+                return follower.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') === true &&
+                       newState.activePlayerId === ownerId;
+            };
+
             const count = effect.value || 1;
             const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
             const targetBoard = newState.players[targetPid].board;
@@ -1117,16 +1150,25 @@ function processSingleEffect(
                     const idx = targetBoard.findIndex(c => c?.instanceId === tid);
                     if (idx !== -1 && targetBoard[idx]) {
                         const card = targetBoard[idx]!;
-                        card.currentHealth = 1;
-                        newState.players[targetPid].graveyard.push(card);
-                        targetBoard[idx] = null;
-                        newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                        // Check if immune to destruction
+                        if (isImmuneToDestruction(card, targetPid)) {
+                            newState.logs.push(`${card.name} は破壊を無効化しました！`);
+                        } else {
+                            card.currentHealth = 1;
+                            newState.players[targetPid].graveyard.push(card);
+                            targetBoard[idx] = null;
+                            newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+                        }
                     }
                 });
             } else {
                 // Fallback (shouldn't be hit for visualized effects but good for safety)
-                // Get all valid indices
-                const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                // Get all valid indices (excluding immune followers)
+                const validIndices = targetBoard.map((c, i) => {
+                    if (!c) return -1;
+                    if (isImmuneToDestruction(c, targetPid)) return -1;
+                    return i;
+                }).filter(i => i !== -1);
 
                 // Shuffle
                 for (let i = validIndices.length - 1; i > 0; i--) {
@@ -1269,9 +1311,10 @@ function processSingleEffect(
                     };
 
                     // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
-                    const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                    // Note: Check by name since card.id is overwritten during deck building (e.g., p1_c0)
+                    const hasSenkaOnBoard = player.board.some(c => c && c.name === 'せんか');
                     console.log(`[SUMMON] Senka aura check: hasSenka=${hasSenkaOnBoard}, newCard=${newCard.name}, tags=${newCard.tags}, id=${newCard.id}`);
-                    if (hasSenkaOnBoard && newCard.tags?.includes('Knuckler') && newCard.id !== 'c_senka_knuckler') {
+                    if (hasSenkaOnBoard && newCard.tags?.includes('Knuckler') && newCard.name !== 'せんか') {
                         if (!newCard.passiveAbilities) newCard.passiveAbilities = [];
                         if (!newCard.passiveAbilities.includes('STORM')) {
                             newCard.passiveAbilities.push('STORM');
@@ -1814,9 +1857,10 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
 
                 // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
-                const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                // Note: Check by name since card.id is overwritten during deck building (e.g., p1_c0)
+                const hasSenkaOnBoard = player.board.some(c => c && c.name === 'せんか');
                 console.log(`[PLAY_CARD] Senka aura check: hasSenka=${hasSenkaOnBoard}, newFollower=${newFollower.name}, tags=${newFollower.tags}, id=${newFollower.id}`);
-                if (hasSenkaOnBoard && newFollower.tags?.includes('Knuckler') && newFollower.id !== 'c_senka_knuckler') {
+                if (hasSenkaOnBoard && newFollower.tags?.includes('Knuckler') && newFollower.name !== 'せんか') {
                     // Grant STORM if not already present
                     if (!newFollower.passiveAbilities) newFollower.passiveAbilities = [];
                     if (!newFollower.passiveAbilities.includes('STORM')) {
