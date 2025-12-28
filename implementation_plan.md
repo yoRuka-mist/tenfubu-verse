@@ -25,6 +25,11 @@
     - `ActiveEffectState` 型定義に `'BLUE_FIRE'` を追加。
 3. `game/src/core/engine.ts`: ルイ・ユー（`c_ruiyu`）の `attackEffectType` を `'BLUE_FIRE'` に変更。
 
+### Yのカード調整
+1. `MOCK_CARDS` 配列内の `id: 'c_y'` を持つオブジェクトを特定する。
+2. `attack` プロパティを `4` から `3` に変更する。
+3. `health` プロパティを `4` から `3` に変更する。
+
 ## 確認事項
 - スタッツの変更が正しく反映されているか、コード上で確認する。
 - 他のカードに影響を与えていないことを確認する。

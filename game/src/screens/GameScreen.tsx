@@ -403,32 +403,35 @@ const SparkleBurst = ({ x, y }: { x: number, y: number }) => {
 
 // --- Battle Log Component ---
 const BattleLog = ({ logs }: { logs: string[] }) => {
-    const endRef = React.useRef<HTMLDivElement>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
-        if (endRef.current) {
-            endRef.current.scrollIntoView({ behavior: 'smooth' });
+        // Scroll to bottom of container without affecting parent elements
+        if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
     }, [logs.length]); // Scroll on length change
 
     return (
-        <div style={{
-            position: 'absolute',
-            left: 0,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: 250,
-            maxHeight: 250,
-            overflowY: 'auto',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
-            color: '#fff',
-            fontSize: '0.8rem',
-            padding: '10px 10px 10px 15px',
-            borderLeft: '3px solid #63b3ed',
-            zIndex: 15, // Under menus, over board default
-            pointerEvents: 'auto', // Allow scroll
-            // Custom Scrollbar styling handled by browser usually, or simple CSS class if available
-            scrollbarWidth: 'thin',
-        }}
+        <div
+            ref={containerRef}
+            style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 250,
+                maxHeight: 250,
+                overflowY: 'auto',
+                background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
+                color: '#fff',
+                fontSize: '0.8rem',
+                padding: '10px 10px 10px 15px',
+                borderLeft: '3px solid #63b3ed',
+                zIndex: 15, // Under menus, over board default
+                pointerEvents: 'auto', // Allow scroll
+                // Custom Scrollbar styling handled by browser usually, or simple CSS class if available
+                scrollbarWidth: 'thin',
+            }}
             onMouseDown={e => e.stopPropagation()} // Prevent drag triggering
         >
             <div style={{
@@ -450,7 +453,6 @@ const BattleLog = ({ logs }: { logs: string[] }) => {
                     </div>
                 ))}
             </div>
-            <div ref={endRef} style={{ height: 1 }} />
         </div>
     );
 };

@@ -81,7 +81,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'c_y', name: 'Y', cost: 6, type: 'FOLLOWER',
-        attack: 4, health: 4,
+        attack: 3, health: 3,
         description: '[隠密] ファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。進化時：相手のフォロワーすべてに3ダメージ。',
         imageUrl: '/cards/y.png',
         evolvedImageUrl: '/cards/y_2.png',
@@ -1266,12 +1266,14 @@ function processSingleEffect(
 
                     // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
                     const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                    console.log(`[SUMMON] Senka aura check: hasSenka=${hasSenkaOnBoard}, newCard=${newCard.name}, tags=${newCard.tags}, id=${newCard.id}`);
                     if (hasSenkaOnBoard && newCard.tags?.includes('Knuckler') && newCard.id !== 'c_senka_knuckler') {
                         if (!newCard.passiveAbilities) newCard.passiveAbilities = [];
                         if (!newCard.passiveAbilities.includes('STORM')) {
                             newCard.passiveAbilities.push('STORM');
                             newCard.canAttack = true;
                             newState.logs.push(`${newCard.name} はせんかの効果で疾走を得た`);
+                            console.log(`[SUMMON] STORM granted to ${newCard.name}`);
                         }
                     }
 
@@ -1409,10 +1411,15 @@ function processSingleEffect(
             } else if (effect.targetType === 'ALL_FOLLOWERS') {
                 const p = newState.players[sourcePlayerId];
                 let count = 0;
+                console.log(`[GRANT_PASSIVE] ALL_FOLLOWERS: Player board has ${p.board.filter(c => c).length} units, condition tag=${effect.conditions?.tag}`);
                 p.board.forEach(c => {
                     if (c) {
+                        console.log(`[GRANT_PASSIVE] Checking: ${c.name}, tags=${c.tags}, passives=${c.passiveAbilities}`);
                         // Check conditions (e.g. tag: 'Knuckler')
-                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) return;
+                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) {
+                            console.log(`[GRANT_PASSIVE] Skipped ${c.name}: no matching tag`);
+                            return;
+                        }
 
                         if (passive === 'BARRIER') {
                             c.hasBarrier = true;
@@ -1422,6 +1429,7 @@ function processSingleEffect(
                             if (!c.passiveAbilities.includes(passive)) {
                                 c.passiveAbilities.push(passive);
                                 count++;
+                                console.log(`[GRANT_PASSIVE] Granted ${passive} to ${c.name}`);
                                 // CRITICAL: Enable attack for STORM/RUSH
                                 if (passive === 'STORM' || passive === 'RUSH') {
                                     c.canAttack = true;
@@ -1433,6 +1441,7 @@ function processSingleEffect(
                 if (count > 0) {
                     newState.logs.push(`味方のフォロワー${count}体に ${passive} を付与した`);
                 }
+                console.log(`[GRANT_PASSIVE] Total granted: ${count}`);
             }
             break;
         }
@@ -1802,6 +1811,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
                 const hasSenkaOnBoard = player.board.some(c => c && c.id === 'c_senka_knuckler');
+                console.log(`[PLAY_CARD] Senka aura check: hasSenka=${hasSenkaOnBoard}, newFollower=${newFollower.name}, tags=${newFollower.tags}, id=${newFollower.id}`);
                 if (hasSenkaOnBoard && newFollower.tags?.includes('Knuckler') && newFollower.id !== 'c_senka_knuckler') {
                     // Grant STORM if not already present
                     if (!newFollower.passiveAbilities) newFollower.passiveAbilities = [];
@@ -1809,6 +1819,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         newFollower.passiveAbilities.push('STORM');
                         newFollower.canAttack = true;
                         newState.logs.push(`${newFollower.name} はせんかの効果で疾走を得た`);
+                        console.log(`[PLAY_CARD] STORM granted to ${newFollower.name}`);
                     }
                 }
 
@@ -1857,12 +1868,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     // CRITICAL: Pre-calculate ALL_FOLLOWERS and ALL_OTHER_FOLLOWERS targets at queue time
                     // This ensures effects only hit units that existed when the effect was triggered
                     else if (e.targetType === 'ALL_FOLLOWERS' || e.type === 'AOE_DAMAGE') {
-                        // ALL_FOLLOWERS targets ALL enemy followers
-                        const targetBoard = newState.players[opponentPid].board;
+                        // GRANT_PASSIVE with ALL_FOLLOWERS targets ALLY followers (e.g., Senka's Knuckler buff)
+                        // AOE_DAMAGE and other damage effects target ENEMY followers
+                        const isAllyTargetEffect = e.type === 'GRANT_PASSIVE' || e.type === 'BUFF_STATS';
+                        const targetPid = isAllyTargetEffect ? selfPid : opponentPid;
+                        const targetBoard = newState.players[targetPid].board;
                         resolvedTargetIds = targetBoard
                             .filter(c => c !== null)
                             .map(c => c!.instanceId);
-                        console.log(`[Engine] Pre-calculated ALL_FOLLOWERS targets: ${resolvedTargetIds.length} units`);
+                        console.log(`[Engine] Pre-calculated ALL_FOLLOWERS targets (${isAllyTargetEffect ? 'ally' : 'enemy'}): ${resolvedTargetIds.length} units`);
                     }
                     else if (e.targetType === 'ALL_OTHER_FOLLOWERS') {
                         // ALL_OTHER_FOLLOWERS targets all own followers except the source
