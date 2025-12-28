@@ -437,7 +437,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '[ファンファーレ] カードを1枚引く。[守護]',
+        description: '[守護] ファンファーレ：カードを1枚引く。',
         imageUrl: '/cards/potechi.png',
         evolvedImageUrl: '/cards/potechi_2.png',
         passiveAbilities: ['WARD'],
