@@ -2570,35 +2570,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         evolveAnimationRef.current = evolveAnimation;
     }, [activeEffects, animatingCard, playingCardAnim, evolveAnimation]);
 
-    // --- Final Cannon Special SE (beamCharge -> beam) ---
-    const finalCannonAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    // --- Final Cannon Special SE ---
     useEffect(() => {
         if (playingCardAnim && playingCardAnim.card.name === '天下布舞・ファイナルキャノン') {
-            // Play beamCharge.mp3 for 2 seconds, then switch to beam.mp3
             if (audioSettings.seEnabled) {
-                const chargeAudio = new Audio(getAssetUrl('/se/beamCharge.mp3'));
-                chargeAudio.volume = audioSettings.se * 0.7;
-                chargeAudio.play().catch(e => console.warn("SE Play prevented", e));
-                finalCannonAudioRef.current = chargeAudio;
-
-                // After 2 seconds, stop charge and play beam
-                const timer = setTimeout(() => {
-                    if (finalCannonAudioRef.current) {
-                        finalCannonAudioRef.current.pause();
-                        finalCannonAudioRef.current = null;
-                    }
-                    const beamAudio = new Audio(getAssetUrl('/se/beam.mp3'));
-                    beamAudio.volume = audioSettings.se * 0.8;
-                    beamAudio.play().catch(e => console.warn("SE Play prevented", e));
-                }, 2000);
-
-                return () => {
-                    clearTimeout(timer);
-                    if (finalCannonAudioRef.current) {
-                        finalCannonAudioRef.current.pause();
-                        finalCannonAudioRef.current = null;
-                    }
-                };
+                const beamAudio = new Audio(getAssetUrl('/se/beam.mp3'));
+                beamAudio.volume = audioSettings.se * 0.8;
+                beamAudio.play().catch(e => console.warn("SE Play prevented", e));
             }
         }
     }, [playingCardAnim, audioSettings]);
