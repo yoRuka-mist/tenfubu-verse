@@ -1751,13 +1751,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const isDestroyEffect = current.effect.type === 'DESTROY' || current.effect.type === 'RANDOM_DESTROY';
             const isHealEffect = current.effect.type === 'HEAL_LEADER';
             const isSetHpEffect = current.effect.type === 'RANDOM_SET_HP';
+            const isSetMaxHpEffect = current.effect.type === 'SET_MAX_HP';
             const isBounceEffect = current.effect.type === 'RETURN_TO_HAND';
             const isSummonEffect = current.effect.type === 'SUMMON_CARD';
 
             const delay = (isHealEffect || isBounceEffect || isSummonEffect) ? 600 : 50;
 
             if (isDamageEffect) {
-                const effectType = current.sourceCard.attackEffectType || 'SLASH';
+                // Default effect type from card's attackEffectType
+                let effectType = current.sourceCard.attackEffectType || 'SLASH';
+
+                // Card-specific effect overrides for evolve triggers
+                // ありす (c_alice): 進化時のダメージエフェクトはWATER
+                if ((current.sourceCard as any).id === 'c_alice' && current.effect.targetType === 'SELECT_FOLLOWER') {
+                    effectType = 'WATER';
+                }
+
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
                 const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
 
@@ -1783,8 +1792,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
                 }
             } else if (isDestroyEffect) {
-                // Destroy effect visuals - Use character's specific animation if available
-                const effectType = current.sourceCard.attackEffectType || 'IMPACT';
+                // Default effect type from card's attackEffectType
+                let effectType = current.sourceCard.attackEffectType || 'IMPACT';
+
+                // Card-specific effect overrides
+                // かすが (c_kasuga): 全体破壊エフェクトはRAY
+                if ((current.sourceCard as any).id === 'c_kasuga') {
+                    effectType = 'RAY';
+                }
+
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
                 const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
 
@@ -1793,6 +1809,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     vBoard.forEach((v, vIdx) => {
                         if (v && v.instanceId !== (current.sourceCard as any).instanceId) {
                             playEffect(effectType, targetPid, vIdx);
+                        }
+                    });
+                    // Also play effect on own board (かすが destroys ALL followers)
+                    const selfPid = current.sourcePlayerId;
+                    const selfBoard = selfPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    selfBoard.forEach((v, vIdx) => {
+                        if (v && v.instanceId !== (current.sourceCard as any).instanceId) {
+                            playEffect(effectType, selfPid, vIdx);
                         }
                     });
                     triggerShake();
@@ -1809,6 +1833,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Trigger HEAL visual effect for leader recovery
                 const targetPid = current.sourcePlayerId; // HEAL_LEADER heals source
                 playEffect('HEAL', targetPid);
+            } else if (isSetMaxHpEffect) {
+                // 天下布舞・ファイナルキャノン: RAY effect on opponent leader
+                const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
+                playEffect('RAY', targetPid, -1); // -1 indicates leader
+                triggerShake();
             }
 
             if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
@@ -1817,7 +1846,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // 0ms: Animation Starts
             // 1000ms: Impact / Damage Applied (Gap is zero relative to impact)
             // 2000ms: Done / Next Effect (1s pause after damage)
-            const isDamageOrDestroy = isDamageEffect || isDestroyEffect || isSetHpEffect;
+            const isDamageOrDestroy = isDamageEffect || isDestroyEffect || isSetHpEffect || isSetMaxHpEffect;
             const stateUpdateDelay = isDamageOrDestroy ? 1000 : delay;
             const postActionDelay = isDamageOrDestroy ? 1000 : 0;
 
@@ -3043,21 +3072,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                 // --- AI Azya FANFARE Visuals ---
                                 if (bestCard.id === 'c_azya') {
-                                    // 1. Damage to Player Leader
+                                    // 1. Damage to Player Leader - THUNDER
                                     setTimeout(() => {
                                         playEffect('THUNDER', currentPlayerId, -1);
                                     }, 200);
 
-                                    // 2. Destroy Target (if targetId was set)
+                                    // 2. Destroy Target - ICE (if targetId was set)
                                     if (targetId) {
                                         const playerBoard = gameStateRef.current.players[currentPlayerId].board;
                                         const targetIdx = playerBoard.findIndex(c => c?.instanceId === targetId);
                                         if (targetIdx !== -1) {
                                             setTimeout(() => {
-                                                playEffect('THUNDER', currentPlayerId, targetIdx, targetId);
+                                                playEffect('ICE', currentPlayerId, targetIdx, targetId);
                                             }, 400);
                                         }
                                     }
+
+                                    // 3. Random Bounce effect - WATER
+                                    setTimeout(() => {
+                                        const pBoard = gameStateRef.current.players[currentPlayerId].board;
+                                        const validTargets = pBoard.filter(c => c !== null);
+                                        if (validTargets.length > 0) {
+                                            const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
+                                            const vIdx = pBoard.findIndex(c => c?.instanceId === randomCard?.instanceId);
+                                            if (vIdx !== -1) {
+                                                playEffect('WATER', currentPlayerId, vIdx, randomCard?.instanceId);
+                                            }
+                                        }
+                                    }, 600);
                                 }
 
                                 setPlayingCardAnim(null);
@@ -3915,24 +3957,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // --- あじゃ (c_azya) Visuals ---
             if (animCard.id === 'c_azya') {
-                // 1. Leader damage effect (immediate)
+                // 1. Leader damage effect - THUNDER (immediate)
                 playEffect('THUNDER', opponentPlayerId, -1);
 
-                // 2. Target follower destruction effect (delayed)
+                // 2. Target follower destruction effect - ICE (delayed)
                 setTimeout(() => {
-                    playEffect('THUNDER', targetPlayerId, actualTargetIndex, targetId);
+                    playEffect('ICE', targetPlayerId, actualTargetIndex, targetId);
                 }, 300);
-            }
 
-            // --- あじゃ (c_azya) Visuals ---
-            if (animCard.id === 'c_azya') {
-                // 1. Leader damage effect (immediate)
-                playEffect('THUNDER', opponentPlayerId, -1);
-
-                // 2. Target follower destruction effect (delayed)
+                // 3. Random bounce effect - WATER (further delayed)
+                // Note: bounce effect is handled by pendingEffects, but visual effect can be shown
                 setTimeout(() => {
-                    playEffect('THUNDER', targetPlayerId, actualTargetIndex, targetId);
-                }, 300);
+                    const oppBoard = gameStateRef.current.players[opponentPlayerId].board;
+                    const validTargets = oppBoard.filter(c => c !== null);
+                    if (validTargets.length > 0) {
+                        const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
+                        const vIdx = oppBoard.findIndex(c => c?.instanceId === randomCard?.instanceId);
+                        if (vIdx !== -1) {
+                            playEffect('WATER', opponentPlayerId, vIdx, randomCard?.instanceId);
+                        }
+                    }
+                }, 600);
             }
 
             // Animation for spell/card
