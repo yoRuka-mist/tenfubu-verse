@@ -2628,6 +2628,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const card = actualFollowerIndex >= 0 ? playerBoard[actualFollowerIndex] : null;
         if (!card) return;
 
+        // Already evolved cards cannot evolve or super-evolve again
+        if (card.hasEvolved) {
+            console.log('[GameScreen] Cannot evolve: card already evolved');
+            return;
+        }
+
         // Get the card's current position on the board (using visual index for display position)
         const cardEl = playerBoardRefs.current[visualIndex];
 
@@ -3229,12 +3235,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
 
                             if (targetIndex === -1) { // If Ward didn't set target
-                                // RUSH Check: If RUSH and played this turn (and no STORM), CANNOT target leader
-                                // const hasRush = attacker.passiveAbilities?.includes('RUSH'); // Unused
+                                // RUSH units can only attack followers on the turn they are summoned
+                                // STORM units can attack anything including leader on summon turn
                                 const hasStorm = attacker.passiveAbilities?.includes('STORM');
                                 const isSummoningSickness = attacker.turnPlayed === state.turnCount;
 
-                                const canAttackLeader = !isSummoningSickness || hasStorm;
+                                // Can attack leader if:
+                                // - Has STORM (can attack anything on summon turn), OR
+                                // - Not summoning sick (previous turn, can attack anything)
+                                // Cannot attack leader if:
+                                // - Summoning sick without STORM (RUSH units are follower-only on summon turn)
+                                const canAttackLeader = hasStorm || !isSummoningSickness;
 
                                 if (!canAttackLeader) {
                                     // Must attack follower. If no follower, cannot attack.
@@ -3713,6 +3724,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     const card = actualFollowerIndex >= 0 ? playerBoard[actualFollowerIndex] : null;
                     if (!card) return;
+
+                    // Already evolved cards cannot evolve or super-evolve again
+                    if (card.hasEvolved) {
+                        console.log('[GameScreen] Cannot evolve: card already evolved (drag drop)');
+                        return;
+                    }
 
                     // Check for Target Selection Requirement (Evolve or Super Evolve Trigger)
                     const isSuper = (currentDrag as any).useSep;
@@ -4490,7 +4507,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
 
 
-                            <div style={{ fontSize: '0.9rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
+                            <div style={{ fontSize: '1.05rem', color: '#cbd5e0', lineHeight: '1.6', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
                                 {selectedCard.card.description}
                             </div>
 

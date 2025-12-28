@@ -33,7 +33,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_senka_knuckler', name: 'せんか', cost: 8, type: 'FOLLOWER',
         attack: 3, health: 5,
-        description: '[疾走] [ダブル] ファンファーレ：手札のナックラーすべてのコストを2軽減する。自分のナックラーすべては[疾走]を得る。超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
+        description: '[疾走] [ダブル]\n手札のナックラーすべてのコストを2軽減する。\nファンファーレ：自分のナックラーすべては[疾走]を得る。\n超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
         imageUrl: '/cards/senka.png',
         evolvedImageUrl: '/cards/senka_2.png',
         tags: ['Knuckler'],
@@ -59,7 +59,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 7, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：自分のリーダーを4回復する。「cyoriena」1体を出す。進化時：自分のリーダーを4回復する。',
+        description: 'ファンファーレ：自分のリーダーを4回復する。「cyoriena」1体を出す。\n進化時：自分のリーダーを4回復する。',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
         attackEffectType: 'BLUE_FIRE',
@@ -82,7 +82,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_y', name: 'Y', cost: 6, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: '[隠密] ファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。進化時：相手のフォロワーすべてに3ダメージ。',
+        description: '[隠密]\nファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。\n進化時：相手のフォロワーすべてに3ダメージ。',
         imageUrl: '/cards/y.png',
         evolvedImageUrl: '/cards/y_2.png',
         passiveAbilities: ['STEALTH'],
@@ -107,7 +107,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_tsubumaru', name: 'つぶまる', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 3,
-        description: '[守護] 進化時：「退職代行」1枚を手札に加える。',
+        description: '[守護]\n進化時：「退職代行」1枚を手札に加える。',
         imageUrl: '/cards/tsubumaru.png',
         evolvedImageUrl: '/cards/tsubumaru_2.png',
         passiveAbilities: ['WARD'],
@@ -156,7 +156,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yunagi', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: 'ファンファーレ：「米」1枚を手札に加える。進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」1枚を手札に加える。',
+        description: 'ファンファーレ：「米」1枚を手札に加える。\n進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」1枚を手札に加える。',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
         attackEffectType: 'SLASH',
@@ -189,7 +189,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_nayuta', name: 'なゆた', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: '[守護] ファンファーレ：「なゆた」1体を出す。進化時：「なゆた」1体を出す。',
+        description: '[守護]\nファンファーレ：「なゆた」1体を出す。\n進化時：「なゆた」1体を出す。',
         imageUrl: '/cards/nayuta.png',
         evolvedImageUrl: '/cards/nayuta_2.png',
         attackEffectType: 'RAY',
@@ -201,11 +201,11 @@ const MOCK_CARDS: Card[] = [
     },
 
     // Ward Variants for Azya Summon
-    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護] ファンファーレ：「米」1枚を手札に加える。', imageUrl: '/cards/yunagi.png', evolvedImageUrl: '/cards/yunagi_2.png', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
+    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護]\nファンファーレ：「米」1枚を手札に加える。', imageUrl: '/cards/yunagi.png', evolvedImageUrl: '/cards/yunagi_2.png', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
     {
         id: 'c_nayuta_ward', name: 'なゆた', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: '[守護] ファンファーレ：「なゆた」1体を出す。進化時：「なゆた」1体を出す。',
+        description: '[守護]\nファンファーレ：「なゆた」1体を出す。\n進化時：「なゆた」1体を出す。',
         imageUrl: '/cards/nayuta.png',
         evolvedImageUrl: '/cards/nayuta_2.png',
         passiveAbilities: ['WARD'],
@@ -219,7 +219,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護]を得る。',
+        description: 'ファンファーレ：相手のリーダーに3ダメージ。相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護]を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -246,7 +246,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuki', name: 'ユキ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 2,
-        description: '[突進] 進化時：自分のフォロワーすべてを+1/+1する。',
+        description: '[突進]\n進化時：自分のフォロワーすべてを+1/+1する。',
         imageUrl: '/cards/yuki.png',
         evolvedImageUrl: '/cards/yuki_2.png',
         tags: ['Knuckler'],
@@ -264,7 +264,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_white_tsubaki', name: '白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
-        description: '[突進] 相手のターン中、このフォロワーはフォロワーからのダメージを受けない。進化時：「しゑこ」1体を出す。',
+        description: '[突進]\n相手のターン中、このフォロワーはフォロワーからのダメージを受けない。\n進化時：「しゑこ」1体を出す。',
         imageUrl: '/cards/white_tsubaki.png',
         evolvedImageUrl: '/cards/white_tsubaki_2.png',
         tags: ['Knuckler'],
@@ -282,7 +282,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_shieko', name: 'しゑこ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 1,
-        description: '[突進] 進化時：自分の他のフォロワー1体を+2/+2する。',
+        description: '[突進]\n進化時：自分の他のフォロワー1体を+2/+2する。',
         imageUrl: '/cards/shieko.png',
         evolvedImageUrl: '/cards/shieko_2.png',
         tags: ['Knuckler'],
@@ -300,7 +300,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] [バリア] 進化時：相手のフォロワー1体に2ダメージ。',
+        description: '[守護] [バリア]\n進化時：相手のフォロワー1体に2ダメージ。',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
         passiveAbilities: ['WARD', 'BARRIER'],
@@ -318,7 +318,8 @@ const MOCK_CARDS: Card[] = [
         id: 'c_kasuga', name: 'かすが', cost: 10, type: 'FOLLOWER',
         attack: 8, health: 8,
         description: 'ファンファーレ：他のフォロワーすべてを破壊する。',
-        imageUrl: '/cards/kasuga.jpg',
+        imageUrl: '/cards/kasuga.png',
+        evolvedImageUrl: '/cards/kasuga_2.png',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -410,7 +411,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_valkyrie', name: 'ヴァルキリー', cost: 6, type: 'FOLLOWER',
         attack: 6, health: 6,
-        description: '[守護] [バリア] [オーラ] 自分のターン終了時、[バリア]を得る。',
+        description: '[守護] [バリア] [オーラ]\n自分のターン終了時、[バリア]を得る。',
         imageUrl: '/cards/valkyrie.png',
         evolvedImageUrl: '/cards/valkyrie_2.png',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],
@@ -437,7 +438,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '[守護] ファンファーレ：カードを1枚引く。',
+        description: '[守護]\nファンファーレ：カードを1枚引く。',
         imageUrl: '/cards/potechi.png',
         evolvedImageUrl: '/cards/potechi_2.png',
         passiveAbilities: ['WARD'],
@@ -450,7 +451,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 1,
-        description: 'ファンファーレ：相手のフォロワー1体に5ダメージ。進化時：相手のフォロワー1体に5ダメージ。',
+        description: 'ファンファーレ：相手のフォロワー1体に5ダメージ。\n進化時：相手のフォロワー1体に5ダメージ。',
         imageUrl: '/cards/Mono.png',
         evolvedImageUrl: '/cards/Mono_2.png',
         attackEffectType: 'SHOT',
@@ -469,7 +470,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_sara', name: 'sara', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 6,
-        description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「すみませんが、これで終わりです。」1枚を手札に加える。超進化時：相手のフォロワー1体を破壊する。',
+        description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「すみませんが、これで終わりです。」1枚を手札に加える。\n超進化時：相手のフォロワー1体を破壊する。',
         imageUrl: '/cards/sara.png',
         evolvedImageUrl: '/cards/sara_2.png',
         attackEffectType: 'SHOT',
@@ -507,7 +508,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_blue_tsubaki', name: '青ツバキ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: 'ファンファーレ：カードを1枚引く。進化時：ランダムな相手のフォロワー1体を破壊する。',
+        description: 'ファンファーレ：カードを1枚引く。\n進化時：ランダムな相手のフォロワー1体を破壊する。',
         imageUrl: '/cards/blue_tsubaki.png',
         evolvedImageUrl: '/cards/blue_tsubaki_2.png',
         attackEffectType: 'SLASH',
@@ -574,7 +575,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'c_amandava', name: 'amandava', cost: 5, attack: 2, health: 3, type: 'FOLLOWER',
-        description: 'ファンファーレ：ランダムな相手のフォロワー2体の体力を1にする。進化時：相手のフォロワーすべてに1ダメージ。',
+        description: 'ファンファーレ：ランダムな相手のフォロワー2体の体力を1にする。\n進化時：相手のフォロワーすべてに1ダメージ。',
         imageUrl: '/cards/amandava.png',
         evolvedImageUrl: '/cards/amandava_2.png',
         attackEffectType: 'SHOT',
@@ -595,7 +596,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'c_alice', name: 'ありす', cost: 3, attack: 1, health: 1, type: 'FOLLOWER',
-        description: 'ファンファーレ：ランダムな相手のフォロワー2体に2ダメージ。進化時：相手のフォロワー1体に2ダメージ。',
+        description: 'ファンファーレ：ランダムな相手のフォロワー2体に2ダメージ。\n進化時：相手のフォロワー1体に2ダメージ。',
         imageUrl: '/cards/alice.png',
         evolvedImageUrl: '/cards/alice_2.png',
         attackEffectType: 'FIRE',
@@ -618,7 +619,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuri', name: 'ユウリ', cost: 5, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: 'ファンファーレ：「水氷龍」1体を出す。進化時：相手のフォロワー1体に3ダメージ。',
+        description: 'ファンファーレ：「水氷龍」1体を出す。\n進化時：相手のフォロワー1体に3ダメージ。',
         imageUrl: '/cards/yuri.png',
         evolvedImageUrl: '/cards/yuri_2.png',
         attackEffectType: 'WATER',
@@ -640,7 +641,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_SUIHYORYU', name: '水氷龍', cost: 5, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[突進] [守護] 自分のターン開始時、このフォロワーを破壊する。',
+        description: '[突進] [守護]\n自分のターン開始時、このフォロワーを破壊する。',
         imageUrl: '/cards/suihyoryu.png',
         evolvedImageUrl: '/cards/suihyoryu.png',
         tags: ['Token'],
@@ -658,7 +659,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_cyoriena', name: 'cyoriena', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 2,
-        description: '[守護] 自分のターン終了時、自分のリーダーを2回復する。進化時：「翼」1枚を手札に加える。',
+        description: '[守護]\n自分のターン終了時、自分のリーダーを2回復する。\n進化時：「翼」1枚を手札に加える。',
         imageUrl: '/cards/cyoriena.png',
         evolvedImageUrl: '/cards/cyoriena_2.png',
         tags: ['Token'],
@@ -748,7 +749,8 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 's_crazy_knucklers', count: 2 },  // クレイジー・ナックラーズ
     { cardId: 'c_sia', count: 2 },              // しあ
     { cardId: 'c_mono', count: 3 },             // Mono
-    { cardId: 'c_ruiyu', count: 2 },            // ルイ・ユー
+    { cardId: 'c_ruiyu', count: 1 },            // ルイ・ユー
+    { cardId: 'c_kasuga', count: 1 },           // かすが
     { cardId: 'c_y', count: 2 },                // Y
     { cardId: 'c_sara', count: 1 },             // sara
     { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
@@ -1712,6 +1714,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             nextPlayer.board.forEach(c => {
                 if (c) {
                     c.canAttack = true;
+                    c.attacksMade = 0; // Reset attacksMade for DOUBLE_ATTACK
                 }
             });
 

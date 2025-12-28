@@ -365,36 +365,48 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         overflow: 'hidden',
                         borderRadius: '0 0 8px 8px'
                     }}>
-                        {/* Central Inky Circle (Black) */}
+                        {/* Central Inky Circle (Black) - Stronger */}
                         <div style={{
                             position: 'absolute',
                             top: '50%', left: '50%',
-                            width: '120%', height: '120%',
+                            width: '140%', height: '140%',
                             transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 30%, transparent 70%)',
-                            filter: 'blur(20px)',
-                            animation: 'stealthInkMove 6s infinite ease-in-out',
+                            background: 'radial-gradient(circle, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 30%, rgba(0, 0, 0, 0.3) 60%, transparent 80%)',
+                            filter: 'blur(15px)',
+                            animation: 'stealthInkMove 3s infinite ease-in-out',
                             mixBlendMode: 'multiply'
                         }} />
 
-                        {/* Central Misty Circle (White/Cloudy) */}
+                        {/* Secondary Ink Layer for stronger effect */}
                         <div style={{
                             position: 'absolute',
                             top: '50%', left: '50%',
                             width: '100%', height: '100%',
                             transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.4) 0%, rgba(200, 200, 200, 0.2) 20%, transparent 60%)',
-                            filter: 'blur(15px)',
-                            animation: 'stealthMistMove 8s infinite ease-in-out',
+                            background: 'radial-gradient(circle, rgba(20, 20, 30, 0.9) 0%, rgba(10, 10, 20, 0.5) 40%, transparent 70%)',
+                            filter: 'blur(10px)',
+                            animation: 'stealthInkPulse 1.5s infinite ease-in-out',
+                            mixBlendMode: 'multiply'
+                        }} />
+
+                        {/* Central Misty Circle (White/Cloudy) - More visible */}
+                        <div style={{
+                            position: 'absolute',
+                            top: '50%', left: '50%',
+                            width: '80%', height: '80%',
+                            transform: 'translate(-50%, -50%)',
+                            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, rgba(200, 200, 200, 0.3) 30%, transparent 60%)',
+                            filter: 'blur(12px)',
+                            animation: 'stealthMistMove 4s infinite ease-in-out',
                             mixBlendMode: 'screen'
                         }} />
 
-                        {/* Outer Edge Glow */}
+                        {/* Outer Edge Glow - Stronger pulsing */}
                         <div style={{
                             position: 'absolute',
                             top: 0, left: 0, right: 0, bottom: 0,
-                            boxShadow: 'inset 0 0 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 0, 0, 0.5)',
-                            animation: 'stealthPulse 3s infinite ease-in-out'
+                            boxShadow: 'inset 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7)',
+                            animation: 'stealthPulse 1.5s infinite ease-in-out'
                         }} />
                     </div>
                 )}
@@ -443,17 +455,24 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     100% { transform: scale(1); opacity: 0.9; filter: blur(0px) drop-shadow(0 0 5px rgba(246, 173, 85, 0.5)); }
                 }
                 @keyframes stealthInkMove {
-                    0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 0.6; }
-                    33% { transform: translate(-45%, -55%) scale(1.1) rotate(5deg); opacity: 0.8; }
-                    66% { transform: translate(-55%, -45%) scale(0.9) rotate(-5deg); opacity: 0.7; }
+                    0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 0.7; }
+                    25% { transform: translate(-45%, -55%) scale(1.15) rotate(3deg); opacity: 1; }
+                    50% { transform: translate(-50%, -50%) scale(0.95) rotate(0deg); opacity: 0.5; }
+                    75% { transform: translate(-55%, -45%) scale(1.1) rotate(-3deg); opacity: 0.9; }
+                }
+                @keyframes stealthInkPulse {
+                    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+                    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
                 }
                 @keyframes stealthMistMove {
-                    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
-                    50% { transform: translate(-52%, -48%) scale(1.2); opacity: 0.6; }
+                    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+                    25% { transform: translate(-48%, -52%) scale(1.1); opacity: 0.8; }
+                    50% { transform: translate(-52%, -48%) scale(1.2); opacity: 0.3; }
+                    75% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.7; }
                 }
                 @keyframes stealthPulse {
-                    0%, 100% { opacity: 0.7; }
-                    50% { opacity: 1; }
+                    0%, 100% { opacity: 0.6; box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7); }
+                    50% { opacity: 1; box-shadow: inset 0 0 70px rgba(0, 0, 0, 1), 0 0 40px rgba(0, 0, 0, 0.9); }
                 }
             `}</style>
         </div >
