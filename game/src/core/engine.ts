@@ -219,7 +219,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。ランダムな相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護]を得る。',
+        description: 'ファンファーレ：相手のリーダーに3ダメージ。ランダムな相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護][突進]を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -238,7 +238,8 @@ const MOCK_CARDS: Card[] = [
                     { type: 'SUMMON_CARD', targetCardId: 'c_tsubumaru' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
-                    { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
+                    { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
+                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             }
         ]

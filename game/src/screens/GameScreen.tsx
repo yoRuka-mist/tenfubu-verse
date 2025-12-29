@@ -159,12 +159,30 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
     );
 };
 
-// --- Buff Visual Effect (Yellow sparkle with +ATK/+HP numbers) ---
+// --- Buff/Debuff Visual Effect (with +ATK/+HP or -ATK/-HP numbers) ---
 const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y: number, atkBuff: number, hpBuff: number, onComplete: () => void }) => {
     React.useEffect(() => {
         const timer = setTimeout(onComplete, 1500);
         return () => clearTimeout(timer);
     }, [onComplete]);
+
+    // Determine colors and glow based on buff/debuff
+    const isDebuff = atkBuff < 0 || hpBuff < 0;
+    const glowColor = isDebuff
+        ? 'radial-gradient(circle, rgba(180,50,50,0.9) 0%, rgba(150,30,30,0.4) 50%, transparent 80%)'
+        : 'radial-gradient(circle, rgba(255,230,100,0.9) 0%, rgba(255,200,50,0.4) 50%, transparent 80%)';
+    const sparkleColor = isDebuff ? '#ff4444' : '#ffd93d';
+
+    // Color for attack value: positive = red, negative = blue, zero = gray
+    const atkColor = atkBuff > 0 ? '#ff6b6b' : atkBuff < 0 ? '#6b9fff' : '#888888';
+    const atkGlow = atkBuff > 0 ? 'rgba(255,100,100,0.8)' : atkBuff < 0 ? 'rgba(100,150,255,0.8)' : 'rgba(128,128,128,0.5)';
+
+    // Color for HP value: positive = green, negative = purple, zero = gray
+    const hpColor = hpBuff > 0 ? '#6bff6b' : hpBuff < 0 ? '#ff6bff' : '#888888';
+    const hpGlow = hpBuff > 0 ? 'rgba(100,255,100,0.8)' : hpBuff < 0 ? 'rgba(255,100,255,0.8)' : 'rgba(128,128,128,0.5)';
+
+    // Format number with sign
+    const formatValue = (val: number) => val >= 0 ? `+${val}` : `${val}`;
 
     return (
         <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
@@ -186,18 +204,18 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
                 }
             `}</style>
 
-            {/* Core Glow - Yellow */}
+            {/* Core Glow */}
             <div style={{
                 position: 'absolute', left: 0, top: 0,
                 width: 150, height: 150,
-                background: 'radial-gradient(circle, rgba(255,230,100,0.9) 0%, rgba(255,200,50,0.4) 50%, transparent 80%)',
+                background: glowColor,
                 borderRadius: '50%',
                 transform: 'translate(-50%, -50%)',
                 animation: 'buffGlow 1.2s ease-out forwards',
                 filter: 'blur(8px)'
             }} />
 
-            {/* Buff Numbers */}
+            {/* Buff/Debuff Numbers */}
             <div style={{
                 position: 'absolute',
                 left: 0, top: -20,
@@ -206,35 +224,35 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
                 transform: 'translateX(-50%)',
                 animation: 'buffNumberRise 1.2s ease-out forwards'
             }}>
-                {/* Attack Buff */}
+                {/* Attack Value */}
                 <div style={{
                     fontSize: '28px',
                     fontWeight: 'bold',
-                    color: '#ff6b6b',
-                    textShadow: '0 0 10px rgba(255,100,100,0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    color: atkColor,
+                    textShadow: `0 0 10px ${atkGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
                     fontFamily: 'Tamanegi, sans-serif'
                 }}>
-                    +{atkBuff}
+                    {formatValue(atkBuff)}
                 </div>
                 {/* Separator */}
                 <div style={{
                     fontSize: '28px',
                     fontWeight: 'bold',
-                    color: '#ffd93d',
+                    color: isDebuff ? '#ff8888' : '#ffd93d',
                     textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
                     fontFamily: 'Tamanegi, sans-serif'
                 }}>
                     /
                 </div>
-                {/* HP Buff */}
+                {/* HP Value */}
                 <div style={{
                     fontSize: '28px',
                     fontWeight: 'bold',
-                    color: '#6bff6b',
-                    textShadow: '0 0 10px rgba(100,255,100,0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    color: hpColor,
+                    textShadow: `0 0 10px ${hpGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
                     fontFamily: 'Tamanegi, sans-serif'
                 }}>
-                    +{hpBuff}
+                    {formatValue(hpBuff)}
                 </div>
             </div>
 
@@ -245,9 +263,9 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
                     left: Math.cos(i * Math.PI / 4) * 60,
                     top: Math.sin(i * Math.PI / 4) * 60,
                     width: 12, height: 12,
-                    background: '#ffd93d',
+                    background: sparkleColor,
                     borderRadius: '50%',
-                    boxShadow: '0 0 10px #ffd93d, 0 0 20px #ffd93d',
+                    boxShadow: `0 0 10px ${sparkleColor}, 0 0 20px ${sparkleColor}`,
                     animation: `buffSparkle 0.8s ease-out ${i * 0.1}s forwards`,
                 }} />
             ))}
@@ -1877,10 +1895,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // Determine if the card is generated for the player or opponent
                     const isForPlayer = current.sourcePlayerId === currentPlayerId;
 
-                    // Target Coords in GAME COORDINATE SYSTEM (BASE_WIDTH x BASE_HEIGHT)
+                    // Use actual screen coordinates for proper positioning with window scaling
                     // Player hand is bottom-right, Opponent hand is top-left
-                    const flyTargetX = isForPlayer ? BASE_WIDTH - 200 : 200;
-                    const flyTargetY = isForPlayer ? BASE_HEIGHT - 100 : 100;
+                    const flyTargetX = isForPlayer ? window.innerWidth - 200 * scale : 200 * scale;
+                    const flyTargetY = isForPlayer ? window.innerHeight - 100 * scale : 100 * scale;
 
                     setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
 
@@ -2021,12 +2039,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (vIdx !== -1) {
                         playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, (current.sourceCard as any).instanceId);
                     }
-                } else if (current.effect.targetType === 'ALL_OTHER_FOLLOWERS') {
-                    // Buff all own followers except source
+                } else if (current.effect.targetType === 'ALL_FOLLOWERS') {
+                    // Buff all own followers (with optional conditions like nameIn)
                     const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
                     const board = gameState.players[targetPid].board;
+                    const conditions = current.effect.conditions;
+                    board.forEach((c) => {
+                        if (c) {
+                            // Apply conditions if present
+                            if (conditions?.tag && !c.tags?.includes(conditions.tag)) return;
+                            if (conditions?.nameIn && !conditions.nameIn.includes(c.name)) return;
+
+                            const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
+                            if (vIdx !== -1) {
+                                playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
+                            }
+                        }
+                    });
+                } else if (current.effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                    // Buff all own followers except source (with optional conditions)
+                    const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    const board = gameState.players[targetPid].board;
+                    const conditions = current.effect.conditions;
                     board.forEach((c) => {
                         if (c && c.instanceId !== (current.sourceCard as any).instanceId) {
+                            // Apply conditions if present
+                            if (conditions?.tag && !c.tags?.includes(conditions.tag)) return;
+                            if (conditions?.nameIn && !conditions.nameIn.includes(c.name)) return;
+
                             const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
                             if (vIdx !== -1) {
                                 playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
@@ -2579,6 +2619,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 setIsProcessingEffect(false);
                 isProcessingEffectRef.current = false;
                 processingHandledRef.current = null;
+                // CRITICAL FIX: Clear animatingCard and its timeout to prevent frozen card display
+                // This ensures the card animation doesn't get stuck when HOST syncs state
+                setAnimatingCard(null);
+                if (effectTimeoutRef.current) {
+                    clearTimeout(effectTimeoutRef.current);
+                    effectTimeoutRef.current = null;
+                }
                 // CRITICAL FIX: Reset card play lock to prevent stuck state in online play
                 // Only reset if there's no ongoing animation to prevent interrupting card play
                 if (!playingCardAnimRef.current && !evolveAnimationRef.current) {
@@ -2746,6 +2793,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 } else if (action.type === 'END_TURN') {
                     console.log('[GameScreen] Remote END_TURN received, turn switching to:',
                         action.playerId === 'p1' ? 'p2' : 'p1');
+                    // CRITICAL FIX: Reset isEndingTurnRef when receiving remote END_TURN
+                    // This prevents a stuck handleEndTurn from dispatching END_TURN again
+                    // after the turn has already switched
+                    isEndingTurnRef.current = false;
                 }
             }
         };
@@ -2812,6 +2863,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Card Play Lock to prevent double play ---
     const cardPlayLockRef = React.useRef(false);
     const lastPlayedInstanceIdRef = React.useRef<string | null>(null);
+    // --- End Turn Lock (moved here for access in handleMessage) ---
+    const isEndingTurnRef = React.useRef(false);
 
     // --- State Refs for AI Timing (Moved here to ensure access to all states) ---
     const activeEffectsRef = React.useRef(activeEffects);
@@ -3166,6 +3219,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             console.log('[GameScreen] Player turn started - resetting card play lock and ending turn state');
             cardPlayLockRef.current = false;
             lastPlayedInstanceIdRef.current = null;
+            // CRITICAL FIX: Also reset isEndingTurnRef to prevent stale async handlers
+            isEndingTurnRef.current = false;
         }
     }, [gameState.activePlayerId, gameState.turnCount, currentPlayerId]);
 
@@ -4416,7 +4471,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- End Turn Handler with Wait ---
     const [isEndingTurn, setIsEndingTurn] = React.useState(false);
-    const isEndingTurnRef = React.useRef(false);
+    // Note: isEndingTurnRef is defined earlier (near cardPlayLockRef) for access in handleMessage
 
     const handleEndTurn = async () => {
         // CRITICAL: Check using ref for accurate async state
@@ -5862,13 +5917,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )
                 }
 
-                {/* --- Card Generation Animation Overlay - Now uses game coordinates --- */}
+                {/* --- Card Generation Animation Overlay - Uses actual screen coordinates --- */}
                 {
                     animatingCard && (
                         <div style={{
                             position: 'absolute',
-                            left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : BASE_WIDTH / 2,
-                            top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : BASE_HEIGHT / 2,
+                            left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : window.innerWidth / 2,
+                            top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : window.innerHeight / 2,
                             transform: animatingCard.status === 'APPEAR'
                                 ? 'translate(-50%, -50%) scale(1.2)'
                                 : 'translate(-50%, -50%) scale(0.2)', // Shrink to hand
@@ -5880,7 +5935,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             opacity: animatingCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
                             animation: animatingCard.status === 'APPEAR' ? 'cardAppear 1s ease-out' : undefined
                         }}>
-                            <Card card={animatingCard.card as any} />
+                            <Card card={animatingCard.card as any} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }} />
                             <style>{`
                         @keyframes cardAppear {
                             0% { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }

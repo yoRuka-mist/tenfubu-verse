@@ -905,5 +905,241 @@ effects: [DRAW(1), SUMMON_CARD x2]
 
 ## 構造の記録（更新）
 - `game/src/core/engine.ts`
-  - 220-234行目: あじゃ（5/5、ランダム破壊）
+  - 220-246行目: あじゃ（5/5、ランダム破壊、超進化時に突進追加）
   - 597-617行目: ありす（ファンファーレ・進化時ともにランダム2体2ダメージ）
+
+---
+
+## 修正日
+2025年12月30日（あじゃ超進化時効果追加）
+
+## 修正内容
+
+### あじゃの超進化時効果に突進追加
+
+#### 変更内容
+- 超進化時に召喚されるフォロワー（つぶまる、ゆうなぎ、なゆた）に[突進]を付与
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 220-246行目: あじゃのカード定義
+    - SUPER_EVOLVEにGRANT_PASSIVE（RUSH）を追加
+    - description更新
+
+---
+
+## 修正日
+2025年12月30日（JOIN側手札ロック問題の修正）
+
+## 問題の概要
+JOIN側（クライアント）でのみ手札が展開できなくなる問題が発生。
+- ホスト側では一度も発生せず、JOIN側でのみ発生
+- 茶トラのスペルを使った後に発生することが多い
+
+## 原因分析
+
+### ログ分析結果
+```
+[handleEndTurn] waitForAllProcessing completed, elapsed: 1012.70ms
+[RemoteDispatch] Remote END_TURN received, turn switching to: p2
+[GameScreen] Player turn started - resetting card play lock
+[handleEndTurn] Dispatching END_TURN for player: p1 turn: 3
+```
+
+### 根本原因
+1. HOST側で茶トラなどのスペル処理後にhandleEndTurnが呼ばれる
+2. handleEndTurnは非同期でwaitForAllProcessing（約1秒）を待機
+3. この待機中にHOST側のEND_TURNが完了し、リモートでJOIN側に通知される
+4. JOIN側のターンが開始される
+5. しかし、JOIN側で以前起動された古いhandleEndTurnの待機が完了
+6. ターン状態チェックが不十分で、古いhandleEndTurnがEND_TURNをdispatch
+7. ターンがHOSTに戻り、JOINは操作不能に
+
+### 問題の本質
+- `isEndingTurnRef`がリモートEND_TURN受信時にリセットされていなかった
+- ターン開始時にもリセットされていなかった
+- これにより古い非同期ハンドラが誤ってEND_TURNをdispatchしてしまった
+
+## 修正内容
+
+### 1. isEndingTurnRefの定義位置を移動
+handleMessage内からアクセスできるよう、定義位置を移動
+
+**修正箇所**: `game/src/screens/GameScreen.tsx` 2820行目
+```typescript
+// --- Card Play Lock to prevent double play ---
+const cardPlayLockRef = React.useRef(false);
+const lastPlayedInstanceIdRef = React.useRef<string | null>(null);
+// --- End Turn Lock (moved here for access in handleMessage) ---
+const isEndingTurnRef = React.useRef(false);
+```
+
+### 2. リモートEND_TURN受信時のリセット追加
+リモートからEND_TURNを受信したら、ローカルのisEndingTurnRefをリセット
+
+**修正箇所**: `game/src/screens/GameScreen.tsx` 2746-2752行目
+```typescript
+} else if (action.type === 'END_TURN') {
+    console.log('[GameScreen] Remote END_TURN received, turn switching to:',
+        action.playerId === 'p1' ? 'p2' : 'p1');
+    // CRITICAL FIX: Reset isEndingTurnRef when receiving remote END_TURN
+    // This prevents a stuck handleEndTurn from dispatching END_TURN again
+    // after the turn has already switched
+    isEndingTurnRef.current = false;
+}
+```
+
+### 3. ターン開始時のリセット追加
+自分のターンが開始されたらisEndingTurnRefをリセット
+
+**修正箇所**: `game/src/screens/GameScreen.tsx` 3169-3177行目
+```typescript
+useEffect(() => {
+    if (gameState.activePlayerId === currentPlayerId) {
+        console.log('[GameScreen] Player turn started - resetting card play lock and ending turn state');
+        cardPlayLockRef.current = false;
+        lastPlayedInstanceIdRef.current = null;
+        // CRITICAL FIX: Also reset isEndingTurnRef to prevent stale async handlers
+        isEndingTurnRef.current = false;
+    }
+}, [gameState.activePlayerId, gameState.turnCount, currentPlayerId]);
+```
+
+## 修正後のisEndingTurnRefライフサイクル
+```
+1. handleEndTurn開始 → isEndingTurnRef = true
+2. waitForAllProcessing待機中...
+3. [パターンA] 正常完了 → END_TURN dispatch → isEndingTurnRef = false
+4. [パターンB] リモートEND_TURN受信 → isEndingTurnRef = false（即座にリセット）
+5. [パターンC] ターン開始 → isEndingTurnRef = false（ターン開始時にリセット）
+```
+
+これにより、古い非同期ハンドラが誤ってEND_TURNをdispatchすることを防止。
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 2820行目: isEndingTurnRef定義（cardPlayLockRefの近くに移動）
+  - 2746-2752行目: リモートEND_TURN受信時のisEndingTurnRefリセット
+  - 3169-3177行目: ターン開始時のisEndingTurnRefリセット
+  - 4421-4515行目: handleEndTurn（既存のターン状態チェック）
+
+## 失敗からの教訓
+- 非同期処理のロック機構は、すべての状態変更タイミングでリセットを考慮する必要がある
+- 特にP2P通信では、リモートからの状態変更とローカルの非同期処理が競合しやすい
+- ロックのリセットは「ターン終了時」だけでなく「ターン開始時」「リモート通知受信時」も必要
+
+---
+
+## 修正日
+2025年12月30日（GENERATE_CARDアニメーションフリーズ問題の修正）
+
+## 問題の概要
+JOIN側で「キジトラ猫のごはん」などのGENERATE_CARDで生成されたカードが画面に表示されたまま固まる問題。
+
+- 茶トラスペル（3枚のカードを手札に加える）使用後に発生
+- カードがFLY状態のまま画面に残り続ける
+
+## 原因分析
+
+### 茶トラの処理フロー
+1. 茶トラスペル使用 → 3つのGENERATE_CARDエフェクトがpendingEffectsに追加
+2. 各エフェクトは1000ms（APPEAR）+ 600ms（FLY）= 1600msのアニメーション
+3. HOST側でRESOLVE_EFFECT dispatch後、50ms後にGAME_STATEを送信
+
+### 問題の発生メカニズム
+1. HOST側でGENERATE_CARDアニメーション完了（1600ms）
+2. HOST側がRESOLVE_EFFECTをdispatch、50ms後にGAME_STATEを送信
+3. **JOIN側はまだアニメーション中（タイミングのズレ）**
+4. JOIN側がGAME_STATEを受信
+5. pendingEffectsが更新されるが、**animatingCardがnullにリセットされない**
+6. アニメーションのタイムアウトがまだ動作中で、状態が不整合に
+7. カードが画面に残ったままフリーズ
+
+### 根本原因
+GAME_STATE受信時にanimatingCardとeffectTimeoutRefをリセットしていなかった。
+
+## 修正内容
+
+**修正箇所**: `game/src/screens/GameScreen.tsx` 2582-2588行目（GAME_STATE受信処理内）
+```typescript
+// CRITICAL FIX: Clear animatingCard and its timeout to prevent frozen card display
+// This ensures the card animation doesn't get stuck when HOST syncs state
+setAnimatingCard(null);
+if (effectTimeoutRef.current) {
+    clearTimeout(effectTimeoutRef.current);
+    effectTimeoutRef.current = null;
+}
+```
+
+## 修正後の処理フロー
+```
+1. HOST: GENERATE_CARDアニメーション開始
+2. JOIN: GENERATE_CARDアニメーション開始（animatingCard設定）
+3. HOST: アニメーション完了 → RESOLVE_EFFECT → GAME_STATE送信
+4. JOIN: GAME_STATE受信
+   - pendingEffects更新（SYNC_STATE）
+   - isProcessingEffect = false
+   - animatingCard = null（★追加：フリーズ防止）
+   - effectTimeoutRefクリア（★追加：重複タイムアウト防止）
+5. JOIN: 次のpendingEffectを処理（正常動作）
+```
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 2575-2594行目: GAME_STATE受信処理（animatingCard/effectTimeoutRefリセット追加）
+
+---
+
+## 修正日
+2025年12月30日（UI・エフェクト改善）
+
+## 修正内容
+
+### 1. GENERATE_CARDアニメーションの座標修正
+
+#### 問題
+- 茶トラ等でカードが手札に加わるアニメーションが、画面左上に寄った位置に表示されていた
+- ウィンドウサイズ変更に対応しておらず、座標がBASE_WIDTH/BASE_HEIGHTの固定値だった
+
+#### 修正箇所
+- `game/src/screens/GameScreen.tsx`
+  - 1880-1883行目: GENERATE_CARDの座標計算を実際の画面座標に変更
+    - 変更前: `BASE_WIDTH - 200` / `BASE_HEIGHT - 100`
+    - 変更後: `window.innerWidth - 200 * scale` / `window.innerHeight - 100 * scale`
+  - 5885-5886行目: animatingCardのAPPEAR時の初期位置も実際の画面中央に変更
+    - 変更前: `BASE_WIDTH / 2` / `BASE_HEIGHT / 2`
+    - 変更後: `window.innerWidth / 2` / `window.innerHeight / 2`
+  - 5898行目: Cardコンポーネントにスケール適用
+    - `style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }}`
+
+### 2. バフ/デバフエフェクトの数字表示改善
+
+#### 問題
+- マイナス値のデバフ（刹那のラストワードなど）が正しく表示されなかった
+- あじゃの超進化時効果（ALL_FOLLOWERS + conditions）のバフが表示されなかった
+
+#### 修正箇所
+
+##### BuffEffectVisualコンポーネント（162-274行目）
+- マイナス値対応: 攻撃力・HPそれぞれの値に応じて色を変更
+  - 攻撃力: +値=赤、-値=青、0=灰色
+  - HP: +値=緑、-値=紫、0=灰色
+- 数字表示を`+N`または`-N`形式に統一
+- デバフ時はグローエフェクトとパーティクルの色を赤系に変更
+
+##### BUFF_STATS処理（2027-2084行目）
+- `ALL_FOLLOWERS`ターゲットタイプへの対応を追加
+  - conditions（nameIn, tag）のフィルタリングを実装
+- `ALL_OTHER_FOLLOWERS`にもconditionsフィルタリングを追加
+
+## 今後の課題
+- `RANDOM_FOLLOWER`ターゲットタイプのBUFF_STATSエフェクト表示
+  - 現在engine.ts側で直接処理され、pendingEffectsにtargetIdが設定されない
+  - HOST/JOIN間のRNG同期を考慮した実装が必要
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 162-274行目: BuffEffectVisual（マイナス値対応）
+  - 1880-1883行目: GENERATE_CARD座標計算（スクリーン座標対応）
+  - 2042-2058行目: BUFF_STATS ALL_FOLLOWERSハンドリング
+  - 5880-5908行目: animatingCard表示（スクリーン座標対応）
