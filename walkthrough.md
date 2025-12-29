@@ -1610,3 +1610,37 @@ if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities?.inc
   - 1537-1548行目: SUMMON_CARD処理のオーラ効果チェック
   - 1578-1594行目: SUMMON_CARD_RUSH処理のオーラ効果チェック（疾走>突進の優先度）
   - 2240-2251行目: PLAY_CARD処理のオーラ効果チェック
+
+---
+
+## 修正日
+2025年12月30日
+
+## 修正内容
+
+### 22. フォロワー選択効果時のリーダーハイライト修正
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **問題**: フォロワーを選択する効果（SELECT_FOLLOWER等）発動時に、リーダーが対象外なのに赤くハイライトされてしまう
+- **原因**: 5156行目でリーダーのborderを決定する条件に`(targetingState && opponentType !== 'CPU')`が含まれていた
+  - targetingStateはフォロワー選択用なので、リーダーはターゲット対象外
+- **対策**:
+  - リーダーのハイライト条件から`targetingState`の存在を除外
+  - `!targetingState`を条件に追加し、ターゲット選択中はリーダーをハイライトしないように変更
+  - cursorも`crosshair`から`default`に変更
+
+#### 修正前
+```typescript
+border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
+cursor: targetingState ? 'crosshair' : 'default',
+```
+
+#### 修正後
+```typescript
+border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
+cursor: 'default',
+```
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 5156行目: 相手リーダーのborder条件（targetingState中はハイライトしない）
+  - 5158行目: 相手リーダーのcursor（常にdefault）

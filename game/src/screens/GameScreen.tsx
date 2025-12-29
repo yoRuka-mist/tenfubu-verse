@@ -5153,9 +5153,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                             width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
                             background: `url(${getLeaderImg(opponent.class)}) center/cover`,
-                            border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
+                            border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
-                            cursor: targetingState ? 'crosshair' : 'default',
+                            cursor: 'default',
                             transition: 'all 0.3s'
                         }}>
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
