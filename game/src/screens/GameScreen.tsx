@@ -94,6 +94,7 @@ interface GameScreenProps {
     networkAdapter?: any; // NetworkAdapter passed from LobbyScreen
     networkConnected?: boolean;
     opponentClass?: ClassType; // For online play: opponent's class selection
+    aiDifficulty?: 'EASY' | 'NORMAL' | 'HARD'; // AI difficulty for CPU mode
 }
 
 
@@ -594,7 +595,7 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                         <div><span style={{ color: '#9f7aea', fontWeight: 'bold' }}>[必殺]</span>：攻撃で相手フォロワーにダメージを与えると、そのフォロワーを破壊します</div>
                         <div><span style={{ color: '#f56565', fontWeight: 'bold' }}>[ダブル]</span>：1ターンに2回攻撃できます</div>
                         <div><span style={{ color: '#38b2ac', fontWeight: 'bold' }}>[バリア]</span>：最初に受けるダメージを1回だけ無効化します。破壊効果や手札に戻す効果は無効化できません</div>
-                        <div><span style={{ color: '#718096', fontWeight: 'bold' }}>[隠密]</span>：カードの効果および攻撃対象に選択することができません（ランダム対象の効果やAoEダメージは適用されます）。隠密状態のカードが一度攻撃を行うと、選択不可の効果は解除されます。また、相手の守護を無視して攻撃することができます</div>
+                        <div><span style={{ color: '#718096', fontWeight: 'bold' }}>[隠密]</span>：カードの効果および攻撃対象に選択することができません（ランダム対象の効果やAoEダメージは適用されます）。隠密状態のカードが一度攻撃を行うと、選択不可の効果は解除されます。また、相手の守護を無視して攻撃することができ、この効果は隠密が解除された後も残ります</div>
                         <div><span style={{ color: '#d69e2e', fontWeight: 'bold' }}>[オーラ]</span>：相手のカードの効果で選択することができません（ランダム対象の効果やAoEダメージは適用されます）。攻撃対象に選択することは可能です</div>
                     </div>
                 </section>
@@ -1502,7 +1503,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL' }) => {
     // For online play, use the adapter passed from LobbyScreen
     // Only use useGameNetwork hook for CPU mode (where it returns nothing)
     // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
@@ -3303,135 +3304,364 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
                 };
 
-                // 1. Thinking time (short pause)
-                await new Promise(resolve => setTimeout(resolve, 800));
+                // --- AI Helper Functions ---
+
+                // Check if target is immune to follower damage (for attack decisions)
+                const isImmuneToFollowerAttack = (target: any, _state: any): boolean => {
+                    if (!target) return false;
+                    // IMMUNE_TO_FOLLOWER_DAMAGE: Always immune to follower attacks
+                    if (target.passiveAbilities?.includes('IMMUNE_TO_FOLLOWER_DAMAGE')) return true;
+                    // IMMUNE_TO_DAMAGE_MY_TURN: Only immune during owner's turn
+                    // AI is attacking during AI's turn, so target's "my turn" is player's turn (not now)
+                    // So this immunity doesn't apply when AI attacks
+                    return false;
+                };
+
+                // Check if attacker would die attacking target (including BANE)
+                const wouldDieAttacking = (attacker: any, target: any): boolean => {
+                    if (!target || !attacker) return false;
+                    // BANE kills on any damage (unless attacker has BARRIER)
+                    if (target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
+                        return true; // BANE always kills attacker
+                    }
+                    return (target.currentAttack || 0) >= attacker.currentHealth;
+                };
+
+                // Check if attacker can kill target
+                const canKillTarget = (attacker: any, target: any): boolean => {
+                    if (!target || !attacker) return false;
+                    // Check BANE (instant kill) but consider BARRIER
+                    if (attacker.passiveAbilities?.includes('BANE')) {
+                        return !target.hasBarrier;
+                    }
+                    return attacker.currentAttack >= target.currentHealth;
+                };
+
+                // Score a card for playing (higher = better)
+                const scoreCardForPlaying = (card: any, state: any): number => {
+                    let score = card.cost * 10; // Base score from cost
+                    const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+
+                    // Bonus for removal effects when enemy has board
+                    if (enemyBoard.length > 0) {
+                        const triggers = card.triggers || [];
+                        for (const trig of triggers) {
+                            if (trig.trigger === 'FANFARE') {
+                                for (const eff of trig.effects || []) {
+                                    if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
+                                        score += 30;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Bonus for STORM when enemy leader is low HP
+                    const playerHp = state.players[currentPlayerId].hp;
+                    if (card.passiveAbilities?.includes('STORM') && playerHp <= 10) {
+                        score += 50;
+                    }
+
+                    // Penalty if board is full
+                    if (card.type === 'FOLLOWER' && aiBoard.length >= 5) {
+                        score -= 100;
+                    }
+
+                    // Bonus for WARD when enemy has threats
+                    if (card.passiveAbilities?.includes('WARD') && enemyBoard.length > 0) {
+                        score += 20;
+                    }
+
+                    return score;
+                };
+
+                // Score evolution target (higher = better)
+                const scoreEvolveTarget = (card: any, _idx: number, state: any, useSuperEvolve: boolean): number => {
+                    let score = 0;
+                    const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+
+                    // Base: Cards with evolve effects are priority
+                    const triggers = card.triggers || [];
+                    for (const trig of triggers) {
+                        const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
+                        if (trig.trigger === trigType) {
+                            for (const eff of trig.effects || []) {
+                                // Damage/Destroy effects are valuable when enemy has board
+                                if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
+                                    score += enemyBoard.length > 0 ? 50 : 10;
+                                }
+                                // Summon effects are always good
+                                if (['SUMMON_CARD', 'SUMMON_CARD_RUSH'].includes(eff.type)) {
+                                    score += 40;
+                                }
+                                // Buff effects
+                                if (eff.type === 'BUFF_STATS') {
+                                    score += 30;
+                                }
+                                // Draw
+                                if (eff.type === 'DRAW') {
+                                    score += 25;
+                                }
+                                // Generate card
+                                if (eff.type === 'GENERATE_CARD') {
+                                    score += 20;
+                                }
+                            }
+                        }
+                    }
+
+                    // Cards that can attack immediately get +2/+2 value
+                    if (card.canAttack) {
+                        score += 20;
+                    }
+
+                    // Higher attack cards benefit more from +2/+2
+                    score += (card.currentAttack || 0) * 3;
+
+                    return score;
+                };
+
+                // Find best target for attack
+                const findBestAttackTarget = (attacker: any, playerBoard: any[], state: any): { index: number, isLeader: boolean } => {
+                    const canAttackLeader = attacker.passiveAbilities?.includes('STORM') || attacker.turnPlayed !== state.turnCount;
+
+                    // Filter targetable enemies
+                    const targetableEnemies = playerBoard
+                        .map((c, i) => ({ c, i }))
+                        .filter(({ c }) => c !== null && !c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA'));
+
+                    // Check for WARD - must attack Ward first (unless attacker has STEALTH/hadStealth)
+                    const attackerIgnoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
+                    if (!attackerIgnoresWard) {
+                        const wardTarget = targetableEnemies.find(({ c }) => c.passiveAbilities?.includes('WARD'));
+                        if (wardTarget) {
+                            // Must attack ward, but check if it's immune
+                            if (!isImmuneToFollowerAttack(wardTarget.c, state)) {
+                                return { index: wardTarget.i, isLeader: false };
+                            }
+                            // Ward is immune - we can't attack anything useful, skip this attacker
+                            return { index: -1, isLeader: false };
+                        }
+                    }
+
+                    // No ward or ignoring ward - find best target
+                    let bestTarget = { index: -1, isLeader: canAttackLeader, score: canAttackLeader ? 0 : -1000 };
+
+                    for (const { c: target, i } of targetableEnemies) {
+                        // Skip immune targets
+                        if (isImmuneToFollowerAttack(target, state)) continue;
+
+                        let targetScore = 0;
+                        const attackerIsEvolved = attacker.isEvolved;
+                        const targetHasBane = target.passiveAbilities?.includes('BANE');
+                        const willDie = wouldDieAttacking(attacker, target);
+
+                        // Can we kill it?
+                        if (canKillTarget(attacker, target)) {
+                            targetScore += 50;
+                            // Bonus for killing high-value targets
+                            targetScore += (target.currentAttack || 0) * 5;
+                            // Extra bonus for killing without dying
+                            if (!willDie) {
+                                targetScore += 30;
+                            } else {
+                                // Dying to kill - consider if it's worth it
+                                // Heavy penalty for evolved followers dying to BANE
+                                if (targetHasBane && attackerIsEvolved) {
+                                    targetScore -= 60; // Very bad trade
+                                } else if (targetHasBane) {
+                                    targetScore -= 30; // Still bad trade unless target is very valuable
+                                }
+                            }
+                            // Target has dangerous abilities (bonus only if we survive or target is worth it)
+                            if (targetHasBane && !willDie) targetScore += 40; // Safe BANE kill is great
+                            if (target.passiveAbilities?.includes('STORM')) targetScore += 30;
+                            if (target.passiveAbilities?.includes('DOUBLE_ATTACK')) targetScore += 35;
+                        } else {
+                            // Can't kill the target
+                            if (!willDie && attacker.currentAttack >= target.currentHealth / 2) {
+                                // We survive and deal significant damage - maybe worth it
+                                targetScore += 10;
+                            } else if (willDie) {
+                                // We die without killing - very bad
+                                targetScore -= 50;
+                                // Even worse if we're evolved
+                                if (attackerIsEvolved) {
+                                    targetScore -= 40;
+                                }
+                                // Slightly less bad if target is very valuable
+                                if ((target.currentAttack || 0) >= 5) targetScore += 10;
+                            }
+                        }
+
+                        if (targetScore > bestTarget.score) {
+                            bestTarget = { index: i, isLeader: false, score: targetScore };
+                        }
+                    }
+
+                    // If no good follower target and can attack leader
+                    if (canAttackLeader && (bestTarget.index === -1 || bestTarget.score <= 0)) {
+                        // Aggro: Attack face
+                        return { index: -1, isLeader: true };
+                    }
+
+                    return bestTarget;
+                };
+
+                // 1. Thinking time (short pause, shorter for HARD)
+                const thinkingTime = aiDifficulty === 'EASY' ? 1200 : aiDifficulty === 'HARD' ? 400 : 800;
+                await new Promise(resolve => setTimeout(resolve, thinkingTime));
                 if (!aiProcessing.current) return;
 
-                // 2. Play MAX Cost Card
-                {
+                // 2. Play Cards (Multiple cards if PP allows - NORMAL/HARD only)
+                let cardsPlayedThisTurn = 0;
+                const maxCardsToPlay = aiDifficulty === 'EASY' ? 1 : aiDifficulty === 'HARD' ? 5 : 3;
+
+                while (cardsPlayedThisTurn < maxCardsToPlay) {
                     const state = gameStateRef.current;
                     const aiHand = state.players[opponentPlayerId].hand;
                     const aiPp = state.players[opponentPlayerId].pp;
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
 
-                    // Sort by Cost Descending
-                    const playable = aiHand
+                    // Check board space for followers
+                    const boardIsFull = aiBoard.length >= 5;
+
+                    // Get playable cards
+                    let playable = aiHand
                         .map((c, i) => ({ ...c, originalIndex: i }))
                         .filter(c => c.cost <= aiPp)
-                        .sort((a, b) => b.cost - a.cost);
+                        .filter(c => !(c.type === 'FOLLOWER' && boardIsFull)); // Don't play followers if board is full
 
-                    if (playable.length > 0) {
-                        const bestCard = playable[0];
-                        let targetId = undefined;
-                        const enemyBoard = state.players[currentPlayerId].board;
-                        // Filter targetable enemies (No Stealth/Aura)
-                        const targetableEnemies = enemyBoard.filter(c =>
-                            c &&
-                            !c.passiveAbilities?.includes('STEALTH') &&
-                            !c.passiveAbilities?.includes('AURA')
-                        );
+                    if (playable.length === 0) break;
 
-                        if (targetableEnemies.length > 0) {
+                    // Sort by score (HARD) or just cost (EASY/NORMAL)
+                    if (aiDifficulty === 'HARD') {
+                        playable = playable.sort((a, b) => scoreCardForPlaying(b, state) - scoreCardForPlaying(a, state));
+                    } else {
+                        playable = playable.sort((a, b) => b.cost - a.cost);
+                    }
+
+                    // EASY: Sometimes skip playing
+                    if (aiDifficulty === 'EASY' && Math.random() < 0.3 && cardsPlayedThisTurn > 0) {
+                        break;
+                    }
+
+                    const bestCard = playable[0];
+
+                    // Find best target for card effects
+                    let targetId = undefined;
+                    const enemyBoard = state.players[currentPlayerId].board;
+                    const targetableEnemies = enemyBoard.filter((c: any) =>
+                        c &&
+                        !c.passiveAbilities?.includes('STEALTH') &&
+                        !c.passiveAbilities?.includes('AURA')
+                    );
+
+                    if (targetableEnemies.length > 0) {
+                        // HARD: Choose best target based on card effect
+                        if (aiDifficulty === 'HARD') {
+                            // Prefer high-value targets for removal
+                            const sortedTargets = [...targetableEnemies].sort((a: any, b: any) => {
+                                let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
+                                let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
+                                if (a.passiveAbilities?.includes('BANE')) scoreA += 10;
+                                if (b.passiveAbilities?.includes('BANE')) scoreB += 10;
+                                return scoreB - scoreA;
+                            });
+                            targetId = sortedTargets[0]!.instanceId;
+                        } else {
                             targetId = targetableEnemies[0]!.instanceId;
                         }
+                    }
 
-                        // Animation First
-                        // Start from opponent's hand area
-                        const startX = window.innerWidth - (20 * scale) - (80 * scale / 2); // Right edge - padding - half card width
-                        const startY = (20 * scale) + (110 * scale / 2); // Top edge + padding + half card height
+                    // Animation First
+                    const startX = window.innerWidth - (20 * scale) - (80 * scale / 2);
+                    const startY = (20 * scale) + (110 * scale / 2);
+                    const targetX = window.innerWidth / 2;
+                    const targetY = window.innerHeight / 2;
 
-                        // Intermediate flying target (center of screen)
-                        const targetX = window.innerWidth / 2;
-                        const targetY = window.innerHeight / 2;
+                    let finalX: number | undefined;
+                    let finalY: number | undefined;
 
-                        let finalX: number | undefined;
-                        let finalY: number | undefined;
+                    if (bestCard.type === 'FOLLOWER') {
+                        const currentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                        const validCards = currentBoard.filter(c => c !== null);
+                        const newBoardSize = validCards.length + 1;
+                        const newIndex = validCards.length;
 
-                        if (bestCard.type === 'FOLLOWER') {
-                            const currentBoard = gameStateRef.current.players[opponentPlayerId].board;
-                            const validCards = currentBoard.filter(c => c !== null);
-                            const newBoardSize = validCards.length + 1;
-                            const newIndex = validCards.length;
+                        const spacing = CARD_SPACING * scale;
+                        const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
 
-                            const spacing = CARD_SPACING * scale;
-                            const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
+                        const boardAreaRect = boardRef.current?.getBoundingClientRect();
+                        const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
 
-                            const boardAreaRect = boardRef.current?.getBoundingClientRect();
-                            const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
+                        finalX = boardCenterX + offsetX;
+                        finalY = (window.innerHeight / 2) - (70 * scale);
+                    }
 
-                            finalX = boardCenterX + offsetX;
+                    setPlayingCardAnim({
+                        card: bestCard,
+                        startX, startY,
+                        targetX, targetY,
+                        finalX,
+                        finalY,
+                        onComplete: () => {
+                            triggerShake();
+                            dispatch({
+                                type: 'PLAY_CARD',
+                                playerId: opponentPlayerId,
+                                payload: { cardIndex: bestCard.originalIndex, targetId }
+                            });
 
-                            // Opponent slots are at top of board area
-                            finalY = (window.innerHeight / 2) - (70 * scale);
-                        }
-
-                        setPlayingCardAnim({
-                            card: bestCard,
-                            startX, startY,
-                            targetX, targetY, // Intermediate flying point
-                            finalX,
-                            finalY,
-                            onComplete: () => {
-                                triggerShake();
-                                dispatch({
-                                    type: 'PLAY_CARD',
-                                    playerId: opponentPlayerId,
-                                    payload: { cardIndex: bestCard.originalIndex, targetId }
+                            // --- AI amandava FANFARE Visuals ---
+                            if (bestCard.id === 'c_amandava') {
+                                const playerBoard = gameStateRef.current.players[currentPlayerId].board;
+                                playerBoard.forEach((c, i) => {
+                                    if (c) {
+                                        const cardInstanceId = (c as any).instanceId;
+                                        setTimeout(() => {
+                                            playEffect('SHOT', currentPlayerId, i, cardInstanceId);
+                                        }, 200);
+                                    }
                                 });
+                            }
 
-                                // --- AI amandava FANFARE Visuals ---
-                                if (bestCard.id === 'c_amandava') {
+                            // --- AI Azya FANFARE Visuals ---
+                            if (bestCard.id === 'c_azya') {
+                                setTimeout(() => {
+                                    playEffect('THUNDER', currentPlayerId, -1);
+                                }, 200);
+
+                                if (targetId) {
                                     const playerBoard = gameStateRef.current.players[currentPlayerId].board;
-                                    playerBoard.forEach((c, i) => {
-                                        if (c) {
-                                            // Since it's random 2, we just show effects on the board or guess
-                                            // For visuals, showing it on 2 random valid targets is fine
-                                            const cardInstanceId = (c as any).instanceId;
-                                            setTimeout(() => {
-                                                playEffect('SHOT', currentPlayerId, i, cardInstanceId);
-                                            }, 200);
-                                        }
-                                    });
+                                    const targetIdx = playerBoard.findIndex(c => c?.instanceId === targetId);
+                                    if (targetIdx !== -1) {
+                                        setTimeout(() => {
+                                            playEffect('ICE', currentPlayerId, targetIdx, targetId);
+                                        }, 400);
+                                    }
                                 }
 
-                                // --- AI Azya FANFARE Visuals ---
-                                if (bestCard.id === 'c_azya') {
-                                    // 1. Damage to Player Leader - THUNDER
-                                    setTimeout(() => {
-                                        playEffect('THUNDER', currentPlayerId, -1);
-                                    }, 200);
-
-                                    // 2. Destroy Target - ICE (if targetId was set)
-                                    if (targetId) {
-                                        const playerBoard = gameStateRef.current.players[currentPlayerId].board;
-                                        const targetIdx = playerBoard.findIndex(c => c?.instanceId === targetId);
-                                        if (targetIdx !== -1) {
-                                            setTimeout(() => {
-                                                playEffect('ICE', currentPlayerId, targetIdx, targetId);
-                                            }, 400);
+                                setTimeout(() => {
+                                    const pBoard = gameStateRef.current.players[currentPlayerId].board;
+                                    const validTargets = pBoard.filter(c => c !== null);
+                                    if (validTargets.length > 0) {
+                                        const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
+                                        const vIdx = pBoard.findIndex(c => c?.instanceId === randomCard?.instanceId);
+                                        if (vIdx !== -1) {
+                                            playEffect('WATER', currentPlayerId, vIdx, randomCard?.instanceId);
                                         }
                                     }
-
-                                    // 3. Random Bounce effect - WATER
-                                    setTimeout(() => {
-                                        const pBoard = gameStateRef.current.players[currentPlayerId].board;
-                                        const validTargets = pBoard.filter(c => c !== null);
-                                        if (validTargets.length > 0) {
-                                            const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
-                                            const vIdx = pBoard.findIndex(c => c?.instanceId === randomCard?.instanceId);
-                                            if (vIdx !== -1) {
-                                                playEffect('WATER', currentPlayerId, vIdx, randomCard?.instanceId);
-                                            }
-                                        }
-                                    }, 600);
-                                }
-
-                                setPlayingCardAnim(null);
+                                }, 600);
                             }
-                        });
 
-                        // Wait for idle (Animation + Effects)
-                        await waitForIdle(600);
-                    }
+                            setPlayingCardAnim(null);
+                        }
+                    });
+
+                    await waitForIdle(600);
+                    cardsPlayedThisTurn++;
                 }
 
                 // 2.5 Evolve Phase
@@ -3441,7 +3671,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const isFirstPlayer = opponentPlayerId === state.firstPlayerId;
                     const turnCount = state.turnCount;
 
-                    // Check if CPU can super evolve (uses same rules as player: P1 >= 7, P2 >= 6)
                     const canSuperEvolveCheck = canSuperEvolve(aiPlayer, turnCount, isFirstPlayer);
                     const canEvolveCheck = canEvolve(aiPlayer, turnCount, isFirstPlayer);
 
@@ -3451,21 +3680,45 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             .filter(({ c }) => c && c.type === 'FOLLOWER' && !c.hasEvolved);
 
                         if (candidates.length > 0) {
-                            const target = candidates[candidates.length - 1];
+                            // EASY: Random or last card. NORMAL/HARD: Best card based on effects
+                            let target;
+                            const useSuper = canSuperEvolveCheck;
+
+                            if (aiDifficulty === 'EASY') {
+                                // Random selection
+                                target = candidates[Math.floor(Math.random() * candidates.length)];
+                            } else {
+                                // Score-based selection
+                                const scored = candidates.map(({ c, i }) => ({
+                                    c, i, score: scoreEvolveTarget(c!, i, state, useSuper)
+                                }));
+                                scored.sort((a, b) => b.score - a.score);
+                                target = scored[0];
+                            }
+
+                            // Find best target for evolve effects
                             let targetId = undefined;
                             const enemyBoard = state.players[currentPlayerId].board;
-                            // Filter targets for Evolve effect (No Stealth/Aura)
-                            const validTargets = enemyBoard.filter(c =>
+                            const validTargets = enemyBoard.filter((c: any) =>
                                 c !== null &&
                                 !c.passiveAbilities?.includes('STEALTH') &&
                                 !c.passiveAbilities?.includes('AURA')
                             );
+
                             if (validTargets.length > 0) {
-                                targetId = validTargets[0]!.instanceId;
+                                if (aiDifficulty === 'HARD') {
+                                    // Choose highest value target
+                                    const sortedTargets = [...validTargets].sort((a: any, b: any) => {
+                                        let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
+                                        let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
+                                        return scoreB - scoreA;
+                                    });
+                                    targetId = sortedTargets[0]!.instanceId;
+                                } else {
+                                    targetId = validTargets[0]!.instanceId;
+                                }
                             }
 
-                            // Trigger Animation for AI - use super evolve only if canSuperEvolveCheck passes
-                            const useSuper = canSuperEvolveCheck;
                             const cardRect = opponentBoardRefs.current[target.i]?.getBoundingClientRect();
 
                             if (cardRect) {
@@ -3480,13 +3733,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     sourcePlayerId: opponentPlayerId,
                                     targetId: targetId
                                 });
-                                // Note: We do NOT set pendingEvolveRef here. 
-                                // handleEvolvePhaseChange will set it when animation completes (DONE phase).
 
-                                // Wait for animation sequence (~2s)
                                 await waitForIdle(800);
                             } else {
-                                // Fallback if no visual ref (should be rare)
                                 dispatchAndSend({
                                     type: 'EVOLVE',
                                     playerId: opponentPlayerId,
@@ -3502,27 +3751,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
                 }
 
-                // 3. Attack (Greedy Trade) - USING FRESH STATE
+                // 3. Attack Phase (Smart targeting based on difficulty)
                 {
-                    // Refresh state loop for multi-attack
-                    // Since we await inside loop, stateRef updates?
-                    // No, `state` var is stale. Must re-read `gameStateRef.current` each iter.
-                    // But we can't simple-loop. We need `while` loop.
-
                     let continueAttacking = true;
-                    // Limit iterations to prevent infinite loops
                     let attempts = 0;
 
-                    while (continueAttacking && attempts < 10) {
+                    while (continueAttacking && attempts < 15) {
                         attempts++;
                         const state = gameStateRef.current;
                         const aiBoard = state.players[opponentPlayerId].board;
                         const playerBoard = state.players[currentPlayerId].board;
-                        const activeWards = playerBoard.filter(c => c && c.passiveAbilities?.includes('WARD'));
-
-                        // Find FIRST valid attacker that hasn't attacked?
-                        // Or calculate all moves?
-                        // Simple greedy: Find first available attacker.
 
                         let actionTaken = false;
 
@@ -3533,106 +3771,99 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             let targetIndex = -1;
                             let targetIsLeader = true;
 
-                            // WARD Logic
-                            if (activeWards.length > 0) {
-                                // Filter out Stealth Wards (Technically Stealth + Ward is weird, but usually Ward breaks Stealth or Stealth overrides Ward blocking?)
-                                // Rules: Stealth unit cannot be targeted. So if a Ward unit has Stealth, it cannot be targeted, so it doesn't protect?
-                                // Usually Stealth negates Ward. "Ward" means "Enemies MUST attack this". "Stealth" means "Enemies CANNOT attack this".
-                                // In most games, Stealth disables Ward.
-                                // Let's assume Stealth units cannot be selected as Ward targets.
-                                const wardIdx = playerBoard.findIndex(c => c && c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH'));
+                            // Check if attacker ignores ward (STEALTH/hadStealth)
+                            const attackerIgnoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
 
-                                if (wardIdx !== -1) {
-                                    targetIndex = wardIdx;
+                            // Check for ward that must be attacked first (unless attacker ignores ward)
+                            const wardTarget = !attackerIgnoresWard
+                                ? playerBoard.findIndex((c: any) =>
+                                    c && c.passiveAbilities?.includes('WARD') &&
+                                    !c.passiveAbilities?.includes('STEALTH') &&
+                                    !isImmuneToFollowerAttack(c, state)
+                                )
+                                : -1;
+
+                            // If ward exists and attacker can't ignore it, must attack ward
+                            if (wardTarget !== -1) {
+                                targetIndex = wardTarget;
+                                targetIsLeader = false;
+                            } else if (aiDifficulty === 'EASY') {
+                                // EASY: Simple logic - random or face (no ward blocking)
+                                const validTargets = playerBoard
+                                    .map((c, idx) => ({ c, idx }))
+                                    .filter(({ c }) => c && !c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA') && !isImmuneToFollowerAttack(c, state));
+
+                                const canAttackLeaderNow = attacker.passiveAbilities?.includes('STORM') || attacker.turnPlayed !== state.turnCount;
+
+                                if (!canAttackLeaderNow && validTargets.length > 0) {
+                                    // Must attack follower (RUSH restriction)
+                                    const randomTarget = validTargets[Math.floor(Math.random() * validTargets.length)];
+                                    targetIndex = randomTarget.idx;
                                     targetIsLeader = false;
-                                } else {
-                                    // No valid Ward (all stealthed? or none). Treat as no Ward.
-                                    // Fall through to normal logic
+                                } else if (!canAttackLeaderNow && validTargets.length === 0) {
+                                    // Can't attack anything - skip this attacker
+                                    continue;
+                                } else if (canAttackLeaderNow && validTargets.length > 0 && Math.random() < 0.5) {
+                                    // 50% chance to attack random follower
+                                    const randomTarget = validTargets[Math.floor(Math.random() * validTargets.length)];
+                                    targetIndex = randomTarget.idx;
+                                    targetIsLeader = false;
+                                }
+                                // else attack leader (default)
+                            } else {
+                                // NORMAL/HARD: Smart targeting
+                                const result = findBestAttackTarget(attacker, playerBoard, state);
+                                targetIndex = result.index;
+                                targetIsLeader = result.isLeader;
+
+                                // Skip if no valid target
+                                if (targetIndex === -1 && !targetIsLeader) {
+                                    continue;
                                 }
                             }
 
-                            if (targetIndex === -1) { // If Ward didn't set target
-                                // RUSH units can only attack followers on the turn they are summoned
-                                // STORM units can attack anything including leader on summon turn
-                                const hasStorm = attacker.passiveAbilities?.includes('STORM');
-                                const isSummoningSickness = attacker.turnPlayed === state.turnCount;
+                            // Check RUSH restriction
+                            const hasStorm = attacker.passiveAbilities?.includes('STORM');
+                            const isSummoningSickness = attacker.turnPlayed === state.turnCount;
+                            if (!hasStorm && isSummoningSickness && targetIsLeader) {
+                                // RUSH can't attack leader - find a follower (prioritize ward)
+                                const validTargets = playerBoard
+                                    .map((c, idx) => ({ c, idx }))
+                                    .filter(({ c }) => c && !c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA') && !isImmuneToFollowerAttack(c, state));
 
-                                // Can attack leader if:
-                                // - Has STORM (can attack anything on summon turn), OR
-                                // - Not summoning sick (previous turn, can attack anything)
-                                // Cannot attack leader if:
-                                // - Summoning sick without STORM (RUSH units are follower-only on summon turn)
-                                const canAttackLeader = hasStorm || !isSummoningSickness;
-
-                                if (!canAttackLeader) {
-                                    // Must attack follower. If no follower, cannot attack.
-                                    let bestTarget = -1;
-                                    for (let t = 0; t < playerBoard.length; t++) {
-                                        const target = playerBoard[t];
-                                        if (!target) continue;
-                                        if (target.passiveAbilities?.includes('STEALTH') || target.passiveAbilities?.includes('AURA')) continue; // Skip Stealth/Aura
-                                        // Simple Logic: Kill small things or trade
-                                        bestTarget = t;
-                                        break;
-                                    }
-
-                                    if (bestTarget !== -1) {
-                                        targetIndex = bestTarget;
-                                        targetIsLeader = false;
+                                if (validTargets.length > 0) {
+                                    // Prefer ward target if exists and attacker can't ignore
+                                    const wardInValid = attackerIgnoresWard ? null : validTargets.find(({ c }) => c.passiveAbilities?.includes('WARD'));
+                                    if (wardInValid) {
+                                        targetIndex = wardInValid.idx;
                                     } else {
-                                        // No valid target
-                                        continue;
+                                        targetIndex = validTargets[0].idx;
                                     }
+                                    targetIsLeader = false;
                                 } else {
-                                    // Can attack leader. Smart Trade or Face?
-                                    // For now: Smart Trade Logic but prefer Face if no good trade
-                                    let bestTarget = -1;
-                                    for (let t = 0; t < playerBoard.length; t++) {
-                                        const target = playerBoard[t];
-                                        if (!target) continue;
-                                        if (target.passiveAbilities?.includes('STEALTH') || target.passiveAbilities?.includes('AURA')) continue; // Skip Stealth/Aura
-
-                                        if (attacker.currentAttack >= target.currentHealth && (target.currentAttack || 0) < attacker.currentHealth) {
-                                            bestTarget = t;
-                                            break;
-                                        }
-                                    }
-
-                                    if (bestTarget !== -1) {
-                                        targetIndex = bestTarget;
-                                        targetIsLeader = false;
-                                    }
-                                    // Else default targetIsLeader = true
+                                    continue; // Can't attack anything
                                 }
                             }
 
                             // Visual Feedback
-                            // Visual Feedback - ATTACKER (CPU -> Player)
-                            // Get target instanceId for accurate visual positioning
                             const targetCard = targetIsLeader ? null : playerBoard[targetIndex];
                             const targetInstanceId = targetCard ? (targetCard as any).instanceId : undefined;
                             playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
 
-                            // Counter-Attack Visuals (Player -> CPU)
+                            // Counter-Attack Visuals
                             if (!targetIsLeader && targetIndex >= 0) {
                                 const defender = playerBoard[targetIndex];
                                 if (defender && (defender.currentAttack || 0) > 0) {
-                                    // Defender attacks Attacker (who is at index 'i' on Opponent Board)
-                                    // Delayed for overlap effect
                                     const attackerInstanceId = (attacker as any).instanceId;
                                     setTimeout(() => {
-                                        // Use defender's effect type, targeting the attacker (index i on opponent board)
                                         playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, i, attackerInstanceId);
-                                    }, 200); // Shorter overlap
+                                    }, 200);
                                 }
                             }
 
                             actionTaken = true;
 
-                            // Check for Counter to optimize wait
-                            // Check for Counter to optimize wait (Unused)
-
-                            await waitForIdle(1000); // Wait for Impact (1s)
+                            await waitForIdle(1000);
 
                             dispatch({
                                 type: 'ATTACK',
@@ -3640,7 +3871,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 payload: { attackerIndex: i, targetIndex, targetIsLeader }
                             });
 
-                            await waitForIdle(1000); // 1 second pause after damage
+                            await waitForIdle(1000);
                             break;
                         }
                         if (!actionTaken) continueAttacking = false;
@@ -3652,7 +3883,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             };
             runAiTurn();
         }
-    }, [gameState.activePlayerId, gameState.turnCount, gameMode, gameState.phase]);
+    }, [gameState.activePlayerId, gameState.turnCount, gameMode, gameState.phase, aiDifficulty]);
 
 
 
@@ -3956,11 +4187,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         };
                         const actualTargetIndex = currentHover.type === 'LEADER' ? -1 : getActualBoardIndex(currentHover.instanceId);
 
-                        // Check Attacker for STEALTH (Ignores Ward)
+                        // Check Attacker for STEALTH or hadStealth (Ignores Ward even after Stealth is removed)
                         const visualAttackerCard = playerRef.current.board[currentDrag.sourceIndex] as any;
-                        const hasStealth = visualAttackerCard?.passiveAbilities?.includes('STEALTH');
+                        const ignoresWard = visualAttackerCard?.passiveAbilities?.includes('STEALTH') || visualAttackerCard?.hadStealth;
 
-                        if (wardUnits.length > 0 && !hasStealth) {
+                        if (wardUnits.length > 0 && !ignoresWard) {
                             if (currentHover.type === 'LEADER') {
                                 isBlocked = true;
                             } else if (currentHover.type === 'FOLLOWER' && actualTargetIndex >= 0) {

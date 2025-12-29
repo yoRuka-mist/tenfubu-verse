@@ -1143,3 +1143,298 @@ if (effectTimeoutRef.current) {
   - 1880-1883行目: GENERATE_CARD座標計算（スクリーン座標対応）
   - 2042-2058行目: BUFF_STATS ALL_FOLLOWERSハンドリング
   - 5880-5908行目: animatingCard表示（スクリーン座標対応）
+
+---
+
+## 修正日
+2025年12月30日（隠密の守護無視効果修正・せんかデッキ調整）
+
+## 修正内容
+
+### 1. 隠密の守護無視効果が解除後も残るように修正
+
+#### 問題
+- Yや遙などの隠密持ちフォロワーが、攻撃して隠密が解除された後、守護を無視できなくなっていた
+- 仕様では「隠密を持っていたフォロワーは、隠密が解除された後も守護を無視できる」
+
+#### 修正箇所
+
+##### types.ts
+- `BoardCard`インターフェースに`hadStealth`プロパティを追加（76行目）
+- 場に出た時点で隠密を持っていたかを記録
+
+##### engine.ts
+- PLAY_CARD処理でhadStealthを設定（2219-2220行目）
+- SUMMON_CARD処理でhadStealthを設定（1521-1522行目）
+- SUMMON_CARD_RUSH処理でhadStealthを設定（1553-1554行目）
+- ATTACK処理の守護無視判定を`attackerIgnoresWard`に変更（2563-2564行目）
+  - `passiveAbilities?.includes('STEALTH') || hadStealth`で判定
+
+##### GameScreen.tsx
+- UI側の守護無視判定も`ignoresWard`に変更（3959-3961行目）
+  - `passiveAbilities?.includes('STEALTH') || hadStealth`で判定
+
+### 2. カードのdescriptionを簡素化
+
+#### 変更内容
+- Yのdescription: `[隠密]（攻撃まで選択不可・守護無視）` → `[隠密]`
+- 遙のdescription: `[隠密]（攻撃まで選択不可・守護無視）` → `[隠密]`
+- 詳細な説明はヘルプボタン内に記載
+
+### 3. ヘルプの隠密説明を更新
+
+- 「この効果は隠密が解除された後も残ります」を追加（597行目）
+
+### 4. せんかデッキ構成変更
+
+#### 変更内容
+- ぶっちー: 3枚 → 2枚
+- ヴァルキリー: 0枚 → 1枚（新規追加）
+
+#### 修正箇所
+- engine.ts SENKA_DECK_TEMPLATE（877-878行目）
+
+## 構造の記録（更新）
+- `game/src/core/types.ts`
+  - 76行目: BoardCard.hadStealth
+- `game/src/core/engine.ts`
+  - 877-878行目: せんかデッキ構成（ぶっちー2、ヴァルキリー1）
+  - 1521-1522行目: SUMMON_CARD hadStealth設定
+  - 1553-1554行目: SUMMON_CARD_RUSH hadStealth設定
+  - 2219-2220行目: PLAY_CARD hadStealth設定
+  - 2563-2564行目: ATTACK守護無視判定（hadStealth対応）
+- `game/src/screens/GameScreen.tsx`
+  - 597行目: ヘルプの隠密説明更新
+  - 3959-3961行目: UI守護無視判定（hadStealth対応）
+
+---
+
+## 修正日
+2025年12月30日（CPU AI強化と難易度選択機能）
+
+## 修正内容
+
+### 1. 難易度選択システムの追加
+
+#### 概要
+ひとりで遊ぶモード（CPU対戦）に、3段階の難易度選択機能を追加。
+
+#### 追加した難易度
+- **かんたん（EASY）**: 初心者向け。CPUは単純な行動をとる
+- **ふつう（NORMAL）**: 標準的な難易度。CPUは基本的な戦略を使用
+- **むずかしい（HARD）**: 上級者向け。CPUは効果的な戦略で挑んでくる
+
+#### 修正ファイル
+
+##### types.ts
+- 3行目: `AIDifficulty`型を追加
+  ```typescript
+  export type AIDifficulty = 'EASY' | 'NORMAL' | 'HARD';
+  ```
+
+##### App.tsx
+- 6行目: AIDifficultyのimport追加
+- 28行目: aiDifficulty state追加（デフォルト: 'NORMAL'）
+- 122-130行目: ClassSelectScreenにgameMode、aiDifficulty、onDifficultyChangeを渡す
+- 150行目: GameScreenにaiDifficultyを渡す
+
+##### ClassSelectScreen.tsx
+- 2行目: AIDifficultyのimport追加
+- 24-26行目: propsにgameMode、aiDifficulty、onDifficultyChangeを追加
+- 138-184行目: 難易度選択UIコンポーネントを追加
+  - CPUモード時のみ表示
+  - 3つのボタン（かんたん/ふつう/むずかしい）
+  - 選択中の難易度は色付きで表示
+  - 各難易度の説明テキストを表示
+
+##### GameScreen.tsx
+- 97行目: propsにaiDifficultyを追加
+- 1506行目: propsからaiDifficulty受け取り（デフォルト: 'NORMAL'）
+- 3851行目: useEffectの依存配列にaiDifficultyを追加
+
+### 2. CPU AI強化
+
+#### 問題点（修正前）
+- カードプレイ: 最もコストが高い1枚だけをプレイ（PPが余っても追加プレイしない）
+- 進化: 最後に出したカードを常に進化（効果を考慮しない）
+- 攻撃: 免疫持ち（IMMUNE_TO_FOLLOWER_DAMAGE等）を考慮せずに攻撃
+
+#### 強化内容
+
+##### AIヘルパー関数の追加（3307-3489行目）
+1. **isImmuneToFollowerAttack**: ターゲットがフォロワー攻撃に対して免疫かどうかを判定
+   - IMMUNE_TO_FOLLOWER_DAMAGE（白ツバキ等）を考慮
+2. **wouldDieAttacking**: 攻撃時に自分が死亡するかを判定
+3. **canKillTarget**: ターゲットを倒せるかを判定（BANEとBARRIERを考慮）
+4. **scoreCardForPlaying**: カードのプレイ優先度をスコアリング
+   - 敵ボードがある場合、除去効果にボーナス
+   - 敵リーダーHP低下時、STORMにボーナス
+   - ボードが満杯の場合、フォロワーにペナルティ
+5. **scoreEvolveTarget**: 進化対象の優先度をスコアリング
+   - 進化時効果（ダメージ/破壊/召喚等）を評価
+   - 攻撃可能なユニットを優先
+6. **findBestAttackTarget**: 最適な攻撃対象を決定
+   - 守護の処理（隠密による無視も考慮）
+   - 免疫持ちを避ける
+   - 有利トレードを優先
+   - ターゲットがいない場合はリーダーを攻撃
+
+##### 難易度別のAI行動（3491-3851行目）
+
+###### カードプレイ
+- **EASY**: 1枚のみプレイ、30%の確率で追加プレイをスキップ
+- **NORMAL**: 最大3枚まで、コスト降順でプレイ
+- **HARD**: 最大5枚まで、スコア順でプレイ、高価値ターゲットを優先
+
+###### 進化
+- **EASY**: ランダムなフォロワーを進化
+- **NORMAL/HARD**: 進化時効果が高価値なフォロワーを優先して進化
+  - ダメージ/破壊効果を持つカードを優先
+  - 敵ボードがある場合、除去効果にボーナス
+
+###### 攻撃
+- **EASY**: 守護があれば攻撃、なければ50%で顔攻撃
+- **NORMAL/HARD**:
+  - 免疫持ちをスキップ
+  - 有利トレードを優先
+  - 倒せないターゲットへの無駄な攻撃を避ける
+  - BANEやDAMNを持つ危険なフォロワーを優先除去
+
+###### 思考時間
+- **EASY**: 1200ms（ゆっくり）
+- **NORMAL**: 800ms（標準）
+- **HARD**: 400ms（テンポよく）
+
+## 構造の記録（更新）
+- `game/src/core/types.ts`
+  - 3行目: AIDifficulty型定義
+
+- `game/src/App.tsx`
+  - 28行目: aiDifficulty state
+  - 122-130行目: ClassSelectScreen props
+  - 150行目: GameScreen props
+
+- `game/src/screens/ClassSelectScreen.tsx`
+  - 2行目: AIDifficulty import
+  - 21-27行目: ClassSelectScreenProps拡張
+  - 138-184行目: 難易度選択UI
+
+- `game/src/screens/GameScreen.tsx`
+  - 97行目: aiDifficulty props
+  - 1506行目: aiDifficulty受け取り
+  - 3307-3489行目: AIヘルパー関数群
+  - 3491-3851行目: 難易度別AIロジック
+
+## 設計メモ
+- AI強化は主にGameScreen.tsx内のrunAiTurn関数で実装
+- 難易度に応じてカード評価関数を使用するかどうかを分岐
+- HARDモードではカード効果とボード状況を考慮した戦略的なプレイを行う
+- 免疫持ちへの無駄な攻撃を防ぐことで、より合理的な行動を実現
+
+---
+
+## 修正日
+2025年12月30日（AI攻撃バグ修正）
+
+## 修正内容
+
+### AIの守護無視バグと必殺回避不足の修正
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **報告された問題**:
+  1. 守護がいるのに守護の裏にいるフォロワーを攻撃しようとし、エフェクトは出るがダメージが通らない処理を無限に試行
+  2. 「むずかしい」でも進化後のフォロワーで必殺のフォロワーに攻撃するなど無駄な行動が見られる
+
+#### 原因分析
+
+##### 守護無視バグの原因
+1. EASYモードでは守護を見つけて攻撃しようとしていたが、**攻撃者が守護を無視できるか（STEALTH/hadStealth）をチェックしていなかった**
+2. 守護がいない場合のフォールバック処理で、再度守護確認をしていなかった
+3. NORMAL/HARDでは`findBestAttackTarget`が守護を返しても、その後のRUSH制限チェックで上書きされる可能性があった
+
+##### 必殺回避不足の原因
+1. `wouldDieAttacking`関数が相手の攻撃力だけで判定し、**BANE（必殺）を考慮していなかった**
+2. `findBestAttackTarget`でBANE持ちを「倒す価値がある」としてボーナスを与えていたが、**BANEで自分が即死するペナルティが不足**
+3. 進化フォロワーで攻撃する場合の追加ペナルティがなかった
+
+#### 修正内容
+
+##### 1. wouldDieAttacking関数の修正（行3320-3328）
+```typescript
+// 修正前
+const wouldDieAttacking = (attacker: any, target: any): boolean => {
+    if (!target || !attacker) return false;
+    return (target.currentAttack || 0) >= attacker.currentHealth;
+};
+
+// 修正後
+const wouldDieAttacking = (attacker: any, target: any): boolean => {
+    if (!target || !attacker) return false;
+    // BANE kills on any damage (unless attacker has BARRIER)
+    if (target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
+        return true; // BANE always kills attacker
+    }
+    return (target.currentAttack || 0) >= attacker.currentHealth;
+};
+```
+
+##### 2. findBestAttackTargetのスコアリング改善（行3451-3501）
+- `attackerIsEvolved`フラグを追加し、進化フォロワーの判定
+- BANEで死ぬ場合の大きなペナルティを追加:
+  - 進化フォロワーがBANEで死ぬ: -60点
+  - 通常フォロワーがBANEで死ぬ: -30点
+- ターゲットを倒せず自分が死ぬ場合:
+  - 基本ペナルティ: -50点
+  - 進化フォロワーの場合: さらに-40点
+
+##### 3. 攻撃フェーズの守護チェック統合（行3774-3846）
+- 全難易度共通で攻撃前に守護チェックを実施
+- `attackerIgnoresWard`変数で守護無視判定（STEALTH/hadStealth）
+- 守護がいる場合は難易度に関係なく守護を攻撃
+- EASYモードのロジックを守護チェック後に移動
+
+```typescript
+// 修正後の構造
+// 1. 攻撃者が守護を無視できるかチェック
+const attackerIgnoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
+
+// 2. 守護がいるかチェック（無視できない場合のみ）
+const wardTarget = !attackerIgnoresWard
+    ? playerBoard.findIndex(c => c && c.passiveAbilities?.includes('WARD') && ...)
+    : -1;
+
+// 3. 守護がいれば強制的に守護を攻撃
+if (wardTarget !== -1) {
+    targetIndex = wardTarget;
+    targetIsLeader = false;
+} else if (aiDifficulty === 'EASY') {
+    // EASYモードのランダムロジック
+} else {
+    // NORMAL/HARDのスマートターゲティング
+}
+```
+
+##### 4. RUSH制限チェックでの守護優先（行3834-3841）
+- RUSHがリーダーを攻撃できない場合、validTargets内で守護を優先
+
+## 修正箇所の確認
+- `wouldDieAttacking`: BANE判定が追加されていることを確認
+- `findBestAttackTarget`: 進化フォロワー+BANE のペナルティが機能することを確認
+- 攻撃ループ: 守護がいる場合に守護以外を攻撃しないことを確認
+- RUSH制限: 守護がいる場合に守護を優先することを確認
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 3320-3328行目: wouldDieAttacking（BANE判定追加）
+  - 3451-3501行目: findBestAttackTarget（スコアリング改善）
+  - 3774-3846行目: 攻撃フェーズ（守護チェック統合、RUSH制限改善）
+
+## 失敗の記録と教訓
+- **問題**: EASYモードの守護チェックが攻撃者の守護無視能力を考慮していなかった
+- **原因の想定**: 当初は「守護があれば守護を攻撃」という単純なロジックで十分と考えた
+- **実際の原因**: 攻撃者がSTEALTH/hadStealth を持つ場合、守護を無視できるため、その判定が必要だった
+- **教訓**: ゲームルールの例外（守護無視など）を全てのコードパスで一貫して処理する必要がある
+
+## 今後の改善案
+1. AI攻撃ログの追加（デバッグ用）
+2. より高度な盤面評価（ターン先読み）
+3. コンボ認識（特定カード組み合わせの優先）

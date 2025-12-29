@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClassType } from '../core/types';
+import { ClassType, AIDifficulty } from '../core/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -21,9 +21,18 @@ const BASE_HEIGHT = 720;
 interface ClassSelectScreenProps {
     onSelectClass: (cls: ClassType) => void;
     onBack: () => void;
+    gameMode?: 'CPU' | 'HOST' | 'JOIN';
+    aiDifficulty?: AIDifficulty;
+    onDifficultyChange?: (difficulty: AIDifficulty) => void;
 }
 
-export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({ onSelectClass, onBack }) => {
+export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
+    onSelectClass,
+    onBack,
+    gameMode = 'CPU',
+    aiDifficulty = 'NORMAL',
+    onDifficultyChange
+}) => {
     // Responsive scaling (same approach as GameScreen)
     const [scale, setScale] = useState(1);
 
@@ -125,6 +134,54 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({ onSelectCl
                     </div>
                 </div>
             </div>
+
+            {/* Difficulty Selector - Only show for CPU mode */}
+            {gameMode === 'CPU' && onDifficultyChange && (
+                <div style={{
+                    marginBottom: `${2 * scale}rem`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: `${0.5 * scale}rem`
+                }}>
+                    <p style={{ fontSize: `${1 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', marginBottom: `${0.5 * scale}rem` }}>
+                        難易度を選択
+                    </p>
+                    <div style={{ display: 'flex', gap: `${1 * scale}rem` }}>
+                        {(['EASY', 'NORMAL', 'HARD'] as AIDifficulty[]).map((diff) => (
+                            <button
+                                key={diff}
+                                onClick={() => onDifficultyChange(diff)}
+                                style={{
+                                    padding: `${8 * scale}px ${20 * scale}px`,
+                                    fontSize: `${0.9 * scale}rem`,
+                                    background: aiDifficulty === diff
+                                        ? (diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea')
+                                        : 'transparent',
+                                    border: `2px solid ${diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea'}`,
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    borderRadius: 4 * scale,
+                                    fontFamily: 'Tamanegi, sans-serif',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {diff === 'EASY' ? 'かんたん' : diff === 'NORMAL' ? 'ふつう' : 'むずかしい'}
+                            </button>
+                        ))}
+                    </div>
+                    <p style={{
+                        fontSize: `${0.75 * scale}rem`,
+                        opacity: 0.6,
+                        fontFamily: 'Tamanegi, sans-serif',
+                        marginTop: `${0.3 * scale}rem`
+                    }}>
+                        {aiDifficulty === 'EASY' && '初心者向け。CPUは単純な行動をとります。'}
+                        {aiDifficulty === 'NORMAL' && '標準的な難易度。CPUは基本的な戦略を使います。'}
+                        {aiDifficulty === 'HARD' && '上級者向け。CPUは効果的な戦略で挑んできます。'}
+                    </p>
+                </div>
+            )}
 
             <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${1 * scale}rem` }}>タイトルに戻る</button>
 

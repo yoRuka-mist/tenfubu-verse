@@ -3,7 +3,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
-import { ClassType } from './core/types';
+import { ClassType, AIDifficulty } from './core/types';
 import { NetworkAdapter } from './network/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
@@ -25,6 +25,7 @@ function App() {
     const [gameMode, setGameMode] = useState<GameMode>('CPU');
     const [roomId, setRoomId] = useState<string>('');
     const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
+    const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('NORMAL');
 
     // Shared network adapter for online play
     const networkAdapterRef = useRef<NetworkAdapter | null>(null);
@@ -118,7 +119,15 @@ function App() {
     return (
         <div className="app-container">
             {currentScreen === 'TITLE' && <TitleScreen onStartConfig={handleTitleConfig} />}
-            {currentScreen === 'CLASS_SELECT' && <ClassSelectScreen onSelectClass={startGame} onBack={backToTitle} />}
+            {currentScreen === 'CLASS_SELECT' && (
+                <ClassSelectScreen
+                    onSelectClass={startGame}
+                    onBack={backToTitle}
+                    gameMode={gameMode}
+                    aiDifficulty={aiDifficulty}
+                    onDifficultyChange={setAiDifficulty}
+                />
+            )}
             {currentScreen === 'LOBBY' && (
                 <LobbyScreen
                     gameMode={gameMode as 'HOST' | 'JOIN'}
@@ -138,6 +147,7 @@ function App() {
                     networkAdapter={networkAdapterRef.current}
                     networkConnected={networkConnected}
                     opponentClass={opponentClass}
+                    aiDifficulty={aiDifficulty}
                 />
             )}
         </div>

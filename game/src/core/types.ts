@@ -1,5 +1,7 @@
 export type ClassType = 'SENKA' | 'AJA' | 'YORUKA';
 
+export type AIDifficulty = 'EASY' | 'NORMAL' | 'HARD';
+
 export type CardType = 'FOLLOWER' | 'SPELL';
 
 // Card Abilities
@@ -73,6 +75,7 @@ export interface BoardCard extends Card {
     hasBarrier?: boolean; // Barrier state (Damage 0 once)
     baseAttack?: number; // Original attack before buffs
     baseHealth?: number; // Original health before buffs
+    hadStealth?: boolean; // Had Stealth when played (for Ward ignore after Stealth is removed)
 }
 
 export interface Player {

@@ -82,7 +82,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_y', name: 'Y', cost: 6, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: '[隠密]（攻撃まで選択不可・守護無視）\nファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。\n進化時：相手のフォロワーすべてに3ダメージ。',
+        description: '[隠密]\nファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。\n進化時：相手のフォロワーすべてに3ダメージ。',
         imageUrl: '/cards/y.png',
         evolvedImageUrl: '/cards/y_2.png',
         passiveAbilities: ['STEALTH'],
@@ -729,7 +729,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[隠密]（攻撃まで選択不可・守護無視）\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
+        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
         passiveAbilities: ['STEALTH'],
@@ -874,7 +874,8 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_white_tsubaki', count: 3 },    // 白ツバキ
     { cardId: 'c_shieko', count: 3 },           // しゑこ
     { cardId: 's_samurai_tea', count: 3 },      // 侍茶
-    { cardId: 'c_bucchi', count: 3 },           // ぶっちー
+    { cardId: 'c_bucchi', count: 2 },           // ぶっちー
+    { cardId: 'c_valkyrie', count: 1 },         // ヴァルキリー
     { cardId: 'c_potechi', count: 3 },          // ぽてち
     { cardId: 's_tenfubu_yabe_hutari', count: 3 }, // てんふぶのヤベー2人
     { cardId: 's_crazy_knucklers', count: 2 },  // クレイジー・ナックラーズ
@@ -1517,7 +1518,8 @@ function processSingleEffect(
                         attacksMade: 0,
                         turnPlayed: newState.turnCount,
                         hasBarrier: template.passiveAbilities?.includes('BARRIER'),
-                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined,
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
                     };
 
                     // Note: せんかのオーラ効果は削除。ファンファーレ時に場にいるナックラーにのみ疾走を付与する仕様。
@@ -1548,7 +1550,8 @@ function processSingleEffect(
                         attacksMade: 0,
                         turnPlayed: newState.turnCount,
                         hasBarrier: template.passiveAbilities?.includes('BARRIER'),
-                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : []
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
                     };
                     // 突進を付与
                     if (!newCard.passiveAbilities!.includes('RUSH')) {
@@ -2215,7 +2218,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     hasEvolved: false,
                     attacksMade: 0,
                     turnPlayed: newState.turnCount,
-                    hasBarrier: card.passiveAbilities?.includes('BARRIER')
+                    hasBarrier: card.passiveAbilities?.includes('BARRIER'),
+                    hadStealth: card.passiveAbilities?.includes('STEALTH') // 隠密を持っていた場合、守護無視効果を永続化
                 };
                 if (card.passiveAbilities?.includes('STORM') || card.passiveAbilities?.includes('RUSH')) {
                     newFollower.canAttack = true;
@@ -2556,10 +2560,10 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 !c.passiveAbilities?.includes('STEALTH')
             );
 
-            // STEALTH attacker ignores WARD
-            const attackerHasStealth = attacker.passiveAbilities?.includes('STEALTH');
+            // STEALTH attacker ignores WARD (hadStealth also counts - Ward ignore persists after Stealth is removed)
+            const attackerIgnoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
 
-            if (wardUnits.length > 0 && !attackerHasStealth) {
+            if (wardUnits.length > 0 && !attackerIgnoresWard) {
                 // If target is Leader, block
                 if (targetIsLeader) {
                     console.log(`[Engine] Attack blocked: Must attack Ward unit first.`);
