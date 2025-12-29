@@ -91,3 +91,42 @@
   - 22-26行目: `getLeaderImg()`
   - 1421-1426行目: CPU対戦時クラス選択
   - 4562行目、5083行目: リーダー画像表示
+
+---
+
+## 修正日
+2025年12月29日（バグ修正）
+
+## 修正内容
+
+### 1. ネクロマンス効果修正
+- **問題**: 遙の超進化時のネクロマンス6によるALL_OTHER_FOLLOWERSバフが発動しなかった
+- **原因**: BUFF_STATSのswitch文にALL_OTHER_FOLLOWERSケースが未実装
+- **対策**: engine.ts 1794-1815行目にALL_OTHER_FOLLOWERSの処理を追加
+
+### 2. ラストワード発動修正
+- **問題**: yoRukaが破壊されてもラストワードで再召喚されなかった
+- **原因**: GameScreen.tsxのisSummonEffect判定にSUMMON_CARD_RUSHが含まれていなかった
+- **対策**: GameScreen.tsx 1770行目でSUMMON_CARD_RUSHも判定に追加
+
+### 3. 墓地枚数表示位置修正
+- **問題**: 墓地枚数がプレイボタンと被っていた
+- **対策**:
+  - プレイヤー側: 手札枚数表示の右に移動（5315-5350行目）
+  - 相手側: 手札カードの横に移動（4626-4654行目）
+
+### 4. 画像パス修正
+- **問題**: yoRukaリーダー画像が表示されなかった
+- **原因**: `/cards/yoRuka_leader.png`を参照していたが、実際は`/leaders/yoRuka_leader.png`
+- **対策**:
+  - ClassSelectScreen.tsx 15行目
+  - GameScreen.tsx 19行目
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1794-1815行目: BUFF_STATS の ALL_OTHER_FOLLOWERS ケース追加
+
+- `game/src/screens/GameScreen.tsx`
+  - 1770行目: isSummonEffect に SUMMON_CARD_RUSH 追加
+  - 5315-5350行目: 手札枚数+墓地枚数の統合表示
+  - 4626-4654行目: 相手の手札+墓地枚数の統合表示

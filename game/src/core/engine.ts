@@ -1791,6 +1791,28 @@ function processSingleEffect(
                         newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
                     }
                 });
+            } else if (effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                // 自分以外の味方フォロワー全体にバフ
+                const p = newState.players[sourcePlayerId];
+                p.board.forEach(c => {
+                    if (c && c.instanceId !== sourceCard.instanceId) {
+                        // Apply conditions if present
+                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) return;
+                        if (effect.conditions?.nameIn && !effect.conditions.nameIn.includes(c.name)) return;
+
+                        // Track original stats for display purposes
+                        if (!c.baseAttack) c.baseAttack = c.attack || 0;
+                        if (!c.baseHealth) c.baseHealth = c.health || 0;
+
+                        c.attack = (c.attack || 0) + attackBuff;
+                        c.currentAttack = (c.currentAttack || 0) + attackBuff;
+                        c.health = (c.health || 0) + healthBuff;
+                        c.maxHealth = (c.maxHealth || 0) + healthBuff;
+                        c.currentHealth = (c.currentHealth || 0) + healthBuff;
+
+                        newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
+                    }
+                });
             } else if ((effect.targetType === 'SELECT_FOLLOWER' || effect.targetType === 'SELECT_ALLY_FOLLOWER' || effect.targetType === 'SELECT_OTHER_ALLY_FOLLOWER') && targetId) {
                 const targetInfo = getBoardCardById(targetId);
                 if (targetInfo) {

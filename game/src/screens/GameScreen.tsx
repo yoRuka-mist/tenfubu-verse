@@ -16,7 +16,7 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
-const yorukaLeaderImg = getAssetUrl('/cards/yoRuka_leader.png');
+const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
 
 // Helper to get leader image by class
 const getLeaderImg = (cls: ClassType): string => {
@@ -1767,7 +1767,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const isSetHpEffect = current.effect.type === 'RANDOM_SET_HP';
             const isSetMaxHpEffect = current.effect.type === 'SET_MAX_HP';
             const isBounceEffect = current.effect.type === 'RETURN_TO_HAND';
-            const isSummonEffect = current.effect.type === 'SUMMON_CARD';
+            const isSummonEffect = current.effect.type === 'SUMMON_CARD' || current.effect.type === 'SUMMON_CARD_RUSH';
 
             const delay = (isHealEffect || isBounceEffect || isSummonEffect) ? 600 : 50;
 
@@ -4623,32 +4623,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{ position: 'absolute', bottom: -20 * scale, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
                     </div>
 
-                    {/* Opponent Graveyard Count - Top Left Below Deck */}
-                    <div style={{ position: 'absolute', top: 120 * scale, left: 20 * scale, display: 'flex', alignItems: 'center', gap: 6, zIndex: 50, pointerEvents: 'none' }}>
-                        <div style={{ fontSize: '1.2rem', filter: 'grayscale(50%)' }}>💀</div>
-                        <div style={{
-                            background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.6), rgba(76, 29, 149, 0.7))',
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                            color: '#c4b5fd',
-                            fontSize: '0.8rem',
-                            fontWeight: 'bold',
-                            border: '1px solid rgba(167, 139, 250, 0.3)'
-                        }}>
-                            {opponent.graveyard.length}
+                    {/* Opponent Hand & Graveyard Count - Top Right */}
+                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 15 * scale, zIndex: 50 }}>
+                        {/* Opponent Hand Cards */}
+                        <div style={{ display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right' }}>
+                            {opponent.hand.map((_, i) => (
+                                <div key={i} style={{
+                                    width: 80 * scale, height: 110 * scale,
+                                    background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
+                                    border: '1px solid #742a3a', borderRadius: 6,
+                                    marginLeft: i > 0 ? -50 * scale : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
+                                }}></div>
+                            ))}
                         </div>
-                    </div>
-
-                    {/* Opponent Hand - Top Right */}
-                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right', zIndex: 50 }}>
-                        {opponent.hand.map((_, i) => (
-                            <div key={i} style={{
-                                width: 80 * scale, height: 110 * scale,
-                                background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
-                                border: '1px solid #742a3a', borderRadius: 6,
-                                marginLeft: i > 0 ? -50 * scale : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
-                            }}></div>
-                        ))}
+                        {/* Opponent Graveyard Count */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none' }}>
+                            <div style={{ fontSize: '1.2rem', filter: 'grayscale(50%)' }}>💀</div>
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.6), rgba(76, 29, 149, 0.7))',
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                color: '#c4b5fd',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                border: '1px solid rgba(167, 139, 250, 0.3)'
+                            }}>
+                                墓地 {opponent.graveyard.length}
+                            </div>
+                        </div>
                     </div>
 
                     {/* ========================================== */}
@@ -5312,7 +5314,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         </div>
                     )}
 
-                    {/* Hand Count Badge & Card Icon - Far Left near boundary */}
+                    {/* Hand Count Badge & Graveyard Count - Far Left near boundary */}
                     <div style={{ position: 'absolute', bottom: 220 * scale, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
                         {/* Hand Icon - Stacked Cards */}
                         <div style={{ position: 'relative', width: 40, height: 50 }}>
@@ -5323,30 +5325,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{ background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
                             手札 {player.hand.length}
                         </div>
-                    </div>
-
-                    {/* Graveyard Count Badge - 墓地枚数表示 */}
-                    <div style={{ position: 'absolute', bottom: 160 * scale, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
-                        {/* Skull Icon */}
+                        {/* Graveyard Count - 墓地枚数表示 (手札の右に配置) */}
                         <div style={{
-                            width: 40, height: 40,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1.8rem',
-                            filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            marginLeft: 10
                         }}>
-                            💀
-                        </div>
-                        <div style={{
-                            background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
-                            padding: '5px 12px',
-                            borderRadius: 8,
-                            color: '#e2e8f0',
-                            fontSize: '1rem',
-                            fontWeight: 'bold',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(167, 139, 250, 0.5)'
-                        }}>
-                            墓地 {player.graveyard.length}
+                            <div style={{
+                                fontSize: '1.5rem',
+                                filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
+                            }}>
+                                💀
+                            </div>
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                color: '#e2e8f0',
+                                fontSize: '1rem',
+                                fontWeight: 'bold',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(167, 139, 250, 0.5)'
+                            }}>
+                                墓地 {player.graveyard.length}
+                            </div>
                         </div>
                     </div>
 
