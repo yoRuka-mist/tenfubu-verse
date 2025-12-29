@@ -1441,24 +1441,51 @@ function processSingleEffect(
             const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
             const targetBoard = newState.players[targetPid].board;
 
+            // Helper function to apply damage to a target
+            const applyDamageToTarget = (idx: number) => {
+                const target = targetBoard[idx];
+                if (!target) return;
+                if (target.hasBarrier) {
+                    target.hasBarrier = false;
+                    newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
+                } else {
+                    target.currentHealth -= damage;
+                    newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
+                }
+                if (target.currentHealth <= 0) {
+                    target.currentHealth = 0;
+                    newState.players[targetPid].graveyard.push(target);
+                    targetBoard[idx] = null;
+                    newState.logs.push(`${target.name} は破壊されました`);
+                }
+            };
+
+            // Track which cards have already been targeted to avoid hitting the same card twice
+            const alreadyTargetedIds = new Set<string>();
+
             if (targetIds && targetIds.length > 0) {
                 targetIds.forEach(tid => {
                     const idx = targetBoard.findIndex(c => c?.instanceId === tid);
                     if (idx !== -1 && targetBoard[idx]) {
-                        const target = targetBoard[idx]!;
-                        if (target.hasBarrier) {
-                            target.hasBarrier = false;
-                            newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
-                        } else {
-                            target.currentHealth -= damage;
-                            newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
+                        // Target is still alive, apply damage
+                        alreadyTargetedIds.add(tid);
+                        applyDamageToTarget(idx);
+                    } else {
+                        // Target is already dead or removed - find a replacement target
+                        // Get valid targets that haven't been hit yet
+                        const validIndices = targetBoard
+                            .map((c, i) => (c && !alreadyTargetedIds.has(c.instanceId)) ? i : -1)
+                            .filter(i => i !== -1);
+
+                        if (validIndices.length > 0) {
+                            // Randomly select a new target
+                            const randomIdx = Math.floor(rng() * validIndices.length);
+                            const newTargetIdx = validIndices[randomIdx];
+                            const newTarget = targetBoard[newTargetIdx]!;
+                            alreadyTargetedIds.add(newTarget.instanceId);
+                            applyDamageToTarget(newTargetIdx);
                         }
-                        if (target.currentHealth <= 0) {
-                            target.currentHealth = 0;
-                            newState.players[targetPid].graveyard.push(target);
-                            targetBoard[idx] = null;
-                            newState.logs.push(`${target.name} は破壊されました`);
-                        }
+                        // If no valid targets remain, the damage fizzles (no target)
                     }
                 });
             } else {
@@ -1469,22 +1496,7 @@ function processSingleEffect(
                 }
                 const targets = validIndices.slice(0, count);
                 targets.forEach(idx => {
-                    const card = targetBoard[idx];
-                    if (card) {
-                        if (card.hasBarrier) {
-                            card.hasBarrier = false;
-                            newState.logs.push(`${card.name} のバリアがダメージを無効化しました`);
-                        } else {
-                            card.currentHealth -= damage;
-                            newState.logs.push(`${sourceCard.name} は ${card.name} に ${damage} ダメージを与えました`);
-                        }
-                        if (card.currentHealth <= 0) {
-                            card.currentHealth = 0;
-                            newState.players[targetPid].graveyard.push(card);
-                            targetBoard[idx] = null;
-                            newState.logs.push(`${card.name} は破壊されました`);
-                        }
-                    }
+                    applyDamageToTarget(idx);
                 });
             }
             break;
