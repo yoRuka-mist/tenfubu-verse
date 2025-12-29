@@ -2575,10 +2575,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (msg.type === 'GAME_STATE') {
                 console.log('[GameScreen] JOIN: Received GAME_STATE sync from HOST');
                 dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
-                // Reset processing flag since state is now synced from HOST
+                // Reset processing flags since state is now synced from HOST
                 setIsProcessingEffect(false);
                 isProcessingEffectRef.current = false;
                 processingHandledRef.current = null;
+                // CRITICAL FIX: Reset card play lock to prevent stuck state in online play
+                // Only reset if there's no ongoing animation to prevent interrupting card play
+                if (!playingCardAnimRef.current && !evolveAnimationRef.current) {
+                    cardPlayLockRef.current = false;
+                }
                 return;
             }
 
@@ -3157,10 +3162,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     useEffect(() => {
         if (gameState.activePlayerId === currentPlayerId) {
             // Reset locks at the start of player's turn
+            console.log('[GameScreen] Player turn started - resetting card play lock');
             cardPlayLockRef.current = false;
             lastPlayedInstanceIdRef.current = null;
         }
     }, [gameState.activePlayerId, gameState.turnCount, currentPlayerId]);
+
+    // Additional safety: Reset lock if it's been stuck for too long (failsafe for online play)
+    useEffect(() => {
+        if (gameMode === 'CPU') return; // Only for online play
+
+        const lockCheckInterval = setInterval(() => {
+            // If lock is held but no animations are running, release it
+            if (cardPlayLockRef.current &&
+                !playingCardAnimRef.current &&
+                !evolveAnimationRef.current &&
+                !targetingState &&
+                gameState.activePlayerId === currentPlayerId) {
+                console.warn('[GameScreen] Safety release: Card play lock was stuck, releasing');
+                cardPlayLockRef.current = false;
+            }
+        }, 3000); // Check every 3 seconds
+
+        return () => clearInterval(lockCheckInterval);
+    }, [gameMode, targetingState, gameState.activePlayerId, currentPlayerId]);
 
     useEffect(() => {
         if (gameMode !== 'CPU') return;
@@ -3582,18 +3607,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // --- PREVENTION: Do not start a new drag if one is active ---
         if (dragStateRef.current || playingCardAnim || animatingCard) return;
 
-        // --- PREVENTION: Block if card play is in progress ---
-        if (cardPlayLockRef.current) {
-            console.warn('[handleHandMouseDown] Card play in progress, blocking drag start');
-            return;
-        }
-
         const card = player.hand[index];
         e.stopPropagation();
 
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 
-        // Always allow hand expansion (even on opponent's turn) for viewing cards
+        // CRITICAL FIX: Always allow hand expansion (even when card play is locked or on opponent's turn)
+        // This ensures the hand can always be viewed regardless of game state
         if (!isHandExpanded) {
             setIsHandExpanded(true);
             setSelectedCard({ card, owner: 'PLAYER' });
@@ -3602,11 +3622,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return;
         }
 
-        // If already expanded, update selected card
+        // If already expanded, update selected card (also always allowed)
         setSelectedCard({ card, owner: 'PLAYER' });
 
         // Only allow drag (to play) on player's turn
         if (gameState.activePlayerId !== currentPlayerId) return;
+
+        // --- PREVENTION: Block drag if card play is in progress ---
+        if (cardPlayLockRef.current) {
+            console.warn('[handleHandMouseDown] Card play in progress, blocking drag start');
+            return;
+        }
 
         // Block card play while pendingEffects are being processed
         const currentState = gameStateRef.current;
