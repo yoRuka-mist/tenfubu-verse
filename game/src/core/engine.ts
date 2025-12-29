@@ -524,7 +524,7 @@ const MOCK_CARDS: Card[] = [
         ]
     },
     {
-        id: 's_resignation_proxy', name: '退職代行', cost: 3, type: 'SPELL',
+        id: 's_resignation_proxy', name: '退職代行', cost: 0, type: 'SPELL',
         description: '相手のフォロワー1体を破壊する。ランダムな自分のフォロワー1体を破壊する。',
         imageUrl: '/cards/taisyokudaiko.png',
         tags: ['Token'],
