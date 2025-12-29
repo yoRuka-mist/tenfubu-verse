@@ -3833,7 +3833,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                 if (validTargets.length > 0) {
                                     // Prefer ward target if exists and attacker can't ignore
-                                    const wardInValid = attackerIgnoresWard ? null : validTargets.find(({ c }) => c.passiveAbilities?.includes('WARD'));
+                                    const wardInValid = attackerIgnoresWard ? null : validTargets.find(({ c }) => c!.passiveAbilities?.includes('WARD'));
                                     if (wardInValid) {
                                         targetIndex = wardInValid.idx;
                                     } else {
