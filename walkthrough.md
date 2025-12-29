@@ -781,3 +781,129 @@ effects: [DRAW(1), SUMMON_CARD x2]
   - 3590-3616行目: handleHandMouseDown（手札展開優先、ロックチェック後）
   - 2582-2586行目: GAME_STATE受信時のロックリセット
   - 3171-3188行目: 安全ロック解除のuseEffect
+
+---
+
+## 修正日
+2025年12月29日（せんかオーラ効果の仕様修正）
+
+## 修正内容
+
+### クレイジー・ナックラーズ等で召喚されるナックラーに疾走が付かないように修正
+
+#### 問題
+- 「クレイジー・ナックラーズ」の効果で場に出た「しゑこ」が疾走を持っていた
+- この効果で場に出る白ツバキとしゑこは普通の効果（突進）のみを持つはずだった
+
+#### 原因
+- 「せんか」の効果が「オーラ」として実装されており、せんかが場にいる間、新しく召喚されるナックラーすべてに疾走を付与していた
+- SUMMON_CARD と PLAY_CARD の両方で、せんかが場にいるかチェックして疾走を付与するロジックがあった
+
+#### 正しい仕様
+- せんかのファンファーレ効果は「自分のナックラーすべては[疾走]を得る」
+- これは「ファンファーレ発動時に場にいるナックラー」にのみ適用される
+- **後から召喚されるナックラーには疾走は付与されない**
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 1522-1534行目（SUMMON_CARD内）: せんかオーラチェックを削除、コメントに仕様を明記
+  - 2223-2236行目（PLAY_CARD内）: せんかオーラチェックを削除、コメントに仕様を明記
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1522-1524行目: SUMMON_CARDのせんか効果コメント（オーラ削除済み）
+  - 2223-2225行目: PLAY_CARDのせんか効果コメント（オーラ削除済み）
+  - 44-46行目: せんかのファンファーレ効果（GRANT_PASSIVEでSTORM付与）はそのまま維持
+
+---
+
+## 修正日
+2025年12月29日（通信対戦・ターン終了二重dispatch問題修正）
+
+## 修正内容
+
+### 通信対戦で手札が展開できなくなる問題の根本原因修正
+
+#### 問題
+- クライアント側（JOIN）で手札が展開できなくなる
+- ログ分析により、リモートのEND_TURNを受信した直後にローカルでもEND_TURNがdispatchされ、ターンが二重に切り替わっていた
+
+#### 原因分析
+```
+1. クライアントがHOSTのEND_TURNを受信
+2. ターンがクライアント側（p2）に切り替わる
+3. handleEndTurnが何らかの理由で呼ばれる（タイムアウト待機中だった可能性）
+4. 3秒のタイムアウト後、END_TURNがdispatchされる
+5. ターンが再びHOST側（p1）に戻る
+6. クライアントは自分のターンではないため操作不能に
+```
+
+#### 対策
+1. **isEndingTurnRefの追加**: 非同期処理中も正確に状態をチェックできるようにrefを追加
+2. **ターン状態の事前キャプチャ**: handleEndTurn開始時のturnCountとactivePlayerIdを記録
+3. **待機中のターン変更検出**: waitForAllProcessing内でターン状態をチェックし、変更があれば即座にabort
+4. **dispatch前の再チェック**: END_TURNをdispatchする前にターン状態が変わっていないか再確認
+
+#### 修正箇所
+- `game/src/screens/GameScreen.tsx`
+  - 4421-4515行目: handleEndTurnを大幅に修正
+    - isEndingTurnRefを追加（4423行目）
+    - turnCountAtStart, activePlayerAtStartをキャプチャ（4440-4441行目）
+    - 待機中のターン変更チェック（4470-4475行目）
+    - dispatch前の再チェック（4498-4508行目）
+
+#### 修正後のhandleEndTurnロジック
+```
+1. gameState.activePlayerId !== currentPlayerId → return (自分のターンではない)
+2. isEndingTurnRef.current === true → return (既にターン終了処理中)
+3. 現在のturnCountとactivePlayerIdをキャプチャ
+4. waitForAllProcessing開始
+   - 待機中にターン状態が変わったら即座にfalseを返してabort
+5. waitForAllProcessing完了後、ターン状態を再チェック
+   - 変わっていたらdispatchせずにreturn
+6. END_TURNをdispatch
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 4421-4515行目: handleEndTurn（ターン状態チェック強化版）
+  - 4423行目: isEndingTurnRef
+  - 4440-4441行目: ターン状態キャプチャ
+  - 4470-4475行目: 待機中ターン変更検出
+  - 4498-4508行目: dispatch前再チェック
+
+---
+
+## 修正日
+2025年12月30日（カードバランス調整）
+
+## 修正内容
+
+### 1. あじゃのカード変更
+
+#### 変更内容
+- **スタッツ変更**: 4/5 → 5/5
+- **効果変更**: 「相手のフォロワー1体を破壊する」→「ランダムな相手のフォロワー1体を破壊する」
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 220-234行目: あじゃのカード定義
+    - attack: 4 → 5
+    - DESTROY, targetType: 'SELECT_FOLLOWER' → RANDOM_DESTROY, value: 1
+    - description更新
+
+### 2. ありすのカード変更
+
+#### 変更内容
+- **進化時効果変更**: 「相手のフォロワー1体に2ダメージ」→「ランダムな相手のフォロワー2体に2ダメージ」
+- ファンファーレと進化時が同じ効果になった
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 597-617行目: ありすのカード定義
+    - EVOLVE effects: DAMAGE, SELECT_FOLLOWER → RANDOM_DAMAGE, value: 2, value2: 2
+    - description更新
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 220-234行目: あじゃ（5/5、ランダム破壊）
+  - 597-617行目: ありす（ファンファーレ・進化時ともにランダム2体2ダメージ）

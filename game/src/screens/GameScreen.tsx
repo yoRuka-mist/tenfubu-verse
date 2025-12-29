@@ -3159,10 +3159,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- AI Logic (Restored) ---
 
     // Reset card play lock when turn changes to player's turn
+    // Also reset isEndingTurn to prevent stale state from blocking next turn
     useEffect(() => {
         if (gameState.activePlayerId === currentPlayerId) {
             // Reset locks at the start of player's turn
-            console.log('[GameScreen] Player turn started - resetting card play lock');
+            console.log('[GameScreen] Player turn started - resetting card play lock and ending turn state');
             cardPlayLockRef.current = false;
             lastPlayedInstanceIdRef.current = null;
         }
@@ -4415,12 +4416,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- End Turn Handler with Wait ---
     const [isEndingTurn, setIsEndingTurn] = React.useState(false);
+    const isEndingTurnRef = React.useRef(false);
 
     const handleEndTurn = async () => {
-        if (gameState.activePlayerId !== currentPlayerId) return;
-        if (isEndingTurn) return; // Already ending turn
+        // CRITICAL: Check using ref for accurate async state
+        if (gameState.activePlayerId !== currentPlayerId) {
+            console.log('[handleEndTurn] Not my turn, ignoring');
+            return;
+        }
+        if (isEndingTurnRef.current) {
+            console.log('[handleEndTurn] Already ending turn, ignoring');
+            return; // Already ending turn
+        }
 
+        isEndingTurnRef.current = true;
         setIsEndingTurn(true);
+
+        // Capture the turn count at the start of the operation
+        const turnCountAtStart = gameStateRef.current.turnCount;
+        const activePlayerAtStart = gameStateRef.current.activePlayerId;
 
         // Wait for all animations and effects to complete
         const waitForAllProcessing = async () => {
@@ -4449,6 +4463,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             let consecutiveIdleCount = 0;
 
             while (waited < maxWait) {
+                // CRITICAL: Abort if turn has changed during wait (e.g., remote END_TURN received)
+                if (gameStateRef.current.turnCount !== turnCountAtStart ||
+                    gameStateRef.current.activePlayerId !== activePlayerAtStart) {
+                    console.log('[handleEndTurn] Turn changed during wait, aborting local END_TURN');
+                    return false; // Signal to abort
+                }
+
                 if (checkIdle()) {
                     consecutiveIdleCount++;
                     // Require 2 consecutive idle checks to confirm processing is done
@@ -4465,12 +4486,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (waited >= maxWait) {
                 console.warn('[handleEndTurn] Timeout waiting for processing to complete - forcing end turn');
             }
+            return true; // Signal to proceed
         };
 
-        await waitForAllProcessing();
+        const shouldProceed = await waitForAllProcessing();
+
+        // CRITICAL: Re-check turn state before dispatching
+        // This prevents double END_TURN when remote END_TURN is received during wait
+        if (!shouldProceed ||
+            gameStateRef.current.turnCount !== turnCountAtStart ||
+            gameStateRef.current.activePlayerId !== activePlayerAtStart ||
+            gameStateRef.current.activePlayerId !== currentPlayerId) {
+            console.log('[handleEndTurn] Turn state changed, aborting END_TURN dispatch');
+            isEndingTurnRef.current = false;
+            setIsEndingTurn(false);
+            return;
+        }
 
         // Now dispatch END_TURN
+        console.log('[handleEndTurn] Dispatching END_TURN');
         dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId });
+        isEndingTurnRef.current = false;
         setIsEndingTurn(false);
     };
 
@@ -4899,45 +4935,43 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <div style={{ position: 'absolute', bottom: -20 * scale, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
                     </div>
 
-                    {/* Opponent Hand & Graveyard Count - Top Right */}
-                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 15 * scale, zIndex: 50 }}>
-                        {/* Opponent Hand Count */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none' }}>
-                            <div style={{ fontSize: '1.2rem' }}>🃏</div>
-                            <div style={{
-                                background: 'linear-gradient(135deg, rgba(74, 25, 44, 0.8), rgba(45, 26, 32, 0.9))',
-                                padding: '3px 8px',
-                                borderRadius: 6,
-                                color: '#f0b8c4',
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold',
-                                border: '1px solid rgba(116, 42, 58, 0.5)'
-                            }}>
-                                手札 {opponent.hand.length}
-                            </div>
+                    {/* Opponent Hand & Graveyard Count - Top Right (墓地の近くに手札を配置) */}
+                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 10, zIndex: 50, pointerEvents: 'none' }}>
+                        {/* Opponent Hand Icon - Stacked Cards (自分の手札アイコンと同じスタイル) */}
+                        <div style={{ position: 'relative', width: 32, height: 40 }}>
+                            <div style={{ position: 'absolute', inset: 0, background: '#4a192c', borderRadius: 3, border: '1px solid #742a3a', transform: 'rotate(-15deg) translate(-4px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#3d1525', borderRadius: 3, border: '1px solid #742a3a', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#2d1a20', borderRadius: 3, border: '1px solid #8b3a4a', transform: 'rotate(5deg)' }} />
                         </div>
-                        {/* Opponent Hand Cards */}
-                        <div style={{ display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right' }}>
-                            {opponent.hand.map((_, i) => (
-                                <div key={i} style={{
-                                    width: 80 * scale, height: 110 * scale,
-                                    background: 'linear-gradient(135deg, #4a192c 0%, #2d1a20 100%)',
-                                    border: '1px solid #742a3a', borderRadius: 6,
-                                    marginLeft: i > 0 ? -50 * scale : 0, boxShadow: '0 4px 6px rgba(0,0,0,0.5)'
-                                }}></div>
-                            ))}
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(74, 25, 44, 0.8), rgba(45, 26, 32, 0.9))',
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            color: '#f0b8c4',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            border: '1px solid rgba(116, 42, 58, 0.5)',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                        }}>
+                            手札 {opponent.hand.length}
                         </div>
                         {/* Opponent Graveyard Count */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none' }}>
-                            <div style={{ fontSize: '1.2rem', filter: 'grayscale(50%)' }}>💀</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
                             <div style={{
-                                background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.6), rgba(76, 29, 149, 0.7))',
-                                padding: '3px 8px',
+                                fontSize: '1.2rem',
+                                filter: 'drop-shadow(0 0 2px rgba(128, 90, 213, 0.6)) grayscale(30%)'
+                            }}>
+                                💀
+                            </div>
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.7), rgba(76, 29, 149, 0.8))',
+                                padding: '4px 10px',
                                 borderRadius: 6,
                                 color: '#c4b5fd',
-                                fontSize: '0.8rem',
+                                fontSize: '0.85rem',
                                 fontWeight: 'bold',
-                                border: '1px solid rgba(167, 139, 250, 0.3)'
+                                border: '1px solid rgba(167, 139, 250, 0.4)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
                             }}>
                                 墓地 {opponent.graveyard.length}
                             </div>

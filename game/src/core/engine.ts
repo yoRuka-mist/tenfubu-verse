@@ -218,8 +218,8 @@ const MOCK_CARDS: Card[] = [
 
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
-        attack: 4, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護]を得る。',
+        attack: 5, health: 5,
+        description: 'ファンファーレ：相手のリーダーに3ダメージ。ランダムな相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護]を得る。',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -228,7 +228,7 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'DAMAGE', value: 3, targetType: 'OPPONENT' },
-                    { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
+                    { type: 'RANDOM_DESTROY', value: 1 },
                     { type: 'RANDOM_BOUNCE', value: 1 }
                 ]
             },
@@ -596,7 +596,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 'c_alice', name: 'ありす', cost: 3, attack: 1, health: 1, type: 'FOLLOWER',
-        description: 'ファンファーレ：ランダムな相手のフォロワー2体に2ダメージ。\n進化時：相手のフォロワー1体に2ダメージ。',
+        description: 'ファンファーレ：ランダムな相手のフォロワー2体に2ダメージ。\n進化時：ランダムな相手のフォロワー2体に2ダメージ。',
         imageUrl: '/cards/alice.png',
         evolvedImageUrl: '/cards/alice_2.png',
         attackEffectType: 'FIRE',
@@ -610,7 +610,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'EVOLVE',
                 effects: [
-                    { type: 'DAMAGE', value: 2, targetType: 'SELECT_FOLLOWER' }
+                    { type: 'RANDOM_DAMAGE', value: 2, value2: 2, targetType: 'OPPONENT' }
                 ]
             }
         ]
@@ -1519,19 +1519,8 @@ function processSingleEffect(
                         passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined
                     };
 
-                    // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
-                    // Note: Check by name since card.id is overwritten during deck building (e.g., p1_c0)
-                    const hasSenkaOnBoard = player.board.some(c => c && c.name === 'せんか');
-                    console.log(`[SUMMON] Senka aura check: hasSenka=${hasSenkaOnBoard}, newCard=${newCard.name}, tags=${newCard.tags}, id=${newCard.id}`);
-                    if (hasSenkaOnBoard && newCard.tags?.includes('Knuckler') && newCard.name !== 'せんか') {
-                        if (!newCard.passiveAbilities) newCard.passiveAbilities = [];
-                        if (!newCard.passiveAbilities.includes('STORM')) {
-                            newCard.passiveAbilities.push('STORM');
-                            newCard.canAttack = true;
-                            newState.logs.push(`${newCard.name} はせんかの効果で疾走を得た`);
-                            console.log(`[SUMMON] STORM granted to ${newCard.name}`);
-                        }
-                    }
+                    // Note: せんかのオーラ効果は削除。ファンファーレ時に場にいるナックラーにのみ疾走を付与する仕様。
+                    // 後から召喚されるナックラーには疾走は付与されない。
 
                     player.board.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を場に出した`);
@@ -2231,20 +2220,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     newFollower.canAttack = true;
                 }
 
-                // CRITICAL: Check for Senka aura - grant STORM to Knuckler followers
-                // Note: Check by name since card.id is overwritten during deck building (e.g., p1_c0)
-                const hasSenkaOnBoard = player.board.some(c => c && c.name === 'せんか');
-                console.log(`[PLAY_CARD] Senka aura check: hasSenka=${hasSenkaOnBoard}, newFollower=${newFollower.name}, tags=${newFollower.tags}, id=${newFollower.id}`);
-                if (hasSenkaOnBoard && newFollower.tags?.includes('Knuckler') && newFollower.name !== 'せんか') {
-                    // Grant STORM if not already present
-                    if (!newFollower.passiveAbilities) newFollower.passiveAbilities = [];
-                    if (!newFollower.passiveAbilities.includes('STORM')) {
-                        newFollower.passiveAbilities.push('STORM');
-                        newFollower.canAttack = true;
-                        newState.logs.push(`${newFollower.name} はせんかの効果で疾走を得た`);
-                        console.log(`[PLAY_CARD] STORM granted to ${newFollower.name}`);
-                    }
-                }
+                // Note: せんかのオーラ効果は削除。ファンファーレ時に場にいるナックラーにのみ疾走を付与する仕様。
+                // 後から召喚されるナックラーには疾走は付与されない。
 
                 player.board.push(newFollower);
                 sourceCard = newFollower;
