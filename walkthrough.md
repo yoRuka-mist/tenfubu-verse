@@ -311,3 +311,321 @@
   - 772-797行目: 悠霞カード定義（ファンファーレ追加・進化時変更）
   - 813-826行目: 継承される力カード定義（効果変更）
   - 1614-1641行目: DESTROY_AND_GENERATE効果の処理実装
+
+---
+
+## 修正日
+2025年12月29日（バグ修正2）
+
+## 修正内容
+
+### RANDOM_DAMAGEの複数ヒット時のターゲット再選択
+
+#### 問題
+- 悠霞の進化時効果「ランダムなフォロワー1体に3ダメージ。これを2回行う」で1回目でフォロワーを倒した際、2回目が発動しない
+- 原因: 全てのエフェクトがキュー時に同じボード状態からターゲットを事前計算するため
+
+#### 対応
+- RANDOM_DAMAGEエフェクトはターゲットを事前計算せず、解決時に選択するように変更
+- RANDOM_DESTROYとRANDOM_SET_HPは従来通り事前計算を維持
+
+#### 修正箇所
+
+##### EVOLVEケースのエフェクトキュー処理（2456-2470行目付近）
+```typescript
+// 変更前
+if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+    const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
+    // 全ターゲット事前計算
+}
+
+// 変更後
+if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+    // RANDOM_DAMAGE is NOT pre-calculated here - it should select target at resolution time
+    // This allows each RANDOM_DAMAGE effect to re-select targets after previous effects resolve
+    const count = e.value || 1;
+    // RANDOM_DAMAGEを除外してターゲット事前計算
+}
+```
+
+##### PLAY_CARDケースのエフェクトキュー処理（2245-2259行目付近）
+- 同様にRANDOM_DAMAGEをターゲット事前計算から除外
+
+#### 動作確認
+- 悠霞の進化時に2回の独立したRANDOM_DAMAGEエフェクトが順番に解決される
+- 1回目のダメージでフォロワーが破壊されても、2回目は残りのフォロワーから新たにターゲットを選択
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 2245-2259行目: PLAY_CARDケースのRANDOM_DAMAGEターゲット事前計算除外
+  - 2456-2470行目: EVOLVEケースのRANDOM_DAMAGEターゲット事前計算除外
+  - 1435-1488行目: RANDOM_DAMAGE解決処理（変更なし、既に動的選択対応済み）
+
+---
+
+## 修正日
+2025年12月29日（バグ修正3）
+
+## 修正内容
+
+### 必殺(BANE)と超進化の「自分のターン中に破壊されない」効果の相互作用
+
+#### 問題
+- 超進化フォロワーと必殺持ちが戦闘すると相打ちになっていた
+- 超進化の「自分のターン中に破壊されない」効果は必殺を無効化するべき
+
+#### 動作仕様
+- 必殺はバリアや白ツバキの「交戦ダメージ無効」を貫通する
+- ただし、超進化フォロワーの「自分のターン中に破壊されない」効果は貫通できない
+- 自分のターン中に相手の必殺持ちから攻撃されても、超進化フォロワーは破壊されない
+
+#### 修正箇所
+
+##### 攻撃者の必殺処理（2646-2659行目付近）
+```typescript
+// 変更前
+if (attacker.passiveAbilities?.includes('BANE') && defender.currentHealth > 0) {
+    defender.currentHealth = 0;
+    newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
+}
+
+// 変更後
+const defOwnerId = isAttackerP1 ? 'p2' : 'p1';
+const defenderIsImmune = defender.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') &&
+                         newState.activePlayerId === defOwnerId;
+if (attacker.passiveAbilities?.includes('BANE') && defender.currentHealth > 0) {
+    if (defenderIsImmune) {
+        newState.logs.push(`　${defender.name} は自分のターン中は破壊されない！必殺を無効化！`);
+    } else {
+        defender.currentHealth = 0;
+        newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
+    }
+}
+```
+
+##### 防御者の必殺処理（2679-2692行目付近）
+```typescript
+// 変更前
+if (defender.passiveAbilities?.includes('BANE') && attacker.currentHealth > 0) {
+    attacker.currentHealth = 0;
+    newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
+}
+
+// 変更後
+const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
+const attackerIsImmune = attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') &&
+                         newState.activePlayerId === attOwnerId;
+if (defender.passiveAbilities?.includes('BANE') && attacker.currentHealth > 0) {
+    if (attackerIsImmune) {
+        newState.logs.push(`　${attacker.name} は自分のターン中は破壊されない！必殺を無効化！`);
+    } else {
+        attacker.currentHealth = 0;
+        newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
+    }
+}
+```
+
+#### 動作確認
+- 自分のターンに超進化フォロワーで相手の必殺持ちを攻撃 → 超進化フォロワーは破壊されない
+- 相手のターンに相手の必殺持ちがこちらの超進化フォロワーを攻撃 → 超進化フォロワーは破壊されない（自分のターン）
+- 自分のターンに必殺持ちで相手の超進化フォロワーを攻撃 → 超進化フォロワーは破壊される（相手のターン）
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 2646-2659行目: 攻撃者の必殺処理（防御者の超進化保護チェック追加）
+  - 2679-2692行目: 防御者の必殺処理（攻撃者の超進化保護チェック追加）
+
+---
+
+## 修正日
+2025年12月29日（バグ修正4）
+
+## 修正内容
+
+### BUFF_STATSにRANDOM_FOLLOWERケースを追加
+
+#### 問題
+- 刹那のラストワード「相手のランダムなフォロワーの攻撃力を-1する」が機能していなかった
+- 原因: BUFF_STATSの処理に`RANDOM_FOLLOWER`というtargetTypeのケースが存在しなかった
+
+#### 対応
+- BUFF_STATSの処理にRANDOM_FOLLOWERケースを追加（1867-1896行目）
+- 相手のボードからランダムにフォロワーを選択してバフ/デバフを適用
+- 攻撃力が0未満にならないように制限を追加
+- ログ表示でマイナス値も正しく表示（「-1/+0」形式）
+
+#### 修正箇所
+```typescript
+} else if (effect.targetType === 'RANDOM_FOLLOWER') {
+    // 相手のランダムなフォロワー1体にバフ/デバフ
+    const targetBoard = newState.players[opponentId].board;
+    const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+
+    if (validIndices.length > 0) {
+        const randomIdx = validIndices[Math.floor(rng() * validIndices.length)];
+        const c = targetBoard[randomIdx]!;
+        // バフ/デバフ適用処理...
+    }
+}
+```
+
+#### 補足：交戦相手の抽選対象について
+- 刹那が交戦で死亡した場合、ラストワードはpendingEffectsにキューされる
+- この時点で攻撃者はまだボード上にいるため、抽選対象に含まれる
+- これは意図した動作（ラストワードは死亡時に発動するため、交戦相手を対象にできる）
+- ただし、攻撃者も交戦で死亡した場合は、攻撃者の死亡処理が先に行われるため、抽選対象から外れる
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1867-1896行目: BUFF_STATSのRANDOM_FOLLOWERケース追加
+
+---
+
+## 修正日
+2025年12月29日（バグ修正5）
+
+## 修正内容
+
+### ラストワードの発動タイミング修正
+
+#### 問題
+- 刹那のラストワード「相手のランダムなフォロワーの攻撃力を-1する」が、交戦相手を抽選対象に含めていた
+- 原因: 防御者のラストワードがキューされた時点で、攻撃者がまだボード上にいたため
+
+#### 正しい動作
+- ラストワードは交戦の**全ての処理が終わった後**に発動する
+- 交戦で死亡したフォロワー（攻撃者・防御者両方）は、ラストワード発動時には既にボードから削除されているべき
+- 必殺で倒れた攻撃者も、ラストワードの抽選対象から外れる
+
+#### 修正前の処理順序
+1. 防御者死亡判定 → ラストワードキュー → 墓地移動 → ボードからnull
+2. 攻撃者死亡判定 → ラストワードキュー → 墓地移動 → ボードからnull
+
+#### 修正後の処理順序
+1. 防御者・攻撃者の死亡判定
+2. **両者をボードから削除**（墓地移動、ボードをnullに）
+3. **その後にラストワードをキュー**
+
+#### 修正箇所（2725-2756行目付近）
+```typescript
+// 4. 交戦終了後の死亡処理
+const defenderDied = defender.currentHealth <= 0;
+const attackerDied = attacker.currentHealth <= 0;
+
+// 4a. まず両者をボードから削除（ラストワードの抽選対象から外す）
+if (defenderDied) {
+    defPlayer.graveyard.push(defender);
+    defPlayer.board[targetIndex] = null;
+}
+if (attackerDied) {
+    attPlayer.graveyard.push(attacker);
+    attPlayer.board[attackerIndex] = null;
+}
+
+// 4b. 両者がボードから削除された後にラストワードをキュー
+if (defenderDied) {
+    triggerLastWordInAttack(defender, defOwnerId);
+}
+if (attackerDied) {
+    triggerLastWordInAttack(attacker, attOwnerId);
+}
+```
+
+#### 動作確認
+- 刹那（防御者）が必殺持ち攻撃者と交戦して両者死亡
+  → 両者がボードから削除
+  → 刹那のラストワードが発動
+  → 相手のランダムなフォロワーを抽選（死亡した攻撃者は対象外）
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 2725-2756行目: 交戦後の死亡処理順序を修正（ボード削除→ラストワードキュー）
+
+---
+
+## 修正日
+2025年12月29日（カードエフェクト変更）
+
+## 修正内容
+
+### attackEffectTypeの変更
+
+#### 変更内容
+- **遙（haruka）**: `attackEffectType: 'SUMI'` → `'SLASH'`
+- **刹那（setsuna）**: `attackEffectType: 'SLASH'` → `'SUMI'`
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 735行目: 遙のattackEffectTypeをSLASHに変更
+  - 761行目: 刹那のattackEffectTypeをSUMIに変更
+
+#### 理由
+- キャラクターのイメージに合わせたエフェクトの変更
+- 刹那は墨（SUMI）エフェクト、遙は斬撃（SLASH）エフェクトに統一
+
+---
+
+## 修正日
+2025年12月29日（カード説明文修正）
+
+## 修正内容
+
+### 隠密能力の説明文を明確化
+
+#### 問題
+- `[隠密]`の説明が不明確だった
+- 隠密には2つの効果がある：
+  1. 選択不可効果（一時的）：攻撃するまで相手に選ばれない
+  2. 守護無視効果（永続）：相手の守護を無視して攻撃できる
+- 攻撃して選択不可が解除されても、守護無視効果は残る
+
+#### 対応
+- 隠密を持つカードの説明文に「（攻撃まで選択不可・守護無視）」を追加
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 85行目: Yのdescription修正
+  - 731行目: 遙のdescription修正
+
+#### 変更後の表記
+```
+[隠密]（攻撃まで選択不可・守護無視）
+```
+
+---
+
+## 修正日
+2025年12月29日（カード名・効果変更）
+
+## 修正内容
+
+### 「百鬼夜行」→「疾きこと風の如く」へ変更
+
+#### 変更内容
+- **カード名**: 「百鬼夜行」 → 「疾きこと風の如く」
+- **イラスト**: hyakkiyako.png → hayakikoto.png
+- **効果追加**: 1ドロー効果を追加
+
+#### 変更前
+```
+name: '百鬼夜行'
+description: '「刹那」を2体場に出す。'
+imageUrl: '/cards/hyakkiyako.png'
+effects: [SUMMON_CARD x2]
+```
+
+#### 変更後
+```
+name: '疾きこと風の如く'
+description: 'カードを1枚引く。「刹那」を2体場に出す。'
+imageUrl: '/cards/hayakikoto.png'
+effects: [DRAW(1), SUMMON_CARD x2]
+```
+
+#### 修正箇所
+- `game/src/core/engine.ts`
+  - 798-813行目: カード定義変更
+  - 915行目: デッキテンプレートのコメント更新
+
+#### 備考
+- カードIDも`s_hyakkiyako`から`s_hayakikoto`に変更（管理しやすさのため）

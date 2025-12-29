@@ -82,7 +82,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_y', name: 'Y', cost: 6, type: 'FOLLOWER',
         attack: 3, health: 3,
-        description: '[隠密]\nファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。\n進化時：相手のフォロワーすべてに3ダメージ。',
+        description: '[隠密]（攻撃まで選択不可・守護無視）\nファンファーレ：相手のフォロワー1体に4ダメージ。相手のフォロワーすべてに2ダメージ。\n進化時：相手のフォロワーすべてに3ダメージ。',
         imageUrl: '/cards/y.png',
         evolvedImageUrl: '/cards/y_2.png',
         passiveAbilities: ['STEALTH'],
@@ -728,11 +728,11 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
+        description: '[隠密]（攻撃まで選択不可・守護無視）\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
         passiveAbilities: ['STEALTH'],
-        attackEffectType: 'SUMI',
+        attackEffectType: 'SLASH',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -758,7 +758,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/setsuna.png',
         evolvedImageUrl: '/cards/setsuna_2.png',
         passiveAbilities: ['STORM', 'BANE'],
-        attackEffectType: 'SLASH',
+        attackEffectType: 'SUMI',
         triggers: [
             {
                 trigger: 'LAST_WORD',
@@ -795,15 +795,16 @@ const MOCK_CARDS: Card[] = [
             }
         ]
     },
-    // --- 百鬼夜行 ---
+    // --- 疾きこと風の如く ---
     {
-        id: 's_hyakkiyako', name: '百鬼夜行', cost: 4, type: 'SPELL',
-        description: '「刹那」を2体場に出す。',
-        imageUrl: '/cards/hyakkiyako.png',
+        id: 's_hayakikoto', name: '疾きこと風の如く', cost: 4, type: 'SPELL',
+        description: 'カードを1枚引く。「刹那」を2体場に出す。',
+        imageUrl: '/cards/hayakikoto.png',
         triggers: [
             {
                 trigger: 'FANFARE',
                 effects: [
+                    { type: 'DRAW', value: 1 },
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' }
                 ]
@@ -911,7 +912,7 @@ const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_haruka', count: 3 },           // 遙
     { cardId: 'c_yuka', count: 3 },             // 悠霞
     { cardId: 'c_setsuna', count: 3 },          // 刹那
-    { cardId: 's_hyakkiyako', count: 3 },       // 百鬼夜行
+    { cardId: 's_hayakikoto', count: 3 },       // 疾きこと風の如く
     { cardId: 's_keishou', count: 1 },          // 継承される力
     { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
     { cardId: 'c_kasuga', count: 1 },           // かすが
@@ -1864,6 +1865,35 @@ function processSingleEffect(
 
                     newState.logs.push(`${c.name} は +${attackBuff}/+${healthBuff} された`);
                 }
+            } else if (effect.targetType === 'RANDOM_FOLLOWER') {
+                // 相手のランダムなフォロワー1体にバフ/デバフ
+                const targetBoard = newState.players[opponentId].board;
+                const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+
+                if (validIndices.length > 0) {
+                    // ランダム選択
+                    const randomIdx = validIndices[Math.floor(rng() * validIndices.length)];
+                    const c = targetBoard[randomIdx]!;
+
+                    if (!c.baseAttack) c.baseAttack = c.attack || 0;
+                    if (!c.baseHealth) c.baseHealth = c.health || 0;
+
+                    c.attack = (c.attack || 0) + attackBuff;
+                    c.currentAttack = (c.currentAttack || 0) + attackBuff;
+                    c.health = (c.health || 0) + healthBuff;
+                    c.maxHealth = (c.maxHealth || 0) + healthBuff;
+                    c.currentHealth = (c.currentHealth || 0) + healthBuff;
+
+                    // 攻撃力が0未満にならないように
+                    if (c.currentAttack < 0) c.currentAttack = 0;
+                    if (c.attack && c.attack < 0) c.attack = 0;
+
+                    const buffText = attackBuff >= 0 ? `+${attackBuff}` : `${attackBuff}`;
+                    const hpText = healthBuff >= 0 ? `+${healthBuff}` : `${healthBuff}`;
+                    newState.logs.push(`${c.name} は ${buffText}/${hpText} された`);
+                } else {
+                    newState.logs.push(`対象となるフォロワーがいません`);
+                }
             }
             break;
         }
@@ -2242,10 +2272,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
                     const selfPid = action.playerId;
 
-                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+                        // RANDOM_DAMAGE is NOT pre-calculated here - it should select target at resolution time
+                        // This allows each RANDOM_DAMAGE effect to re-select targets after previous effects resolve
                         const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
                         const targetBoard = newState.players[targetPid].board;
-                        const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
+                        const count = e.value || 1;
 
                         const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                         for (let i = validIndices.length - 1; i > 0; i--) {
@@ -2453,10 +2485,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
                 const selfPid = action.playerId;
 
-                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
+                    // RANDOM_DAMAGE is NOT pre-calculated here - it should select target at resolution time
+                    // This allows each RANDOM_DAMAGE effect to re-select targets after previous effects resolve
                     const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
                     const targetBoard = newState.players[targetPid].board;
-                    const count = (e.type === 'RANDOM_DAMAGE') ? (e.value2 || 1) : (e.value || 1);
+                    const count = e.value || 1;
 
                     const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                     for (let i = validIndices.length - 1; i > 0; i--) {
@@ -2641,9 +2675,17 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 // 必殺(BANE)チェック: 攻撃者が必殺を持っている場合、即死（効果による破壊扱い）
                 // 白ツバキの無効化やバリアを貫通する（ダメージが0でも発動）
+                // ただし、超進化フォロワーの「自分のターン中に破壊されない」効果は貫通できない
+                const defOwnerId = isAttackerP1 ? 'p2' : 'p1';
+                const defenderIsImmune = defender.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') &&
+                                         newState.activePlayerId === defOwnerId;
                 if (attacker.passiveAbilities?.includes('BANE') && defender.currentHealth > 0) {
-                    defender.currentHealth = 0;
-                    newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
+                    if (defenderIsImmune) {
+                        newState.logs.push(`　${defender.name} は自分のターン中は破壊されない！必殺を無効化！`);
+                    } else {
+                        defender.currentHealth = 0;
+                        newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
+                    }
                 }
 
                 let counterDamage = defender.currentAttack;
@@ -2666,32 +2708,52 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 // 必殺(BANE)チェック: 防御者が必殺を持っている場合、即死（効果による破壊扱い）
                 // バリアを貫通する（ダメージが0でも発動）
+                // ただし、超進化フォロワーの「自分のターン中に破壊されない」効果は貫通できない
+                const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
+                const attackerIsImmune = attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') &&
+                                         newState.activePlayerId === attOwnerId;
                 if (defender.passiveAbilities?.includes('BANE') && attacker.currentHealth > 0) {
-                    attacker.currentHealth = 0;
-                    newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
+                    if (attackerIsImmune) {
+                        newState.logs.push(`　${attacker.name} は自分のターン中は破壊されない！必殺を無効化！`);
+                    } else {
+                        attacker.currentHealth = 0;
+                        newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
+                    }
                 }
 
                 // 重複定義削除: triggerLastWordInAttackは上で定義済み
 
-                if (defender.currentHealth <= 0) {
-                    defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
-                    const defOwnerId = isAttackerP1 ? 'p2' : 'p1';
-                    triggerLastWordInAttack(defender, defOwnerId);
+                // 4. 交戦終了後の死亡処理
+                // ラストワードは交戦の全処理が終わってからキューする
+                // そのため、先に両者をボードから削除してからラストワードをキューする
+                const defenderDied = defender.currentHealth <= 0;
+                const attackerDied = attacker.currentHealth <= 0;
+
+                // 4a. まず両者をボードから削除（ラストワードの抽選対象から外す）
+                if (defenderDied) {
+                    defender.currentHealth = Math.min(0, defender.currentHealth);
                     defPlayer.graveyard.push(defender);
                     defPlayer.board[targetIndex] = null;
                     newState.logs.push(`　${defender.name} は破壊されました`);
                 }
-            }
 
-            // 4. Resolve Attacker Death (Counter Damage)
-            if (attacker.currentHealth <= 0) {
-                attacker.currentHealth = Math.min(0, attacker.currentHealth); // Ensure <= 0
-                const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
-                // triggerLastWordInAttackは上で定義済み - 再利用
-                triggerLastWordInAttack(attacker, attOwnerId);
-                attPlayer.graveyard.push(attacker);
-                attPlayer.board[attackerIndex] = null;
-                newState.logs.push(`　${attacker.name} は破壊されました`);
+                if (attackerDied) {
+                    attacker.currentHealth = Math.min(0, attacker.currentHealth);
+                    attPlayer.graveyard.push(attacker);
+                    attPlayer.board[attackerIndex] = null;
+                    newState.logs.push(`　${attacker.name} は破壊されました`);
+                }
+
+                // 4b. 両者がボードから削除された後にラストワードをキュー
+                if (defenderDied) {
+                    const defOwnerId = isAttackerP1 ? 'p2' : 'p1';
+                    triggerLastWordInAttack(defender, defOwnerId);
+                }
+
+                if (attackerDied) {
+                    const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
+                    triggerLastWordInAttack(attacker, attOwnerId);
+                }
             }
 
             // 5. Commit Updates - Create COMPLETELY fresh state
