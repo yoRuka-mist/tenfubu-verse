@@ -1534,8 +1534,18 @@ function processSingleEffect(
                         hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
                     };
 
-                    // Note: せんかのオーラ効果は削除。ファンファーレ時に場にいるナックラーにのみ疾走を付与する仕様。
-                    // 後から召喚されるナックラーには疾走は付与されない。
+                    // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
+                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities?.includes('STORM')) {
+                        const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                        if (hasSenkaOnBoard) {
+                            if (!newCard.passiveAbilities) {
+                                newCard.passiveAbilities = [];
+                            }
+                            newCard.passiveAbilities.push('STORM');
+                            newCard.canAttack = true;
+                            newState.logs.push(`${template.name} は せんか の効果で疾走を得た！`);
+                        }
+                    }
 
                     player.board.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を場に出した`);
@@ -1565,12 +1575,23 @@ function processSingleEffect(
                         passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
                         hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
                     };
-                    // 突進を付与
-                    if (!newCard.passiveAbilities!.includes('RUSH')) {
+                    // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与（突進より優先）
+                    let grantedStormFromSenka = false;
+                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
+                        const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                        if (hasSenkaOnBoard) {
+                            newCard.passiveAbilities!.push('STORM');
+                            grantedStormFromSenka = true;
+                            newState.logs.push(`${template.name} は せんか の効果で疾走を得た！`);
+                        }
+                    }
+
+                    // 疾走が付与されなかった場合のみ突進を付与
+                    if (!grantedStormFromSenka && !newCard.passiveAbilities!.includes('RUSH')) {
                         newCard.passiveAbilities!.push('RUSH');
                     }
                     player.board.push(newCard);
-                    newState.logs.push(`${player.name} は ${template.name} を場に出した（突進付与）`);
+                    newState.logs.push(`${player.name} は ${template.name} を場に出した${grantedStormFromSenka ? '' : '（突進付与）'}`);
                 }
             }
             break;
@@ -2237,8 +2258,18 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     newFollower.canAttack = true;
                 }
 
-                // Note: せんかのオーラ効果は削除。ファンファーレ時に場にいるナックラーにのみ疾走を付与する仕様。
-                // 後から召喚されるナックラーには疾走は付与されない。
+                // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
+                if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities?.includes('STORM')) {
+                    const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                    if (hasSenkaOnBoard) {
+                        if (!newFollower.passiveAbilities) {
+                            newFollower.passiveAbilities = [];
+                        }
+                        newFollower.passiveAbilities.push('STORM');
+                        newFollower.canAttack = true;
+                        newState.logs.push(`${newFollower.name} は せんか の効果で疾走を得た！`);
+                    }
+                }
 
                 player.board.push(newFollower);
                 sourceCard = newFollower;

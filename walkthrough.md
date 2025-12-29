@@ -1566,3 +1566,47 @@ case 'RANDOM_DAMAGE': {
   - 1444-1461行目: applyDamageToTargetヘルパー関数
   - 1463行目: alreadyTargetedIds（重複ターゲット防止用Set）
   - 1473-1489行目: 死亡カード検出時の再抽選ロジック
+
+---
+
+## 修正日
+2025年12月30日
+
+## 修正内容
+
+### 21. せんかのオーラ効果復活（ナックラー疾走付与）
+- **対象ファイル**: `game/src/core/engine.ts`
+- **問題**: せんかが場にいる状態で後からナックラーを出しても疾走が付与されない
+- **原因**: 以前の修正でせんかのオーラ効果が削除されていた（ファンファーレ時のみ付与する仕様に変更）
+- **対策**: 3箇所にオーラ効果を追加
+  1. PLAY_CARD処理（2240-2251行目）: 手札からナックラーをプレイ時にせんかがいれば疾走付与
+  2. SUMMON_CARD処理（1537-1548行目）: トークンとしてナックラーを召喚時にせんかがいれば疾走付与
+  3. SUMMON_CARD_RUSH処理（1578-1594行目）: 突進付与召喚時にナックラー+せんかがいれば疾走付与（突進より優先）
+
+#### 修正コード（PLAY_CARD）
+```typescript
+// せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
+if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities?.includes('STORM')) {
+    const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+    if (hasSenkaOnBoard) {
+        if (!newFollower.passiveAbilities) {
+            newFollower.passiveAbilities = [];
+        }
+        newFollower.passiveAbilities.push('STORM');
+        newFollower.canAttack = true;
+        newState.logs.push(`${newFollower.name} は せんか の効果で疾走を得た！`);
+    }
+}
+```
+
+#### 動作確認
+- せんかが場にいる状態でナックラーをプレイ → 疾走が付与され即座に攻撃可能
+- せんかが場にいない状態でナックラーをプレイ → 通常通り（疾走なし）
+- せんかの超進化時にトークンナックラーを召喚 → 疾走が付与される
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 34-57行目: c_senka_knuckler定義
+  - 1537-1548行目: SUMMON_CARD処理のオーラ効果チェック
+  - 1578-1594行目: SUMMON_CARD_RUSH処理のオーラ効果チェック（疾走>突進の優先度）
+  - 2240-2251行目: PLAY_CARD処理のオーラ効果チェック
