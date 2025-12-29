@@ -1438,3 +1438,57 @@ if (wardTarget !== -1) {
 1. AI攻撃ログの追加（デバッグ用）
 2. より高度な盤面評価（ターン先読み）
 3. コンボ認識（特定カード組み合わせの優先）
+
+---
+
+## 修正日
+2025年12月30日（ダメージ表記左上バグ修正）
+
+## 修正内容
+
+### ダメージ表記が画面左上に表示されるバグの修正
+
+#### 問題
+- 稀にダメージの赤文字が画面左上（0,0座標）に表示されることがあった
+- 再現条件が不明確で、毎回ではなく稀に発生
+
+#### 原因
+- カードが墓地に移動した際のダメージ表示処理（2307-2324行目）で：
+  1. まず `x: 0, y: 0` でダメージを配列に追加
+  2. その後に `refs[idx]` から座標を取得して更新
+  3. `refs[idx]` がnull（カードが既に削除されている等）の場合、座標が0,0のまま残る
+- コードコメントにも「Coords need fix」「Last Known Position needed」と記載されており、既知の問題だった
+
+#### 修正内容
+座標を先に取得し、有効な座標が取得できた場合のみダメージ表示を追加するように変更
+
+**修正箇所**: `game/src/screens/GameScreen.tsx` 2307-2320行目
+```typescript
+// 修正前
+if (damage > 0) {
+    newDamages.push({ ..., x: 0, y: 0, ... }); // 先に0,0で追加
+    const el = refs[idx];
+    if (el) {
+        // 後から座標を更新（elがnullなら0,0のまま）
+        newDamages[newDamages.length - 1].x = coords.x;
+        newDamages[newDamages.length - 1].y = coords.y;
+    }
+}
+
+// 修正後
+if (damage > 0) {
+    const el = refs[idx];
+    if (el) {
+        const coords = getScreenCoordsFromElement(el);
+        if (coords.x !== 0 || coords.y !== 0) {
+            // 座標が有効な場合のみ追加
+            newDamages.push({ ..., x: coords.x, y: coords.y, ... });
+        }
+    }
+    // elがnullまたは座標が0,0の場合はスキップ
+}
+```
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 2307-2320行目: 墓地移動時のダメージ表示処理（座標検証追加）
