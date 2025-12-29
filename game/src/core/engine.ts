@@ -699,7 +699,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yoruka', name: 'yoRuka', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
+        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 4：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
         imageUrl: '/cards/yoRuka.png',
         evolvedImageUrl: '/cards/yoRuka_2.png',
         attackEffectType: 'SUMI',
@@ -713,7 +713,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'LAST_WORD',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka' }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 4 }
                 ]
             },
             {
@@ -728,7 +728,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。\n超進化時：「刹那」を2体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
+        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
         passiveAbilities: ['STEALTH'],
@@ -737,13 +737,13 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'SUMMON_CARD_RUSH', targetCardId: 'c_yuka' }
+                    { type: 'SUMMON_CARD_RUSH', targetCardId: 'c_yuka' },
+                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' }
                 ]
             },
             {
                 trigger: 'SUPER_EVOLVE',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
                     { type: 'BUFF_STATS', value: 2, value2: 0, targetType: 'ALL_OTHER_FOLLOWERS', necromance: 6 }
                 ]
@@ -754,7 +754,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_setsuna', name: '刹那', cost: 3, type: 'FOLLOWER',
         attack: 1, health: 1,
-        description: '[疾走] [必殺]\nラストワード：1枚ドローする。墓地を1増やす。',
+        description: '[疾走] [必殺]\nラストワード：相手のランダムなフォロワーの攻撃力を-1する。墓地を1増やす。',
         imageUrl: '/cards/setsuna.png',
         evolvedImageUrl: '/cards/setsuna_2.png',
         passiveAbilities: ['STORM', 'BANE'],
@@ -763,7 +763,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'LAST_WORD',
                 effects: [
-                    { type: 'DRAW', value: 1 },
+                    { type: 'BUFF_STATS', value: -1, value2: 0, targetType: 'RANDOM_FOLLOWER' },
                     { type: 'ADD_GRAVEYARD', value: 1 }
                 ]
             }
@@ -773,17 +773,24 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuka', name: '悠霞', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 6,
-        description: '[守護] [オーラ] [必殺]\n進化時：相手のランダムなフォロワー1体に2ダメージ。これを2回行う。',
+        description: '[守護] [オーラ] [必殺]\nファンファーレ：「刹那」を1体場に出す。カードを1枚引く。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
         imageUrl: '/cards/yuka.png',
         evolvedImageUrl: '/cards/yuka_2.png',
         passiveAbilities: ['WARD', 'AURA', 'BANE'],
         attackEffectType: 'SHOT',
         triggers: [
             {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
+                    { type: 'DRAW', value: 1 }
+                ]
+            },
+            {
                 trigger: 'EVOLVE',
                 effects: [
-                    { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' },
-                    { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
+                    { type: 'RANDOM_DAMAGE', value: 3, value2: 1, targetType: 'OPPONENT' },
+                    { type: 'RANDOM_DAMAGE', value: 3, value2: 1, targetType: 'OPPONENT' }
                 ]
             }
         ]
@@ -806,13 +813,13 @@ const MOCK_CARDS: Card[] = [
     // --- 継承される力 ---
     {
         id: 's_keishou', name: '継承される力', cost: 9, type: 'SPELL',
-        description: '相手のフォロワー1体を破壊する。破壊したフォロワーを自分の場に出す。',
+        description: '相手のフォロワー1体を破壊する。破壊したフォロワーを自分の手札に加え、そのコストを-9する。',
         imageUrl: '/cards/keishou.png',
         triggers: [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'DESTROY_AND_STEAL', targetType: 'SELECT_FOLLOWER' }
+                    { type: 'DESTROY_AND_GENERATE', targetType: 'SELECT_FOLLOWER', value: -9 }
                 ]
             }
         ]
@@ -1090,18 +1097,18 @@ function processSingleEffect(
     }
 
     // ラストワード発動ヘルパー: カード破壊時にpendingEffectsに追加
+    // 新しい配列を作成してReactの変更検出とRESOLVE_EFFECTでの追加効果検出を確実にする
     const triggerLastWord = (deadCard: BoardCard, ownerId: string) => {
         const lastWordTrigger = deadCard.triggers?.find(t => t.trigger === 'LAST_WORD');
         if (lastWordTrigger) {
-            lastWordTrigger.effects.forEach(eff => {
-                newState.pendingEffects = newState.pendingEffects || [];
-                newState.pendingEffects.push({
-                    sourceCard: deadCard,
-                    effect: eff,
-                    sourcePlayerId: ownerId
-                });
-            });
+            const newEffects = lastWordTrigger.effects.map(eff => ({
+                sourceCard: deadCard,
+                effect: eff,
+                sourcePlayerId: ownerId
+            }));
+            newState.pendingEffects = [...(newState.pendingEffects || []), ...newEffects];
             newState.logs.push(`${deadCard.name} のラストワードが発動！`);
+            console.log(`[Engine] processSingleEffect: Last Word triggered for ${deadCard.name}. pendingEffects count: ${newState.pendingEffects.length}`);
         }
     };
 
@@ -1604,6 +1611,35 @@ function processSingleEffect(
             }
             break;
         }
+        case 'DESTROY_AND_GENERATE': {
+            // 相手フォロワーを破壊して手札に加える（コスト修正付き）
+            if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
+                const targetInfo = getBoardCardById(targetId);
+                if (targetInfo) {
+                    const { card, player: targetOwner, index: idx } = targetInfo;
+
+                    // ラストワードを発動させない（奪取なので）
+                    targetOwner.board[idx] = null;
+                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+
+                    // 手札に加えるカードを作成
+                    const myPlayer = newState.players[sourcePlayerId];
+                    const baseCardDef = MOCK_CARDS.find(c => c.id === card.id);
+                    if (baseCardDef) {
+                        const generatedCard: Card = {
+                            ...baseCardDef,
+                            instanceId: `generated_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
+                            baseCost: baseCardDef.cost,
+                            cost: Math.max(0, baseCardDef.cost + (effect.value || 0))
+                        };
+                        myPlayer.hand.push(generatedCard);
+                        const costChange = effect.value || 0;
+                        newState.logs.push(`${myPlayer.name} は ${generatedCard.name} を手札に加えた（コスト${costChange >= 0 ? '+' : ''}${costChange}）`);
+                    }
+                }
+            }
+            break;
+        }
         case 'RETURN_TO_HAND': {
             const oppBoard = newState.players[opponentId].board;
             let targetIdx = -1;
@@ -2043,8 +2079,17 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 (currentEffect as any).targetIds
             );
 
+            // processSingleEffect内でラストワード等の新しい効果が追加された可能性がある
+            // それらを残りの効果の後に追加する
+            const newlyAddedEffects = (processedState.pendingEffects || []).filter(
+                e => !newState.pendingEffects?.includes(e)
+            );
+            const finalPendingEffects = [...remainingEffects, ...newlyAddedEffects];
+
+            console.log(`[Engine] RESOLVE_EFFECT done. Remaining: ${remainingEffects.length}, NewlyAdded: ${newlyAddedEffects.length}, Final: ${finalPendingEffects.length}`);
+
             // Cleanup null board slots if no effects remain
-            if (remainingEffects.length === 0) {
+            if (finalPendingEffects.length === 0) {
                 Object.values(processedState.players).forEach(p => {
                     p.board = p.board.filter(Boolean);
                 });
@@ -2053,7 +2098,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             // Return completely new state object with updated pendingEffects
             return {
                 ...processedState,
-                pendingEffects: remainingEffects
+                pendingEffects: finalPendingEffects
             };
         }
 
@@ -2546,6 +2591,22 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const damage = attacker.currentAttack;
             console.log(`[Engine] Attack: ${attacker.name} (${damage}) -> Target (Leader? ${targetIsLeader}). DefHP before: ${defPlayer.hp}`);
 
+            // ラストワード発動ヘルパー（ATTACK内用）
+            // 新しい配列を作成してReactの変更検出を確実にする
+            const triggerLastWordInAttack = (deadCard: BoardCard, ownerId: string) => {
+                const lastWordTrigger = deadCard.triggers?.find(t => t.trigger === 'LAST_WORD');
+                if (lastWordTrigger) {
+                    const newEffects = lastWordTrigger.effects.map(eff => ({
+                        sourceCard: deadCard,
+                        effect: eff,
+                        sourcePlayerId: ownerId
+                    }));
+                    newState.pendingEffects = [...(newState.pendingEffects || []), ...newEffects];
+                    newState.logs.push(`${deadCard.name} のラストワードが発動！`);
+                    console.log(`[Engine] Last Word triggered for ${deadCard.name}. pendingEffects count: ${newState.pendingEffects.length}`);
+                }
+            };
+
             // 3. Resolve Damage
             if (targetIsLeader) {
                 const targetName = "相手リーダー";
@@ -2578,8 +2639,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 defender.currentHealth -= actualDamage;
 
-                // 必殺(BANE)チェック: 攻撃者が必殺を持っていてダメージを与えた場合、即死
-                if (attacker.passiveAbilities?.includes('BANE') && actualDamage > 0 && defender.currentHealth > 0) {
+                // 必殺(BANE)チェック: 攻撃者が必殺を持っている場合、即死（効果による破壊扱い）
+                // 白ツバキの無効化やバリアを貫通する（ダメージが0でも発動）
+                if (attacker.passiveAbilities?.includes('BANE') && defender.currentHealth > 0) {
                     defender.currentHealth = 0;
                     newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
                 }
@@ -2602,27 +2664,14 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 attacker.currentHealth -= counterDamage;
 
-                // 必殺(BANE)チェック: 防御者が必殺を持っていて反撃ダメージを与えた場合、即死
-                if (defender.passiveAbilities?.includes('BANE') && counterDamage > 0 && attacker.currentHealth > 0) {
+                // 必殺(BANE)チェック: 防御者が必殺を持っている場合、即死（効果による破壊扱い）
+                // バリアを貫通する（ダメージが0でも発動）
+                if (defender.passiveAbilities?.includes('BANE') && attacker.currentHealth > 0) {
                     attacker.currentHealth = 0;
                     newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
                 }
 
-                // ラストワード発動ヘルパー（ATTACK内用）
-                const triggerLastWordInAttack = (deadCard: BoardCard, ownerId: string) => {
-                    const lastWordTrigger = deadCard.triggers?.find(t => t.trigger === 'LAST_WORD');
-                    if (lastWordTrigger) {
-                        lastWordTrigger.effects.forEach(eff => {
-                            newState.pendingEffects = newState.pendingEffects || [];
-                            newState.pendingEffects.push({
-                                sourceCard: deadCard,
-                                effect: eff,
-                                sourcePlayerId: ownerId
-                            });
-                        });
-                        newState.logs.push(`${deadCard.name} のラストワードが発動！`);
-                    }
-                };
+                // 重複定義削除: triggerLastWordInAttackは上で定義済み
 
                 if (defender.currentHealth <= 0) {
                     defender.currentHealth = Math.min(0, defender.currentHealth); // Ensure <= 0
@@ -2638,21 +2687,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (attacker.currentHealth <= 0) {
                 attacker.currentHealth = Math.min(0, attacker.currentHealth); // Ensure <= 0
                 const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
-                // ラストワード発動ヘルパー（ATTACK内用）
-                const triggerLastWordInAttack = (deadCard: BoardCard, ownerId: string) => {
-                    const lastWordTrigger = deadCard.triggers?.find(t => t.trigger === 'LAST_WORD');
-                    if (lastWordTrigger) {
-                        lastWordTrigger.effects.forEach(eff => {
-                            newState.pendingEffects = newState.pendingEffects || [];
-                            newState.pendingEffects.push({
-                                sourceCard: deadCard,
-                                effect: eff,
-                                sourcePlayerId: ownerId
-                            });
-                        });
-                        newState.logs.push(`${deadCard.name} のラストワードが発動！`);
-                    }
-                };
+                // triggerLastWordInAttackは上で定義済み - 再利用
                 triggerLastWordInAttack(attacker, attOwnerId);
                 attPlayer.graveyard.push(attacker);
                 attPlayer.board[attackerIndex] = null;

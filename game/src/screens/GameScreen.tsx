@@ -159,6 +159,102 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
     );
 };
 
+// --- Buff Visual Effect (Yellow sparkle with +ATK/+HP numbers) ---
+const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y: number, atkBuff: number, hpBuff: number, onComplete: () => void }) => {
+    React.useEffect(() => {
+        const timer = setTimeout(onComplete, 1500);
+        return () => clearTimeout(timer);
+    }, [onComplete]);
+
+    return (
+        <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
+            <style>{`
+                @keyframes buffGlow {
+                    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+                    30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+                    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+                }
+                @keyframes buffNumberRise {
+                    0% { transform: translateY(0); opacity: 0; }
+                    20% { opacity: 1; }
+                    100% { transform: translateY(-40px); opacity: 0; }
+                }
+                @keyframes buffSparkle {
+                    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+                    50% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+                    100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+                }
+            `}</style>
+
+            {/* Core Glow - Yellow */}
+            <div style={{
+                position: 'absolute', left: 0, top: 0,
+                width: 150, height: 150,
+                background: 'radial-gradient(circle, rgba(255,230,100,0.9) 0%, rgba(255,200,50,0.4) 50%, transparent 80%)',
+                borderRadius: '50%',
+                transform: 'translate(-50%, -50%)',
+                animation: 'buffGlow 1.2s ease-out forwards',
+                filter: 'blur(8px)'
+            }} />
+
+            {/* Buff Numbers */}
+            <div style={{
+                position: 'absolute',
+                left: 0, top: -20,
+                display: 'flex',
+                gap: '20px',
+                transform: 'translateX(-50%)',
+                animation: 'buffNumberRise 1.2s ease-out forwards'
+            }}>
+                {/* Attack Buff */}
+                <div style={{
+                    fontSize: '28px',
+                    fontWeight: 'bold',
+                    color: '#ff6b6b',
+                    textShadow: '0 0 10px rgba(255,100,100,0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    fontFamily: 'Tamanegi, sans-serif'
+                }}>
+                    +{atkBuff}
+                </div>
+                {/* Separator */}
+                <div style={{
+                    fontSize: '28px',
+                    fontWeight: 'bold',
+                    color: '#ffd93d',
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                    fontFamily: 'Tamanegi, sans-serif'
+                }}>
+                    /
+                </div>
+                {/* HP Buff */}
+                <div style={{
+                    fontSize: '28px',
+                    fontWeight: 'bold',
+                    color: '#6bff6b',
+                    textShadow: '0 0 10px rgba(100,255,100,0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    fontFamily: 'Tamanegi, sans-serif'
+                }}>
+                    +{hpBuff}
+                </div>
+            </div>
+
+            {/* Sparkle particles */}
+            {[...Array(8)].map((_, i) => (
+                <div key={i} style={{
+                    position: 'absolute',
+                    left: Math.cos(i * Math.PI / 4) * 60,
+                    top: Math.sin(i * Math.PI / 4) * 60,
+                    width: 12, height: 12,
+                    background: '#ffd93d',
+                    borderRadius: '50%',
+                    boxShadow: '0 0 10px #ffd93d, 0 0 20px #ffd93d',
+                    animation: `buffSparkle 0.8s ease-out ${i * 0.1}s forwards`,
+                }} />
+            ))}
+        </div>
+    );
+};
+
 // --- Visual Effects ---
 const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
     // Sprite Configuration (Updated for 8x8 standardization)
@@ -1533,10 +1629,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, []);
 
     interface ActiveEffectState {
-        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE';
+        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE' | 'BUFF';
         x: number;
         y: number;
         key: number;
+        atkBuff?: number; // For BUFF type
+        hpBuff?: number;  // For BUFF type
     }
     const [activeEffects, setActiveEffects] = React.useState<ActiveEffectState[]>([]);
 
@@ -1604,6 +1702,41 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             x,
             y,
             key: Date.now() + Math.random()
+        }]);
+    };
+
+    // Buff effect with attack and HP values
+    const playBuffEffect = (targetPlayerId: string, targetIndex: number, atkBuff: number, hpBuff: number, targetInstanceId?: string) => {
+        let x = window.innerWidth / 2;
+        let y = window.innerHeight / 2;
+
+        const isOpponentTarget = targetPlayerId === opponentPlayerId;
+        const refs = isOpponentTarget ? opponentBoardRefs : playerBoardRefs;
+        const visualBoard = isOpponentTarget ? visualOpponentBoardRef.current : visualPlayerBoardRef.current;
+
+        let visualIndex = targetIndex;
+        if (targetInstanceId) {
+            const foundIndex = visualBoard.findIndex((c: any) => c && c.instanceId === targetInstanceId);
+            if (foundIndex >= 0) {
+                visualIndex = foundIndex;
+            }
+        }
+
+        const el = refs.current[visualIndex];
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            const gameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            x = gameCoords.x;
+            y = gameCoords.y;
+        }
+
+        setActiveEffects(prev => [...prev, {
+            type: 'BUFF' as const,
+            x,
+            y,
+            key: Date.now() + Math.random(),
+            atkBuff,
+            hpBuff
         }]);
     };
 
@@ -1714,14 +1847,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [bgmLoadedForClass, setBgmLoadedForClass] = React.useState<string | null>(null);
 
     React.useEffect(() => {
+        // Debug: Log pending effects state
+        console.log(`[PendingEffects] useEffect fired. isProcessingEffect=${isProcessingEffect}, pendingEffects.length=${gameState.pendingEffects?.length || 0}`);
+
         // If we're already busy with an animation, wait for the timeout/callback to clear it
-        if (isProcessingEffect) return;
+        if (isProcessingEffect) {
+            console.log('[PendingEffects] Early return: isProcessingEffect=true');
+            return;
+        }
 
         if (gameState.pendingEffects && gameState.pendingEffects.length > 0) {
             const current = gameState.pendingEffects[0];
+            console.log(`[PendingEffects] Processing effect: ${current.effect.type} from ${current.sourceCard.name}`);
 
             // Prevent re-processing the exact same effect object.
-            if (processingHandledRef.current === current) return;
+            if (processingHandledRef.current === current) {
+                console.log('[PendingEffects] Early return: same effect already processed');
+                return;
+            }
             processingHandledRef.current = current;
 
             setIsProcessingEffect(true);
@@ -1760,7 +1903,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             }
 
-            // case B: Visual Effects (Damage, Destroy, Heal)
+            // case B: Visual Effects (Damage, Destroy, Heal, Buff)
             const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE';
             const isDestroyEffect = current.effect.type === 'DESTROY' || current.effect.type === 'RANDOM_DESTROY';
             const isHealEffect = current.effect.type === 'HEAL_LEADER';
@@ -1768,8 +1911,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const isSetMaxHpEffect = current.effect.type === 'SET_MAX_HP';
             const isBounceEffect = current.effect.type === 'RETURN_TO_HAND';
             const isSummonEffect = current.effect.type === 'SUMMON_CARD' || current.effect.type === 'SUMMON_CARD_RUSH';
+            const isBuffEffectType = current.effect.type === 'BUFF_STATS';
 
-            const delay = (isHealEffect || isBounceEffect || isSummonEffect) ? 600 : 50;
+            const delay = (isHealEffect || isBounceEffect || isSummonEffect || isBuffEffectType) ? 600 : 50;
 
             if (isDamageEffect) {
                 // Default effect type from card's attackEffectType
@@ -1852,6 +1996,43 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
                 playEffect('RAY', targetPid, -1); // -1 indicates leader
                 triggerShake();
+            }
+
+            // case C: Buff Effects (BUFF_STATS)
+            const isBuffEffect = current.effect.type === 'BUFF_STATS';
+            if (isBuffEffect) {
+                const atkBuff = current.effect.value ?? 0;
+                const hpBuff = current.effect.value2 ?? 0;
+                const targetPid = current.sourcePlayerId; // Buff typically applies to own followers
+
+                // Determine target based on targetType
+                if (current.effect.targetType === 'SELF') {
+                    // Buff self (the source card)
+                    const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    const vIdx = vBoard.findIndex(v => v?.instanceId === (current.sourceCard as any).instanceId);
+                    if (vIdx !== -1) {
+                        playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, (current.sourceCard as any).instanceId);
+                    }
+                } else if (current.effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                    // Buff all own followers except source
+                    const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    const board = gameState.players[targetPid].board;
+                    board.forEach((c) => {
+                        if (c && c.instanceId !== (current.sourceCard as any).instanceId) {
+                            const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
+                            if (vIdx !== -1) {
+                                playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
+                            }
+                        }
+                    });
+                } else if (current.targetId) {
+                    // Single target buff
+                    const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
+                    if (vIdx !== -1) {
+                        playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, current.targetId);
+                    }
+                }
             }
 
             if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
@@ -2997,6 +3178,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     while (!checkIdle() && waitCount < 60) { // 60 * 100ms = 6 seconds max wait
                         await new Promise(r => setTimeout(r, 100));
                         waitCount++;
+
+                        // pendingEffectsが滞留している場合、useEffectが発火していない可能性があるので
+                        // 強制的にRESOLVE_EFFECTをdispatchして処理を進める
+                        const state = gameStateRef.current;
+                        if (state.pendingEffects && state.pendingEffects.length > 0 && !isProcessingEffectRef.current) {
+                            console.log('[waitForIdle] Forcing RESOLVE_EFFECT for stuck pending effect');
+                            const current = state.pendingEffects[0];
+                            dispatch({
+                                type: 'RESOLVE_EFFECT',
+                                playerId: current.sourcePlayerId,
+                                payload: { targetId: current.targetId }
+                            });
+                            await new Promise(r => setTimeout(r, 200)); // 処理待ち
+                        }
                     }
                 };
 
@@ -5570,14 +5765,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* --- Active Effects (Now using cached coordinates) --- */}
                 {
                     activeEffects.map(effect => (
-                        <AttackEffect
-                            key={effect.key}
-                            type={effect.type}
-                            x={effect.x}
-                            y={effect.y}
-                            onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
-                            audioSettings={audioSettings}
-                        />
+                        effect.type === 'BUFF' ? (
+                            <BuffEffectVisual
+                                key={effect.key}
+                                x={effect.x}
+                                y={effect.y}
+                                atkBuff={effect.atkBuff ?? 0}
+                                hpBuff={effect.hpBuff ?? 0}
+                                onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
+                            />
+                        ) : (
+                            <AttackEffect
+                                key={effect.key}
+                                type={effect.type}
+                                x={effect.x}
+                                y={effect.y}
+                                onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
+                                audioSettings={audioSettings}
+                            />
+                        )
                     ))
                 }
 

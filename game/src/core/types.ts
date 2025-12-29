@@ -7,7 +7,7 @@ export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK
 export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'EVOLVE' | 'SUPER_EVOLVE' | 'END_OF_TURN' | 'START_OF_TURN'; // ファンファーレ, ラストワード, 進化時, 超進化時, ターン終了時, ターン開始時
 
 export type EffectType =
-    | 'DESTROY' | 'RANDOM_DESTROY' | 'DESTROY_SELF' | 'DESTROY_AND_STEAL'
+    | 'DESTROY' | 'RANDOM_DESTROY' | 'DESTROY_SELF' | 'DESTROY_AND_STEAL' | 'DESTROY_AND_GENERATE'
     | 'BOUNCE' | 'RANDOM_BOUNCE'
     | 'RETURN_TO_HAND'
     | 'DRAW' | 'ADD_GRAVEYARD'
