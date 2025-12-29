@@ -728,7 +728,7 @@ const MOCK_CARDS: Card[] = [
     // --- 遙 ---
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
-        attack: 4, health: 4,
+        attack: 2, health: 3,
         description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
