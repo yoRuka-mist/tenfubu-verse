@@ -3608,6 +3608,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Only allow drag (to play) on player's turn
         if (gameState.activePlayerId !== currentPlayerId) return;
 
+        // Block card play while pendingEffects are being processed
+        const currentState = gameStateRef.current;
+        if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
+            console.log("UI: Card play drag blocked - pendingEffects still processing");
+            return;
+        }
+
         const info = {
             sourceType: 'HAND' as const,
             sourceIndex: index,
@@ -3650,6 +3657,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Inspect - set selected card
         if (currentCard) setSelectedCard({ card: currentCard, owner: 'PLAYER' });
 
+        // Block attack drag while pendingEffects are being processed
+        if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
+            console.log("UI: Attack drag blocked - pendingEffects still processing");
+            return;
+        }
+
         if (currentState.activePlayerId === currentPlayerId && (currentCard as any)?.canAttack) {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             // Use Screen Coords directly
@@ -3675,6 +3688,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const handleEvolveMouseDown = (e: React.MouseEvent, useSepFlag: boolean = false) => {
         if (gameState.activePlayerId !== currentPlayerId) return;
         e.stopPropagation();
+
+        // Block evolve while pendingEffects are being processed
+        const currentState = gameStateRef.current;
+        if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
+            console.log("UI: Evolve drag blocked - pendingEffects still processing");
+            return;
+        }
 
         // Client-side visual check
         const isFirstPlayer = currentPlayerId === gameState.firstPlayerId;
@@ -3895,6 +3915,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // Check if we have valid attacker
                                 if (actualAttackerIndex < 0 || !attackerCard) {
                                     console.log("UI: Attack blocked - invalid attacker");
+                                    return;
+                                }
+
+                                // CRITICAL: Block attack while pendingEffects are being processed
+                                // This ensures spell effects (like SET_MAX_HP) resolve before attacks
+                                const currentState = gameStateRef.current;
+                                if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
+                                    console.log("UI: Attack blocked - pendingEffects still processing");
                                     return;
                                 }
 
