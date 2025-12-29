@@ -699,7 +699,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yoruka', name: 'yoRuka', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 4：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
+        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 6：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
         imageUrl: '/cards/yoRuka.png',
         evolvedImageUrl: '/cards/yoRuka_2.png',
         attackEffectType: 'SUMI',
@@ -713,7 +713,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'LAST_WORD',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 4 }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 6 }
                 ]
             },
             {
@@ -773,10 +773,10 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuka', name: '悠霞', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 6,
-        description: '[守護] [オーラ] [必殺]\nファンファーレ：「刹那」を1体場に出す。カードを1枚引く。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
+        description: '[守護] [オーラ]\nファンファーレ：「刹那」を1体場に出す。カードを1枚引く。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
         imageUrl: '/cards/yuka.png',
         evolvedImageUrl: '/cards/yuka_2.png',
-        passiveAbilities: ['WARD', 'AURA', 'BANE'],
+        passiveAbilities: ['WARD', 'AURA'],
         attackEffectType: 'SHOT',
         triggers: [
             {
@@ -2065,12 +2065,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
             }
 
-            // Reset Board Attack Status
+            // Reset Board Attack Status (召喚酔い解除)
+            // turnPlayed を -1 に設定することで、このターンに召喚されていないことを示す
+            // これにより、相手のターン中に召喚されたカードも自分のターン開始時に攻撃可能になる
             nextPlayer.board = nextPlayer.board.filter(Boolean);
             nextPlayer.board.forEach(c => {
                 if (c) {
                     c.canAttack = true;
                     c.attacksMade = 0; // Reset attacksMade for DOUBLE_ATTACK
+                    c.turnPlayed = -1; // Mark as not played this turn (summoning sickness cleared)
                 }
             });
 
