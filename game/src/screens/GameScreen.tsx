@@ -2305,23 +2305,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
 
                     if (damage > 0) {
-                        newDamages.push({ id: Date.now() + Math.random(), value: damage, x: 0, y: 0, color: '#e53e3e' }); // Coords need fix
-                        // Fix coords for graveyard item? Use Last known pos from board ref?
-                        // We can try to use refs index.
-                        // Board index might shift if cards removed.
-                        // But prevCard is from prev.board[idx].
-                        // If we use idx, refs[idx] might be current card at that slot (different card).
-                        // We need "Last Known Position".
-                        // Use stored refs?
+                        // Get coordinates first - only add damage if we can get valid coordinates
                         const isMe = pid === currentPlayerId;
                         const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                        const el = refs[idx]; // idx matches prevCard index if no shift... wait.
+                        const el = refs[idx];
                         if (el) {
                             const coords = getScreenCoordsFromElement(el);
-                            // Update the damage item pushed above
-                            newDamages[newDamages.length - 1].x = coords.x;
-                            newDamages[newDamages.length - 1].y = coords.y;
+                            // Only add damage if coordinates are valid (not 0,0)
+                            if (coords.x !== 0 || coords.y !== 0) {
+                                newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
+                            }
                         }
+                        // If el is null or coords are 0,0, skip adding damage text to avoid left-top corner display
                     }
                 }
             });
