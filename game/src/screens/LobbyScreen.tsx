@@ -148,10 +148,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 fontSize: '2.5rem',
                 marginBottom: '1rem',
                 textShadow: '0 0 10px #e94560',
-                fontFamily: 'Impact, sans-serif',
+                fontFamily: 'Tamanegi, sans-serif',
                 letterSpacing: '2px'
             }}>
-                {gameMode === 'HOST' ? 'WAITING FOR OPPONENT' : 'CONNECTING...'}
+                {gameMode === 'HOST' ? '対戦相手を待っています' : '接続中...'}
             </h1>
 
             {/* Status Display */}
@@ -167,7 +167,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
             }}>
                 {/* Error State */}
                 {error && (
-                    <div style={{ color: '#ff6b6b', fontSize: '1.2rem', textAlign: 'center' }}>
+                    <div style={{ color: '#ff6b6b', fontSize: '1.2rem', textAlign: 'center', fontFamily: 'Tamanegi, sans-serif' }}>
                         <p>接続エラーが発生しました</p>
                         <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>{error}</p>
                     </div>
@@ -184,7 +184,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             borderRadius: '50%',
                             animation: 'spin 1s linear infinite'
                         }} />
-                        <p style={{ opacity: 0.8 }}>
+                        <p style={{ opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
                             {gameMode === 'HOST' ? 'ルームを作成中...' : 'ルームに接続中...'}
                         </p>
                     </div>
@@ -199,7 +199,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             alignItems: 'center',
                             gap: '0.5rem'
                         }}>
-                            <p style={{ fontSize: '1rem', opacity: 0.7 }}>Room ID:</p>
+                            <p style={{ fontSize: '1rem', opacity: 0.7, fontFamily: 'Tamanegi, sans-serif' }}>ルームID:</p>
                             <div style={{
                                 fontSize: '2rem',
                                 fontFamily: 'monospace',
@@ -225,10 +225,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                 cursor: 'pointer',
                                 transition: 'all 0.3s',
                                 borderRadius: '4px',
-                                fontWeight: 'bold'
+                                fontWeight: 'bold',
+                                fontFamily: 'Tamanegi, sans-serif'
                             }}
                         >
-                            {copied ? '✓ Copied!' : 'Copy Room ID'}
+                            {copied ? '✓ コピーしました！' : 'ルームIDをコピー'}
                         </button>
 
                         <div style={{
@@ -246,7 +247,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                 borderRadius: '50%',
                                 animation: 'spin 1s linear infinite'
                             }} />
-                            <span>相手の接続を待っています...</span>
+                            <span style={{ fontFamily: 'Tamanegi, sans-serif' }}>相手の接続を待っています...</span>
                         </div>
                     </>
                 )}
@@ -262,7 +263,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             borderRadius: '50%',
                             animation: 'spin 1s linear infinite'
                         }} />
-                        <span>Room {targetRoomId} に接続中...</span>
+                        <span style={{ fontFamily: 'Tamanegi, sans-serif' }}>ルーム {targetRoomId} に接続中...</span>
                     </div>
                 )}
 
@@ -274,8 +275,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                         alignItems: 'center',
                         gap: '1rem'
                     }}>
-                        <p style={{ fontSize: '1.5rem', color: '#48bb78' }}>✓ Connected!</p>
-                        <p>ゲームを開始します...</p>
+                        <p style={{ fontSize: '1.5rem', color: '#48bb78', fontFamily: 'Tamanegi, sans-serif' }}>✓ 接続完了！</p>
+                        <p style={{ fontFamily: 'Tamanegi, sans-serif' }}>ゲームを開始します...</p>
                     </div>
                 )}
 
@@ -286,9 +287,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     background: 'rgba(255,255,255,0.1)',
                     borderRadius: '4px',
                     fontSize: '0.9rem',
-                    opacity: 0.7
+                    opacity: 0.7,
+                    fontFamily: 'Tamanegi, sans-serif'
                 }}>
-                    クラス: {playerClass === 'SENKA' ? 'せんか' : 'あじゃ'}
+                    クラス: {playerClass === 'SENKA' ? 'せんか' : playerClass === 'AJA' ? 'あじゃ' : 'yoRuka'}
                 </div>
             </div>
 
@@ -304,7 +306,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     cursor: 'pointer',
                     transition: 'all 0.3s',
                     borderRadius: '4px',
-                    marginTop: '1rem'
+                    marginTop: '1rem',
+                    fontFamily: 'Tamanegi, sans-serif'
                 }}
                 onMouseOver={(e) => {
                     e.currentTarget.style.color = '#fff';
@@ -315,7 +318,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     e.currentTarget.style.borderColor = '#888';
                 }}
             >
-                ← Back to Title
+                ← タイトルに戻る
             </button>
 
             {/* CSS for spinner animation */}

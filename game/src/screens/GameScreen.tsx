@@ -1891,10 +1891,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             setAnimatingCard(null);
                             setIsProcessingEffect(false);
                             isProcessingEffectRef.current = false;
-                            // CPU mode: process all effects locally
-                            // Online mode: only source player sends RESOLVE_EFFECT to network
-                            if (gameMode === 'CPU' || current.sourcePlayerId === currentPlayerId) {
-                                dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+                            // Online mode synchronization:
+                            // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
+                            // - JOIN waits for state sync from HOST
+                            if (gameMode === 'CPU' || gameMode === 'HOST') {
+                                dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+
+                                if (gameMode === 'HOST' && connected && adapter) {
+                                    setTimeout(() => {
+                                        const updatedState = gameStateRef.current;
+                                        adapter.send({ type: 'GAME_STATE', payload: updatedState });
+                                    }, 50);
+                                }
                             }
                             effectTimeoutRef.current = null;
                         }, 600);
@@ -2046,11 +2054,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const postActionDelay = isDamageOrDestroy ? 1000 : 0;
 
             effectTimeoutRef.current = setTimeout(() => {
-                // CPU mode: process all effects locally
-                // Online mode: only source player sends RESOLVE_EFFECT to network
-                if (gameMode === 'CPU' || current.sourcePlayerId === currentPlayerId) {
-                    dispatchAndSend({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+                // Online mode synchronization:
+                // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
+                // - JOIN waits for state sync from HOST to avoid RNG desync
+                if (gameMode === 'CPU' || gameMode === 'HOST') {
+                    // HOST/CPU: dispatch locally and send updated state to network
+                    dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+
+                    // Send updated state to JOIN after processing
+                    if (gameMode === 'HOST' && connected && adapter) {
+                        // Use setTimeout to ensure dispatch is processed first
+                        setTimeout(() => {
+                            const updatedState = gameStateRef.current;
+                            adapter.send({ type: 'GAME_STATE', payload: updatedState });
+                        }, 50);
+                    }
                 }
+                // JOIN mode: don't dispatch locally - wait for GAME_STATE from HOST
+                // The GAME_STATE message handler will update our state
 
                 if (postActionDelay > 0) {
                     effectTimeoutRef.current = setTimeout(() => {
@@ -2072,7 +2093,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 effectTimeoutRef.current = null;
             }
         }
-    }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId]);
+    }, [gameState.pendingEffects, isProcessingEffect, currentPlayerId, opponentPlayerId, gameMode, connected, adapter]);
 
     // Turn Notification Check
     React.useEffect(() => {
@@ -2549,9 +2570,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 return;
             }
 
-            // GAME_STATE: Full state sync (legacy support)
+            // GAME_STATE: Full state sync from HOST
+            // JOIN relies on this for pendingEffects resolution to avoid RNG desync
             if (msg.type === 'GAME_STATE') {
+                console.log('[GameScreen] JOIN: Received GAME_STATE sync from HOST');
                 dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                // Reset processing flag since state is now synced from HOST
+                setIsProcessingEffect(false);
+                isProcessingEffectRef.current = false;
+                processingHandledRef.current = null;
                 return;
             }
 
@@ -4820,6 +4847,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     {/* Opponent Hand & Graveyard Count - Top Right */}
                     <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 15 * scale, zIndex: 50 }}>
+                        {/* Opponent Hand Count */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none' }}>
+                            <div style={{ fontSize: '1.2rem' }}>🃏</div>
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(74, 25, 44, 0.8), rgba(45, 26, 32, 0.9))',
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                color: '#f0b8c4',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                border: '1px solid rgba(116, 42, 58, 0.5)'
+                            }}>
+                                手札 {opponent.hand.length}
+                            </div>
+                        </div>
                         {/* Opponent Hand Cards */}
                         <div style={{ display: 'flex', transform: 'scale(0.6)', transformOrigin: 'top right' }}>
                             {opponent.hand.map((_, i) => (

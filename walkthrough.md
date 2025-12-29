@@ -629,3 +629,106 @@ effects: [DRAW(1), SUMMON_CARD x2]
 
 #### 備考
 - カードIDも`s_hyakkiyako`から`s_hayakikoto`に変更（管理しやすさのため）
+
+---
+
+## 修正日
+2025年12月29日（UI日本語化）
+
+## 修正内容
+
+### ロビー画面の日本語化とyoRuka表示対応
+
+#### 問題
+1. yoRukaクラス選択時、待機画面で「クラス：あじゃ」と表示されていた
+2. ロビー画面に英語表記が残っていた
+3. フォントがタイトル画面と統一されていなかった
+
+#### 対応
+1. クラス表示ロジックを修正してYORUKAに対応
+2. 全ての英語テキストを日本語に翻訳
+3. Tamanegiフォントを適用
+
+#### 修正箇所
+- `game/src/screens/LobbyScreen.tsx`
+  - 151行目: fontFamilyを'Tamanegi, sans-serif'に変更
+  - 154行目: 'WAITING FOR OPPONENT' → '対戦相手を待っています'、'CONNECTING...' → '接続中...'
+  - 170行目: エラーメッセージにfontFamily追加
+  - 187行目: ルーム作成中/接続中メッセージにfontFamily追加
+  - 202行目: 'Room ID:' → 'ルームID:'、fontFamily追加
+  - 229行目: コピーボタンにfontFamily追加
+  - 231行目: 'Copy Room ID' → 'ルームIDをコピー'、'✓ Copied!' → '✓ コピーしました！'
+  - 250行目: 待機メッセージにfontFamily追加
+  - 266行目: 'Room X に接続中...' → 'ルーム X に接続中...'、fontFamily追加
+  - 278行目: '✓ Connected!' → '✓ 接続完了！'、fontFamily追加
+  - 279行目: ゲーム開始メッセージにfontFamily追加
+  - 291行目: fontFamily追加
+  - 293行目: クラス表示ロジックをYORUKA対応に修正
+    - 変更前: `playerClass === 'SENKA' ? 'せんか' : 'あじゃ'`
+    - 変更後: `playerClass === 'SENKA' ? 'せんか' : playerClass === 'AJA' ? 'あじゃ' : 'yoRuka'`
+  - 309行目: 戻るボタンにfontFamily追加
+  - 319行目: '← Back to Title' → '← タイトルに戻る'
+
+## 構造の記録（更新）
+- `game/src/screens/LobbyScreen.tsx`
+  - 151行目: タイトルのfontFamily
+  - 154行目: タイトルテキスト（日本語化）
+  - 170行目: エラーメッセージfontFamily
+  - 187行目: 接続中メッセージfontFamily
+  - 202行目: ルームIDラベル（日本語化+fontFamily）
+  - 229行目: コピーボタンfontFamily
+  - 231行目: コピーボタンテキスト（日本語化）
+  - 250行目: 待機メッセージfontFamily
+  - 266行目: 接続中メッセージ（日本語化+fontFamily）
+  - 278行目: 接続完了メッセージ（日本語化+fontFamily）
+  - 279行目: ゲーム開始メッセージfontFamily
+  - 291行目: クラス表示fontFamily
+  - 293行目: クラス表示ロジック（YORUKA対応）
+  - 309行目: 戻るボタンfontFamily
+  - 319行目: 戻るボタンテキスト（日本語化）
+
+---
+
+## 修正日
+2025年12月29日（通信対戦同期修正）
+
+## 修正内容
+
+### 1. 対戦相手の手札枚数表示追加
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **変更**: 対戦相手の手札エリアに手札枚数のテキスト表示を追加
+- **修正箇所**: 4823-4837行目に手札枚数表示コンポーネントを追加
+
+### 2. 通信対戦の同期問題修正
+
+#### 問題
+- 刹那のラストワード発動後、相手側でフォロワーが表示されない・ダメージが反映されない
+- 通信対戦中に状態の同期が外れる
+
+#### 原因
+- pendingEffectsの処理（RESOLVE_EFFECT）が、`sourcePlayerId === currentPlayerId`の条件で片方のクライアントでしか実行されていなかった
+- 相手のラストワードがキューされた場合、自分のクライアントでは`sourcePlayerId !== currentPlayerId`となり、RESOLVE_EFFECTがdispatchされなかった
+- 両クライアントが独立してRESOLVE_EFFECTを処理すると、RNG（乱数）の呼び出し順序が異なり、ランダム効果の結果が不一致になる可能性があった
+
+#### 対策
+- **HOST/CPUモードのみがRESOLVE_EFFECTを処理**し、処理後のゲーム状態をJOINに送信
+- **JOINモードはRESOLVE_EFFECTを処理せず**、HOSTからのGAME_STATE同期を待つ
+- GAME_STATE受信時にisProcessingEffectフラグをリセット
+
+#### 修正箇所
+- `game/src/screens/GameScreen.tsx`
+  - 1894-1906行目: GENERATE_CARD処理でのRESOLVE_EFFECTをHOST/CPUのみに制限
+  - 2047-2064行目: 一般エフェクト処理でのRESOLVE_EFFECTをHOST/CPUのみに制限
+  - 2054-2061行目: HOST時にGAME_STATEをJOINに送信
+  - 2573-2582行目: GAME_STATE受信時の処理を拡張（ログ追加、フラグリセット）
+  - 2096行目: useEffectの依存配列にgameMode, connected, adapterを追加
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 4823-4837行目: 相手の手札枚数表示
+  - 1894-1906行目: GENERATE_CARDのRESOLVE_EFFECT処理（HOST/CPU限定）
+  - 2047-2064行目: エフェクト処理でのRESOLVE_EFFECT（HOST/CPU限定+状態送信）
+  - 2573-2582行目: GAME_STATE受信処理（フラグリセット追加）
+
+## 設計メモ
+オンライン対戦では、ランダム要素を含む処理は「HOSTがマスター」として処理し、結果をJOINに同期する設計が必要。これにより、シード付きRNGの呼び出し順序が保証され、両クライアントで同じ結果が得られる。
