@@ -16,6 +16,14 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
+const yorukaLeaderImg = getAssetUrl('/cards/yoRuka_leader.png');
+
+// Helper to get leader image by class
+const getLeaderImg = (cls: ClassType): string => {
+    if (cls === 'YORUKA') return yorukaLeaderImg;
+    if (cls === 'AJA') return azyaLeaderImg;
+    return senkaLeaderImg;
+};
 
 // --- Scale Factor Hook for 4K/Multi-resolution Support ---
 // Base resolution: 1920x1080 (Full HD)
@@ -1415,9 +1423,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const currentPlayerId = isHost ? 'p1' : 'p2';
     const opponentPlayerId = isHost ? 'p2' : 'p1';
 
-    // CPU対戦時は相手クラスを自分と反対にする
+    // CPU対戦時は相手クラスを決定
     // For online play, use propOpponentClass if provided
-    const opponentClass: ClassType = propOpponentClass || (playerClass === 'SENKA' ? 'AJA' : 'SENKA');
+    // プレイヤーがYORUKAの場合、CPUはSENKAかAJAをランダム選択
+    const opponentClass: ClassType = propOpponentClass || (() => {
+        if (playerClass === 'YORUKA') {
+            return Math.random() < 0.5 ? 'SENKA' : 'AJA';
+        }
+        return playerClass === 'SENKA' ? 'AJA' : 'SENKA';
+    })();
 
     // Game state initialization
     // HOST initializes the game, JOIN waits for INIT_GAME message
@@ -4545,7 +4559,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         style={{
                             position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                             width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
-                            background: `url(${opponent.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg}) center/cover`,
+                            background: `url(${getLeaderImg(opponent.class)}) center/cover`,
                             border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId) || (targetingState && opponentType !== 'CPU') ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
                             cursor: targetingState ? 'crosshair' : 'default',
@@ -4607,6 +4621,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
                         ))}
                         <div style={{ position: 'absolute', bottom: -20 * scale, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
+                    </div>
+
+                    {/* Opponent Graveyard Count - Top Left Below Deck */}
+                    <div style={{ position: 'absolute', top: 120 * scale, left: 20 * scale, display: 'flex', alignItems: 'center', gap: 6, zIndex: 50, pointerEvents: 'none' }}>
+                        <div style={{ fontSize: '1.2rem', filter: 'grayscale(50%)' }}>💀</div>
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.6), rgba(76, 29, 149, 0.7))',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            color: '#c4b5fd',
+                            fontSize: '0.8rem',
+                            fontWeight: 'bold',
+                            border: '1px solid rgba(167, 139, 250, 0.3)'
+                        }}>
+                            {opponent.graveyard.length}
+                        </div>
                     </div>
 
                     {/* Opponent Hand - Top Right */}
@@ -5050,7 +5080,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
                             border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c'
                         }}>
-                            <img src={player.class === 'AJA' ? azyaLeaderImg : senkaLeaderImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
 
                         {/* Player HP - Top Left (Center - 140px) */}
@@ -5292,6 +5322,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         </div>
                         <div style={{ background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
                             手札 {player.hand.length}
+                        </div>
+                    </div>
+
+                    {/* Graveyard Count Badge - 墓地枚数表示 */}
+                    <div style={{ position: 'absolute', bottom: 160 * scale, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
+                        {/* Skull Icon */}
+                        <div style={{
+                            width: 40, height: 40,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '1.8rem',
+                            filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
+                        }}>
+                            💀
+                        </div>
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
+                            padding: '5px 12px',
+                            borderRadius: 8,
+                            color: '#e2e8f0',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(167, 139, 250, 0.5)'
+                        }}>
+                            墓地 {player.graveyard.length}
                         </div>
                     </div>
 

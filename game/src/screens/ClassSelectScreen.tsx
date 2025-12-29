@@ -12,6 +12,7 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
+const yorukaSecretImg = getAssetUrl('/cards/yoRuka_leader.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -25,6 +26,7 @@ interface ClassSelectScreenProps {
 export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({ onSelectClass, onBack }) => {
     // Responsive scaling (same approach as GameScreen)
     const [scale, setScale] = useState(1);
+    const [showSecretHover, setShowSecretHover] = useState(false);
 
     useEffect(() => {
         const updateScale = () => {
@@ -126,6 +128,51 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({ onSelectCl
             </div>
 
             <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${1 * scale}rem` }}>タイトルに戻る</button>
+
+            {/* Hidden Character - yoRuka Secret Entry */}
+            <div
+                onClick={() => onSelectClass('YORUKA')}
+                onMouseEnter={() => setShowSecretHover(true)}
+                onMouseLeave={() => setShowSecretHover(false)}
+                style={{
+                    position: 'absolute',
+                    bottom: 20 * scale,
+                    right: 20 * scale,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    opacity: showSecretHover ? 1 : 0.6,
+                    transition: 'all 0.3s ease',
+                    transform: showSecretHover ? 'scale(1.1)' : 'scale(1)',
+                }}
+            >
+                <img
+                    src={yorukaSecretImg}
+                    alt="?"
+                    style={{
+                        width: 80 * scale,
+                        height: 80 * scale,
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        border: showSecretHover ? '3px solid #805ad5' : '2px solid #4a5568',
+                        boxShadow: showSecretHover ? '0 0 20px rgba(128, 90, 213, 0.8)' : 'none',
+                    }}
+                />
+                <div style={{
+                    marginTop: 8 * scale,
+                    padding: `${4 * scale}px ${10 * scale}px`,
+                    background: showSecretHover ? 'rgba(128, 90, 213, 0.9)' : 'rgba(0, 0, 0, 0.7)',
+                    borderRadius: 8 * scale,
+                    fontSize: `${0.7 * scale}rem`,
+                    color: '#e2e8f0',
+                    fontFamily: 'Tamanegi, sans-serif',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.3s ease',
+                }}>
+                    {showSecretHover ? '🎮 yoRukaデッキで参戦！' : 'ほぼAIで作りました'}
+                </div>
+            </div>
         </div>
     );
 };
