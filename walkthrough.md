@@ -1492,3 +1492,77 @@ if (damage > 0) {
 ## 構造の記録（更新）
 - `game/src/screens/GameScreen.tsx`
   - 2307-2320行目: 墓地移動時のダメージ表示処理（座標検証追加）
+
+---
+
+## 修正日
+2025年12月30日（RANDOM_DAMAGE死亡カード重複ダメージ修正）
+
+## 修正内容
+
+### RANDOM_DAMAGEで死亡済みカードへの重複ダメージを防止
+
+#### 問題
+- 悠霞の進化時効果（ランダム3ダメージ×2回）で、1回目のダメージでフォロワーが破壊されても、2回目のダメージが同じフォロワーに飛んでしまう
+- 死亡アニメーション中に次の対象を抽選してしまい、既に破壊されたフォロワーが選ばれる
+
+#### 原因
+- 複数のRANDOM_DAMAGEエフェクトがキューに追加される際、全てが同じボード状態からターゲットを事前計算していた
+- 例：悠霞の進化時効果
+  1. 2つのRANDOM_DAMAGEエフェクトがキューに追加される
+  2. 両方とも同じ時点のボードからターゲットを選択
+  3. 同じカードが両方のtargetIdsに含まれる可能性がある
+  4. 1回目でカードが死亡しても、2回目のtargetIdsには同じIDが残っている
+
+#### 修正内容
+RANDOM_DAMAGE処理時に、targetIdsで指定されたカードが既に死亡している場合は、別の有効なターゲットを再選択するように変更
+
+**修正箇所**: `game/src/core/engine.ts` 1438-1503行目
+```typescript
+case 'RANDOM_DAMAGE': {
+    // ... 省略 ...
+
+    // Track which cards have already been targeted to avoid hitting the same card twice
+    const alreadyTargetedIds = new Set<string>();
+
+    if (targetIds && targetIds.length > 0) {
+        targetIds.forEach(tid => {
+            const idx = targetBoard.findIndex(c => c?.instanceId === tid);
+            if (idx !== -1 && targetBoard[idx]) {
+                // Target is still alive, apply damage
+                alreadyTargetedIds.add(tid);
+                applyDamageToTarget(idx);
+            } else {
+                // Target is already dead or removed - find a replacement target
+                const validIndices = targetBoard
+                    .map((c, i) => (c && !alreadyTargetedIds.has(c.instanceId)) ? i : -1)
+                    .filter(i => i !== -1);
+
+                if (validIndices.length > 0) {
+                    // Randomly select a new target
+                    const randomIdx = Math.floor(rng() * validIndices.length);
+                    const newTargetIdx = validIndices[randomIdx];
+                    const newTarget = targetBoard[newTargetIdx]!;
+                    alreadyTargetedIds.add(newTarget.instanceId);
+                    applyDamageToTarget(newTargetIdx);
+                }
+                // If no valid targets remain, the damage fizzles (no target)
+            }
+        });
+    }
+    // ... 省略 ...
+}
+```
+
+#### 修正後の動作
+1. targetIdsに指定されたカードが生存している → そのカードにダメージ
+2. targetIdsに指定されたカードが死亡している → 他の有効なターゲットを再抽選
+3. 有効なターゲットがない → ダメージがfizzle（不発）
+4. `alreadyTargetedIds`で同一処理内での重複ターゲットも防止
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1438-1503行目: RANDOM_DAMAGE処理（死亡カード再抽選対応）
+  - 1444-1461行目: applyDamageToTargetヘルパー関数
+  - 1463行目: alreadyTargetedIds（重複ターゲット防止用Set）
+  - 1473-1489行目: 死亡カード検出時の再抽選ロジック
