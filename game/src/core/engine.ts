@@ -2275,12 +2275,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
                     const selfPid = action.playerId;
 
-                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
-                        // RANDOM_DAMAGE is NOT pre-calculated here - it should select target at resolution time
-                        // This allows each RANDOM_DAMAGE effect to re-select targets after previous effects resolve
+                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                        // Pre-calculate random targets for visualization
+                        // RANDOM_DAMAGE needs pre-calculation for correct effect display in online play
                         const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
                         const targetBoard = newState.players[targetPid].board;
-                        const count = e.value || 1;
+                        const count = e.type === 'RANDOM_DAMAGE' ? (e.value2 || 1) : (e.value || 1);
 
                         const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                         for (let i = validIndices.length - 1; i > 0; i--) {
@@ -2488,12 +2488,12 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
                 const selfPid = action.playerId;
 
-                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP') {
-                    // RANDOM_DAMAGE is NOT pre-calculated here - it should select target at resolution time
-                    // This allows each RANDOM_DAMAGE effect to re-select targets after previous effects resolve
+                if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                    // Pre-calculate random targets for visualization
+                    // RANDOM_DAMAGE needs pre-calculation for correct effect display in online play
                     const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
                     const targetBoard = newState.players[targetPid].board;
-                    const count = e.value || 1;
+                    const count = e.type === 'RANDOM_DAMAGE' ? (e.value2 || 1) : (e.value || 1);
 
                     const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
                     for (let i = validIndices.length - 1; i > 0; i--) {
