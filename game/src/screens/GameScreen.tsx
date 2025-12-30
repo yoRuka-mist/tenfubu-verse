@@ -807,6 +807,7 @@ interface EvolutionAnimationProps {
 
 const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE, scale }) => {
     const [rotateY, setRotateY] = React.useState(0);
+    const [rotateZ, setRotateZ] = React.useState(0); // Z-axis tilt for evolution enhancement
     const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
     const [whiteness, setWhiteness] = React.useState(0);
     const [glowIntensity, setGlowIntensity] = React.useState(0);
@@ -941,7 +942,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         const currentRotateY = 10 + eased * 160;
 
                         setRotateY(currentRotateY); // 10 to 170
-                        setCurrentScale(0.75 + eased * 0.225); // Scale up from 0.75 to ~0.975 (3/4 of previous max)
+                        // Scale up to 1.1x during rapid rotation (enhanced evolution animation)
+                        setCurrentScale(0.75 + eased * 0.35); // Scale up from 0.75 to 1.1
+                        // Z-axis tilt: Ease to -10 degrees during rapid rotation
+                        setRotateZ(-10 * eased);
 
                         // Fade out white light quickly as rotation starts
                         setWhiteness(Math.max(1 - progress * 3, 0));
@@ -974,6 +978,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             ? 2 * slowProgress * slowProgress
                             : 1 - Math.pow(-2 * slowProgress + 2, 2) / 2;
                         setRotateY(170 + slowEased * 10); // 170 to 180
+                        // Gradually return Z-axis tilt to 0
+                        setRotateZ(-10 * (1 - slowEased));
 
                         // Ensure whiteness is 0
                         setWhiteness(0);
@@ -1070,6 +1076,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     // Total rotation is just pure Y rotation + charge wobble
     // 3D CSS will handle the face visibility
     const totalRotateY = rotateY + chargeRotate;
+    const totalRotateZ = rotateZ; // Z-axis tilt for enhanced evolution
 
     // Vibration offset
     const vibrateOffset = vibrate ? {
@@ -1198,7 +1205,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 position: 'absolute',
                 left: position.x + vibrateOffset.x,
                 top: position.y + vibrateOffset.y,
-                transform: `translate(-50%, -50%) scale(${currentScale}) perspective(1200px) rotateY(${totalRotateY}deg)`, // Use currentScale
+                transform: `translate(-50%, -50%) scale(${currentScale}) perspective(1200px) rotateY(${totalRotateY}deg) rotateZ(${totalRotateZ}deg)`, // Use currentScale + Z-axis tilt
                 transition: (phase === 'ZOOM_IN' || phase === 'ZOOM_OUT')
                     ? 'left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
                     : 'none',
@@ -1949,6 +1956,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Special Summon Tracking (for cards appearing not from hand)
     const [summonedCardIds, setSummonedCardIds] = React.useState<Set<string>>(new Set());
+
+    // Attack Animation State (for Y-axis rotation during attack)
+    const [attackingFollowerInstanceId, setAttackingFollowerInstanceId] = React.useState<string | null>(null);
+
+    // Drag Cancel Animation State (for ease-in falling animation)
+    const [cancellingDragIndex, setCancellingDragIndex] = React.useState<number | null>(null);
 
     const [selectedCard, setSelectedCard] = React.useState<{
         card: any;
@@ -4662,6 +4675,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     payload: attackParams
                                 });
 
+                                // Trigger attack Y-axis rotation animation
+                                if (attackerInstanceId) {
+                                    setAttackingFollowerInstanceId(attackerInstanceId);
+                                    setTimeout(() => setAttackingFollowerInstanceId(null), 300);
+                                }
+
                                 // Correctly pass target info to playEffect with instanceId for accurate positioning
                                 const attackType = attackerCard?.attackEffectType || 'SLASH';
                                 playEffect(attackType, opponentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
@@ -4770,6 +4789,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setTimeout(() => { ignoreClickRef.current = false; }, 100);
                     }
                 }
+            }
+
+            // Trigger ease-in falling animation for cancelled hand drag
+            if (currentDrag && currentDrag.sourceType === 'HAND' && (currentDrag as any).canDrag) {
+                // Drag was active but cancelled (not over board or action didn't complete)
+                setCancellingDragIndex(currentDrag.sourceIndex);
+                setTimeout(() => setCancellingDragIndex(null), 300);
             }
 
             // Reset
@@ -5684,14 +5710,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 return (
                                     <div key={c?.instanceId || `empty-opp-${i}`}
                                         ref={el => opponentBoardRefs.current[i] = el}
-                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: c?.instanceId })}
-                                        onMouseLeave={() => setHoveredTarget(null)}
+                                        onMouseEnter={() => {
+                                            // Only set hover target during drag operations (not on mouse-over)
+                                            if (dragState) {
+                                                setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: c?.instanceId });
+                                            }
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (dragState) {
+                                                setHoveredTarget(null);
+                                            }
+                                        }}
                                         onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId, c?.instanceId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
                                         style={{
                                             position: 'absolute',
                                             left: '50%',
                                             top: 0,
-                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${(hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i) ? 'scale(1.05)' : 'scale(1)'}`,
+                                            transform: `translateX(calc(-50% + ${offsetX}px))`,
                                             transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             border: (targetingState && c && targetingState.allowedTargetPlayerId === opponentPlayerId) ? '2px solid #f56565' : 'none',
                                             boxShadow: (targetingState && c && targetingState.allowedTargetPlayerId === opponentPlayerId) ? '0 0 15px #f56565' : 'none',
@@ -5728,14 +5763,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         ref={el => playerBoardRefs.current[i] = el}
                                         onMouseDown={(e) => handleBoardMouseDown(e, i, c?.instanceId)}
                                         onClick={(e) => e.stopPropagation()} // Prevent background click from validating selection
-                                        onMouseEnter={() => setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: c?.instanceId })}
-                                        onMouseLeave={() => setHoveredTarget(null)}
+                                        onMouseEnter={() => {
+                                            // Only set hover target during drag operations (not on mouse-over)
+                                            if (dragState) {
+                                                setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: c?.instanceId });
+                                            }
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (dragState) {
+                                                setHoveredTarget(null);
+                                            }
+                                        }}
                                         style={{
                                             position: 'absolute',
                                             left: '50%',
                                             top: 0,
-                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
-                                            transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
+                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''} ${attackingFollowerInstanceId === c?.instanceId ? 'rotateY(360deg)' : ''}`,
+                                            transition: attackingFollowerInstanceId === c?.instanceId
+                                                ? 'transform 0.3s ease-out, left 0.4s ease'
+                                                : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             cursor: 'pointer',
                                             pointerEvents: 'auto',
                                             width: CARD_WIDTH * scale,
@@ -6267,7 +6313,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         left: '50%',
                                         bottom: 5 * scale, // Slightly higher to avoid cut-off
                                         transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.1) translateY(-30px)' : (isHandExpanded ? 'translateY(-10px)' : '')}`,
-                                        transition: dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'none' : 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                                        transition: cancellingDragIndex === i
+                                            ? 'all 0.3s ease-in' // Ease-in for falling animation
+                                            : (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'none' : 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'),
                                         zIndex: dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 1000 : i + 100,
                                         width: CARD_WIDTH * scale,
                                         height: CARD_HEIGHT * scale,
@@ -6512,18 +6560,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 <style>{`
                                 @keyframes playCardSequence {
                                     ${playingCardAnim.finalX !== undefined ? `
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    25% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
-                                    85% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    100% { 
-                                        transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(1.0); 
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
+                                    25% { transform: translate(-50%, -50%) scale(1.8) rotateY(360deg); opacity: 1; }
+                                    85% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
+                                    100% {
+                                        transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(1.0) rotateY(360deg);
                                         opacity: 1;
                                     }
                                     ` : `
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    30% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    85% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; }
-                                    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
+                                    30% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
+                                    85% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
+                                    100% { transform: translate(-50%, -50%) scale(2.5) rotateY(360deg); opacity: 0; }
                                     `}
                                 }
                                 /* Add stronger ease-in for snappy takeoff and cushioned landing */
@@ -6531,10 +6579,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); /* Faster exit from center */
                                 }
                                 @keyframes playSpellSequence {
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2); opacity: 1; }
-                                    40% { transform: translate(-50%, -50%) scale(2.0); opacity: 1; filter: brightness(1); }
-                                    80% { transform: translate(-50%, -50%) scale(2.2); opacity: 1; filter: brightness(1.2); }
-                                    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; filter: brightness(3); }
+                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
+                                    30% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; filter: brightness(1); }
+                                    80% { transform: translate(-50%, -50%) scale(2.2) rotateY(360deg); opacity: 1; filter: brightness(1.2); }
+                                    100% { transform: translate(-50%, -50%) scale(2.5) rotateY(360deg); opacity: 0; filter: brightness(3); }
                                 }
                             `}</style>
                                 <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
