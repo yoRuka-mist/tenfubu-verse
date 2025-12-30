@@ -1329,7 +1329,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 interface GameOverScreenProps {
     winnerId: string;
     playerId: string;
-    onRematch: () => void;
+    onRematch: (deckType: ClassType) => void;
     onLeave: () => void;
     isOnline: boolean;
     myRematchRequested: boolean;
@@ -1339,9 +1339,11 @@ interface GameOverScreenProps {
 const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
     const [timeLeft, setTimeLeft] = React.useState(15);
+    const [showDeckSelect, setShowDeckSelect] = React.useState(false);
+    const [selectedDeck, setSelectedDeck] = React.useState<ClassType | null>(null);
 
-    // For online: stop countdown when either player requests rematch
-    const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : myRematchRequested;
+    // For online: stop countdown when either player requests rematch or deck selection is shown
+    const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : (myRematchRequested || showDeckSelect);
 
     React.useEffect(() => {
         if (shouldStopCountdown) return;
@@ -1357,6 +1359,12 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
         }, 1000);
         return () => clearInterval(timer);
     }, [onLeave, shouldStopCountdown]);
+
+    // Handle deck selection and start rematch
+    const handleDeckSelect = (deckType: ClassType) => {
+        setSelectedDeck(deckType);
+        onRematch(deckType);
+    };
 
     // Get rematch button text based on state
     const getRematchButtonText = () => {
@@ -1409,6 +1417,19 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
         };
     };
 
+    // Deck selection button style
+    const getDeckButtonStyle = (deckType: ClassType, isHovered: boolean) => ({
+        width: 120,
+        height: 120,
+        borderRadius: '50%',
+        border: selectedDeck === deckType ? '4px solid #f6e05e' : '3px solid rgba(255,255,255,0.3)',
+        background: `url(${getLeaderImg(deckType)}) center/cover`,
+        cursor: 'pointer',
+        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+        transition: 'all 0.2s ease',
+        boxShadow: isHovered ? '0 0 20px rgba(246, 224, 94, 0.6)' : '0 4px 10px rgba(0,0,0,0.4)'
+    });
+
     return (
         <div style={{
             position: 'absolute', inset: 0, zIndex: 5000,
@@ -1432,28 +1453,119 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                 <div style={{ fontSize: '2rem', color: 'white', marginTop: 10 }}>{isVictory ? '勝利' : '敗北'}</div>
             </div>
 
-            <div style={{ display: 'flex', gap: 20 }}>
-                <button
-                    onClick={() => { if (!myRematchRequested) onRematch(); }}
-                    disabled={myRematchRequested}
-                    style={getRematchButtonStyle()}
-                    onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
-                    onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                    {getRematchButtonText()}
-                </button>
-                <button
-                    onClick={onLeave}
-                    style={{
-                        padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
-                        background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
-                        color: 'white', borderRadius: 12,
-                        cursor: 'pointer'
-                    }}
-                >
-                    タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
-                </button>
-            </div>
+            {/* Deck Selection UI */}
+            {showDeckSelect && !myRematchRequested ? (
+                <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    animation: 'fadeIn 0.3s ease-out'
+                }}>
+                    <div style={{
+                        fontSize: '1.5rem', fontWeight: 'bold', color: 'white',
+                        marginBottom: 20, textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                    }}>
+                        デッキを選択してください
+                    </div>
+                    <div style={{ display: 'flex', gap: 30, marginBottom: 20 }}>
+                        {/* せんかデッキ */}
+                        <DeckSelectButton
+                            deckType="SENKA"
+                            label="せんか"
+                            onSelect={handleDeckSelect}
+                            getStyle={getDeckButtonStyle}
+                        />
+                        {/* あじゃデッキ */}
+                        <DeckSelectButton
+                            deckType="AJA"
+                            label="あじゃ"
+                            onSelect={handleDeckSelect}
+                            getStyle={getDeckButtonStyle}
+                        />
+                        {/* yoRukaデッキ（隠し要素） - 画像がないのでプレースホルダー */}
+                        <DeckSelectButton
+                            deckType="YORUKA"
+                            label="???"
+                            onSelect={handleDeckSelect}
+                            getStyle={getDeckButtonStyle}
+                            isHidden={true}
+                        />
+                    </div>
+                    <button
+                        onClick={() => setShowDeckSelect(false)}
+                        style={{
+                            padding: '10px 30px', fontSize: '1rem', fontWeight: 'bold',
+                            background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
+                            color: 'white', borderRadius: 8,
+                            cursor: 'pointer', marginTop: 10
+                        }}
+                    >
+                        キャンセル
+                    </button>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', gap: 20 }}>
+                    <button
+                        onClick={() => {
+                            if (!myRematchRequested) {
+                                setShowDeckSelect(true);
+                            }
+                        }}
+                        disabled={myRematchRequested}
+                        style={getRematchButtonStyle()}
+                        onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
+                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                        {getRematchButtonText()}
+                    </button>
+                    <button
+                        onClick={onLeave}
+                        style={{
+                            padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
+                            background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
+                            color: 'white', borderRadius: 12,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Deck selection button component
+interface DeckSelectButtonProps {
+    deckType: ClassType;
+    label: string;
+    onSelect: (deckType: ClassType) => void;
+    getStyle: (deckType: ClassType, isHovered: boolean) => React.CSSProperties;
+    isHidden?: boolean;
+}
+
+const DeckSelectButton = ({ deckType, label, onSelect, getStyle, isHidden }: DeckSelectButtonProps) => {
+    const [isHovered, setIsHovered] = React.useState(false);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <button
+                onClick={() => onSelect(deckType)}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                style={{
+                    ...getStyle(deckType, isHovered),
+                    // 隠し要素は見た目を暗くするが、クリックは可能
+                    filter: isHidden ? 'brightness(0.3) grayscale(0.8)' : 'none',
+                    opacity: isHidden ? 0.6 : 1
+                }}
+            />
+            <span style={{
+                color: isHidden ? 'rgba(255,255,255,0.3)' : 'white',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+            }}>
+                {label}
+            </span>
         </div>
     );
 };
@@ -1570,6 +1682,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Rematch states for online play
     const [myRematchRequested, setMyRematchRequested] = React.useState(false);
     const [opponentRematchRequested, setOpponentRematchRequested] = React.useState(false);
+
+    // Current player class (can be changed on rematch)
+    const [currentPlayerClass, setCurrentPlayerClass] = React.useState<ClassType>(playerClass);
 
     // HOST: Send initial game state when connected AND coin toss is complete
     const initialStateSentRef = useRef(false);
@@ -2398,7 +2513,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     // Helper: Start rematch (shared between CPU and online modes)
-    const startRematch = useCallback(() => {
+    // newDeckType: Optional - if provided, use this deck type for the rematch
+    const startRematch = useCallback((newDeckType?: ClassType) => {
         // 1. Reset visual and logic artifacts IMMEDIATELY
         setDamageNumbers([]);
         setActiveEffects([]);
@@ -2414,27 +2530,44 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setMyRematchRequested(false);
         setOpponentRematchRequested(false);
 
-        // 3. Suppress immediate diff detection by clearing and then resetting the Ref
-        const freshState = initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+        // 3. Update player class if new deck type is provided
+        const deckToUse = newDeckType || currentPlayerClass;
+        if (newDeckType) {
+            setCurrentPlayerClass(newDeckType);
+        }
+
+        // 4. Determine opponent class based on new player class
+        // CPUは自分と違うクラスをランダムで選択（YORUKAの場合はSENKAかAJA）
+        let newOpponentClass: ClassType = opponentClass;
+        if (opponentType === 'CPU') {
+            if (deckToUse === 'YORUKA') {
+                newOpponentClass = Math.random() < 0.5 ? 'SENKA' : 'AJA';
+            } else {
+                newOpponentClass = deckToUse === 'SENKA' ? 'AJA' : 'SENKA';
+            }
+        }
+
+        // 5. Suppress immediate diff detection by clearing and then resetting the Ref
+        const freshState = initializeGame('You', deckToUse, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', newOpponentClass);
         prevPlayersRef.current = freshState.players;
         prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
 
-        // 4. Force BGM re-roll and restart
+        // 6. Force BGM re-roll and restart
         setBgmLoadedForClass(null);
 
-        // 5. Reset coin toss for new game
+        // 7. Reset coin toss for new game
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
-        // 6. For online rematch, HOST needs to send new game state after coin toss completes
+        // 8. For online rematch, HOST needs to send new game state after coin toss completes
         if (gameMode === 'HOST') {
             initialStateSentRef.current = false;
         }
 
-        // 7. Update Game State
+        // 9. Update Game State
         dispatch({ type: 'SYNC_STATE', payload: freshState });
-    }, [playerClass, opponentClass, opponentType, gameMode]);
+    }, [currentPlayerClass, opponentClass, opponentType, gameMode]);
 
     // Coin Toss and Game Start Animation Sequence
     // JOIN mode: Skip coin toss, wait for INIT_GAME from HOST
@@ -2753,8 +2886,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // REMATCH_ACCEPT: Opponent accepted rematch - start new game
             if (msg.type === 'REMATCH_ACCEPT') {
                 console.log('[GameScreen] Opponent accepted rematch - starting new game');
-                // Both players agreed - start rematch
-                startRematch();
+                // Both players agreed - start rematch with currently selected deck
+                startRematch(currentPlayerClass);
                 return;
             }
 
@@ -6284,7 +6417,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             isOnline={opponentType === 'ONLINE'}
                             myRematchRequested={myRematchRequested}
                             opponentRematchRequested={opponentRematchRequested}
-                            onRematch={() => {
+                            onRematch={(deckType: ClassType) => {
                                 if (opponentType === 'ONLINE') {
                                     // Online mode: Send rematch request to opponent
                                     setMyRematchRequested(true);
@@ -6292,14 +6425,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     if (opponentRematchRequested) {
                                         // Both players want rematch - send accept and start
                                         adapter?.send({ type: 'REMATCH_ACCEPT' });
-                                        startRematch();
+                                        startRematch(deckType);
                                     } else {
                                         // Only I want rematch - send request and wait
+                                        // Note: In online mode, deck change may need additional sync
                                         adapter?.send({ type: 'REMATCH_REQUEST' });
+                                        // Store the selected deck for when opponent accepts
+                                        setCurrentPlayerClass(deckType);
                                     }
                                 } else {
-                                    // CPU mode: Just start new game immediately
-                                    startRematch();
+                                    // CPU mode: Start new game with selected deck
+                                    startRematch(deckType);
                                 }
                             }}
                             onLeave={onLeave}

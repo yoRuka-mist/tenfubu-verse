@@ -1644,3 +1644,59 @@ cursor: 'default',
 - `game/src/screens/GameScreen.tsx`
   - 5156行目: 相手リーダーのborder条件（targetingState中はハイライトしない）
   - 5158行目: 相手リーダーのcursor（常にdefault）
+
+---
+
+## 修正日
+2025年12月30日
+
+## 修正内容
+
+### 23. リザルト画面でのデッキ選択機能追加
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **要求**: 決着後の再戦時に、次に使用するデッキタイプを選択できるようにする
+- **実装内容**:
+
+#### GameOverScreenコンポーネントの拡張
+1. **デッキ選択UI追加**（1456-1503行目）
+   - 「再戦」ボタンをクリックするとデッキ選択画面に切り替わる
+   - せんか、あじゃの2つのデッキを選択可能
+   - yoRukaは隠し要素として表示（暗くして`???`ラベル、クリックは可能）
+   - キャンセルボタンで選択画面を閉じれる
+
+2. **DeckSelectButtonコンポーネント追加**（1536-1571行目）
+   - 各デッキ選択ボタンのコンポーネント
+   - ホバー時に拡大エフェクト
+   - 隠し要素は暗く表示
+
+3. **onRematch引数の変更**
+   - `onRematch: () => void` → `onRematch: (deckType: ClassType) => void`
+   - 選択したデッキタイプを親コンポーネントに渡す
+
+#### startRematch関数の拡張（2515-2570行目）
+1. **デッキタイプ引数追加**
+   - `startRematch()` → `startRematch(newDeckType?: ClassType)`
+   - 指定されたデッキタイプでゲームを初期化
+
+2. **currentPlayerClass状態追加**（1687行目）
+   - 再戦時に選択したデッキタイプを保持
+   - オンラインモードで相手の承認待ち中もデッキを保持
+
+3. **CPU対戦時の相手クラス決定**
+   - 選択したデッキに応じて相手CPUのクラスを自動決定
+   - YORUKAの場合はSENKAかAJAをランダム選択
+   - それ以外は異なるクラスを選択
+
+#### オンラインモード対応（2886-2891行目, 6420-6440行目）
+- REMATCH_ACCEPT受信時も選択したデッキで再戦
+- デッキ選択後に相手の承認を待つ場合、選択をcurrentPlayerClassに保存
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 1329-1337行目: GameOverScreenProps（onRematchにClassType引数追加）
+  - 1339-1533行目: GameOverScreen（デッキ選択UI追加）
+  - 1536-1571行目: DeckSelectButton（新規コンポーネント）
+  - 1687行目: currentPlayerClass状態
+  - 2515-2570行目: startRematch（デッキタイプ引数対応）
+  - 2886-2891行目: REMATCH_ACCEPT処理
+  - 6420-6440行目: onRematch呼び出し
