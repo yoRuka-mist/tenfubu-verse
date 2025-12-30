@@ -1700,3 +1700,56 @@ cursor: 'default',
   - 2515-2570行目: startRematch（デッキタイプ引数対応）
   - 2886-2891行目: REMATCH_ACCEPT処理
   - 6420-6440行目: onRematch呼び出し
+
+---
+
+## 修正日
+2025年12月30日
+
+## 修正内容
+
+### 24. リザルト画面のUIリニューアル
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **要求**:
+  - yoRukaの勝利/敗北画像を表示し、クリックでyoRukaデッキで再戦
+  - VICTORYをtamanegiフォントの「勝利」に変更
+  - 「あなたの勝ち！」「お前の負け！」メッセージをtamanegiフォントで表示
+  - クラス選択からyoRukaを削除（隠し要素のため）
+  - クラスアイコンを大きく（120px→180px）
+
+#### 実装内容
+
+1. **yoRuka画像の追加**（1328-1330行目）
+   ```typescript
+   const yorukaWinImg = getAssetUrl('/cards/yoRuka_win2.png');
+   const yorukaLoseImg = getAssetUrl('/cards/yoRuka_lose.png');
+   ```
+
+2. **レイアウト変更**（1438-1591行目）
+   - 横並びレイアウト（左: yoRuka画像、右: メインコンテンツ）
+   - yoRuka画像: 300x400px、勝利時はyoRuka_win2.png、敗北時はyoRuka_lose.png
+   - デッキ選択中のみyoRuka画像がクリック可能に
+   - ホバー時に紫色のグロー効果
+
+3. **tamanegiフォント適用**
+   - 「勝利」「敗北」: 6rem、floatアニメーション付き
+   - 「あなたの勝ち！」「お前の負け！」: 1.8rem
+   - 「デッキを選択してください」: 1.8rem
+   - クラスラベル「せんか」「あじゃ」: 1.4rem
+
+4. **クラス選択の変更**
+   - yoRukaを選択肢から削除（せんか、あじゃのみ表示）
+   - アイコンサイズを120px→180pxに拡大
+   - ボーダー、シャドウも強化
+
+5. **DeckSelectButtonコンポーネントの簡素化**（1596-1625行目）
+   - isHiddenプロパティを削除（yoRukaは選択肢に表示しないため）
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 1328-1330行目: yoRuka勝利/敗北画像URL定義
+  - 1343-1593行目: GameOverScreen（横並びレイアウト、yoRuka画像、tamanegiフォント）
+  - 1425-1436行目: getDeckButtonStyle（180px、ボーダー・シャドウ強化）
+  - 1457-1502行目: yoRuka画像エリア（クリックでYORUKAデッキ選択）
+  - 1508-1520行目: 「勝利」「敗北」表示（tamanegiフォント、6rem）
+  - 1596-1625行目: DeckSelectButton（tamanegiフォント使用）

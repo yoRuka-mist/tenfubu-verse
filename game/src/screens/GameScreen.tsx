@@ -1325,6 +1325,10 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
 
 
+// yoRuka result images
+const yorukaWinImg = getAssetUrl('/cards/yoRuka_win2.png');
+const yorukaLoseImg = getAssetUrl('/cards/yoRuka_lose.png');
+
 // Simple internal component for Game Over
 interface GameOverScreenProps {
     winnerId: string;
@@ -1341,6 +1345,7 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
     const [timeLeft, setTimeLeft] = React.useState(15);
     const [showDeckSelect, setShowDeckSelect] = React.useState(false);
     const [selectedDeck, setSelectedDeck] = React.useState<ClassType | null>(null);
+    const [yorukaHovered, setYorukaHovered] = React.useState(false);
 
     // For online: stop countdown when either player requests rematch or deck selection is shown
     const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : (myRematchRequested || showDeckSelect);
@@ -1417,118 +1422,173 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
         };
     };
 
-    // Deck selection button style
+    // Deck selection button style - larger size (180px)
     const getDeckButtonStyle = (deckType: ClassType, isHovered: boolean) => ({
-        width: 120,
-        height: 120,
+        width: 180,
+        height: 180,
         borderRadius: '50%',
-        border: selectedDeck === deckType ? '4px solid #f6e05e' : '3px solid rgba(255,255,255,0.3)',
+        border: selectedDeck === deckType ? '5px solid #f6e05e' : '4px solid rgba(255,255,255,0.4)',
         background: `url(${getLeaderImg(deckType)}) center/cover`,
         cursor: 'pointer',
         transform: isHovered ? 'scale(1.1)' : 'scale(1)',
         transition: 'all 0.2s ease',
-        boxShadow: isHovered ? '0 0 20px rgba(246, 224, 94, 0.6)' : '0 4px 10px rgba(0,0,0,0.4)'
+        boxShadow: isHovered ? '0 0 30px rgba(246, 224, 94, 0.7)' : '0 6px 15px rgba(0,0,0,0.5)'
     });
 
     return (
         <div style={{
             position: 'absolute', inset: 0, zIndex: 5000,
             background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.5s ease-out'
+            display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            animation: 'fadeIn 0.5s ease-out',
+            gap: 60
         }} onClick={() => { /* background click */ }}>
             <style>{`
                 @keyframes pulse {
                     0%, 100% { transform: scale(1); }
                     50% { transform: scale(1.05); }
                 }
+                @keyframes float {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10px); }
+                }
             `}</style>
-            <div style={{
-                fontSize: '5rem', fontWeight: 900,
-                color: isVictory ? '#f6e05e' : '#a0aec0',
-                textShadow: isVictory ? '0 0 30px rgba(246, 224, 94, 0.6)' : 'none',
-                marginBottom: 20
-            }}>
-                {isVictory ? 'VICTORY' : 'DEFEAT'}
-                <div style={{ fontSize: '2rem', color: 'white', marginTop: 10 }}>{isVictory ? '勝利' : '敗北'}</div>
+
+            {/* Left: yoRuka Image (Hidden element - clickable only during deck select) */}
+            <div
+                onClick={() => {
+                    if (showDeckSelect && !myRematchRequested) {
+                        handleDeckSelect('YORUKA');
+                    }
+                }}
+                onMouseEnter={() => setYorukaHovered(true)}
+                onMouseLeave={() => setYorukaHovered(false)}
+                style={{
+                    width: 300,
+                    height: 400,
+                    backgroundImage: `url(${isVictory ? yorukaWinImg : yorukaLoseImg})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: 16,
+                    cursor: showDeckSelect && !myRematchRequested ? 'pointer' : 'default',
+                    opacity: showDeckSelect && !myRematchRequested ? (yorukaHovered ? 1 : 0.9) : 0.7,
+                    transform: showDeckSelect && yorukaHovered ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.3s ease',
+                    boxShadow: showDeckSelect && yorukaHovered
+                        ? '0 0 40px rgba(147, 112, 219, 0.8)'
+                        : '0 8px 30px rgba(0,0,0,0.6)',
+                    border: showDeckSelect && yorukaHovered
+                        ? '4px solid rgba(147, 112, 219, 0.8)'
+                        : '2px solid rgba(255,255,255,0.2)',
+                    position: 'relative'
+                }}
+            >
+                {/* yoRuka message */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: -50,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontFamily: 'var(--font-tamanegi)',
+                    fontSize: '1.8rem',
+                    color: isVictory ? '#f6e05e' : '#e53e3e',
+                    textShadow: isVictory
+                        ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
+                        : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    whiteSpace: 'nowrap'
+                }}>
+                    {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
+                </div>
             </div>
 
-            {/* Deck Selection UI */}
-            {showDeckSelect && !myRematchRequested ? (
+            {/* Right: Main Content */}
+            <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center'
+            }}>
+                {/* Result Text with Tamanegi font */}
                 <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    animation: 'fadeIn 0.3s ease-out'
+                    fontFamily: 'var(--font-tamanegi)',
+                    fontSize: '6rem',
+                    color: isVictory ? '#f6e05e' : '#a0aec0',
+                    textShadow: isVictory
+                        ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
+                        : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
+                    marginBottom: 40,
+                    animation: 'float 3s ease-in-out infinite'
                 }}>
+                    {isVictory ? '勝利' : '敗北'}
+                </div>
+
+                {/* Deck Selection UI */}
+                {showDeckSelect && !myRematchRequested ? (
                     <div style={{
-                        fontSize: '1.5rem', fontWeight: 'bold', color: 'white',
-                        marginBottom: 20, textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        animation: 'fadeIn 0.3s ease-out'
                     }}>
-                        デッキを選択してください
+                        <div style={{
+                            fontFamily: 'var(--font-tamanegi)',
+                            fontSize: '1.8rem', color: 'white',
+                            marginBottom: 30, textShadow: '0 2px 6px rgba(0,0,0,0.6)'
+                        }}>
+                            デッキを選択してください
+                        </div>
+                        <div style={{ display: 'flex', gap: 50, marginBottom: 30 }}>
+                            {/* せんかデッキ */}
+                            <DeckSelectButton
+                                deckType="SENKA"
+                                label="せんか"
+                                onSelect={handleDeckSelect}
+                                getStyle={getDeckButtonStyle}
+                            />
+                            {/* あじゃデッキ */}
+                            <DeckSelectButton
+                                deckType="AJA"
+                                label="あじゃ"
+                                onSelect={handleDeckSelect}
+                                getStyle={getDeckButtonStyle}
+                            />
+                        </div>
+                        <button
+                            onClick={() => setShowDeckSelect(false)}
+                            style={{
+                                padding: '12px 40px', fontSize: '1.2rem', fontWeight: 'bold',
+                                background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
+                                color: 'white', borderRadius: 10,
+                                cursor: 'pointer', marginTop: 10
+                            }}
+                        >
+                            キャンセル
+                        </button>
                     </div>
-                    <div style={{ display: 'flex', gap: 30, marginBottom: 20 }}>
-                        {/* せんかデッキ */}
-                        <DeckSelectButton
-                            deckType="SENKA"
-                            label="せんか"
-                            onSelect={handleDeckSelect}
-                            getStyle={getDeckButtonStyle}
-                        />
-                        {/* あじゃデッキ */}
-                        <DeckSelectButton
-                            deckType="AJA"
-                            label="あじゃ"
-                            onSelect={handleDeckSelect}
-                            getStyle={getDeckButtonStyle}
-                        />
-                        {/* yoRukaデッキ（隠し要素） - 画像がないのでプレースホルダー */}
-                        <DeckSelectButton
-                            deckType="YORUKA"
-                            label="???"
-                            onSelect={handleDeckSelect}
-                            getStyle={getDeckButtonStyle}
-                            isHidden={true}
-                        />
+                ) : (
+                    <div style={{ display: 'flex', gap: 25 }}>
+                        <button
+                            onClick={() => {
+                                if (!myRematchRequested) {
+                                    setShowDeckSelect(true);
+                                }
+                            }}
+                            disabled={myRematchRequested}
+                            style={getRematchButtonStyle()}
+                            onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
+                            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                        >
+                            {getRematchButtonText()}
+                        </button>
+                        <button
+                            onClick={onLeave}
+                            style={{
+                                padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
+                                background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
+                                color: 'white', borderRadius: 12,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
+                        </button>
                     </div>
-                    <button
-                        onClick={() => setShowDeckSelect(false)}
-                        style={{
-                            padding: '10px 30px', fontSize: '1rem', fontWeight: 'bold',
-                            background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
-                            color: 'white', borderRadius: 8,
-                            cursor: 'pointer', marginTop: 10
-                        }}
-                    >
-                        キャンセル
-                    </button>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', gap: 20 }}>
-                    <button
-                        onClick={() => {
-                            if (!myRematchRequested) {
-                                setShowDeckSelect(true);
-                            }
-                        }}
-                        disabled={myRematchRequested}
-                        style={getRematchButtonStyle()}
-                        onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
-                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                        {getRematchButtonText()}
-                    </button>
-                    <button
-                        onClick={onLeave}
-                        style={{
-                            padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
-                            background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
-                            color: 'white', borderRadius: 12,
-                            cursor: 'pointer'
-                        }}
-                    >
-                        タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
-                    </button>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
@@ -1539,30 +1599,24 @@ interface DeckSelectButtonProps {
     label: string;
     onSelect: (deckType: ClassType) => void;
     getStyle: (deckType: ClassType, isHovered: boolean) => React.CSSProperties;
-    isHidden?: boolean;
 }
 
-const DeckSelectButton = ({ deckType, label, onSelect, getStyle, isHidden }: DeckSelectButtonProps) => {
+const DeckSelectButton = ({ deckType, label, onSelect, getStyle }: DeckSelectButtonProps) => {
     const [isHovered, setIsHovered] = React.useState(false);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <button
                 onClick={() => onSelect(deckType)}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                style={{
-                    ...getStyle(deckType, isHovered),
-                    // 隠し要素は見た目を暗くするが、クリックは可能
-                    filter: isHidden ? 'brightness(0.3) grayscale(0.8)' : 'none',
-                    opacity: isHidden ? 0.6 : 1
-                }}
+                style={getStyle(deckType, isHovered)}
             />
             <span style={{
-                color: isHidden ? 'rgba(255,255,255,0.3)' : 'white',
-                fontWeight: 'bold',
-                fontSize: '1.1rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                color: 'white',
+                fontFamily: 'var(--font-tamanegi)',
+                fontSize: '1.4rem',
+                textShadow: '0 2px 6px rgba(0,0,0,0.6)'
             }}>
                 {label}
             </span>
