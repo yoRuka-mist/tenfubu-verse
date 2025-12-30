@@ -676,17 +676,18 @@ const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
                 <span
                     key={key++}
                     style={{
-                        color: '#90cdf4',
+                        color: '#ffd700', // Yellow color for visibility
                         cursor: 'pointer',
                         textDecoration: 'underline',
                         textUnderlineOffset: '2px',
+                        fontWeight: 'bold',
                     }}
                     onMouseEnter={(e) => {
-                        (e.target as HTMLElement).style.color = '#63b3ed';
-                        (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(99, 179, 237, 0.6)';
+                        (e.target as HTMLElement).style.color = '#ffec8b';
+                        (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
                     }}
                     onMouseLeave={(e) => {
-                        (e.target as HTMLElement).style.color = '#90cdf4';
+                        (e.target as HTMLElement).style.color = '#ffd700';
                         (e.target as HTMLElement).style.textShadow = 'none';
                     }}
                     onClick={(e) => {
@@ -714,17 +715,18 @@ const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
                     <span
                         key={key++}
                         style={{
-                            color: '#90cdf4',
+                            color: '#ffd700', // Yellow color for visibility
                             cursor: 'pointer',
                             textDecoration: 'underline',
                             textUnderlineOffset: '2px',
+                            fontWeight: 'bold',
                         }}
                         onMouseEnter={(e) => {
-                            (e.target as HTMLElement).style.color = '#63b3ed';
-                            (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(99, 179, 237, 0.6)';
+                            (e.target as HTMLElement).style.color = '#ffec8b';
+                            (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
                         }}
                         onMouseLeave={(e) => {
-                            (e.target as HTMLElement).style.color = '#90cdf4';
+                            (e.target as HTMLElement).style.color = '#ffd700';
                             (e.target as HTMLElement).style.textShadow = 'none';
                         }}
                         onClick={(e) => {
@@ -846,6 +848,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Start at card position, scale to match board card size initially
                 setPosition({ x: startX, y: startY });
                 setCurrentScale(0.25); // Match board card size (90/360)
+                setRotateZ(-10); // Start tilted -10 degrees (to the right)
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
                     // Move to left-center of board area (slightly left of center)
@@ -944,8 +947,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         setRotateY(currentRotateY); // 10 to 170
                         // Scale up to 1.1x during rapid rotation (enhanced evolution animation)
                         setCurrentScale(0.75 + eased * 0.35); // Scale up from 0.75 to 1.1
-                        // Z-axis tilt: Ease to -10 degrees during rapid rotation
-                        setRotateZ(-10 * eased);
+                        // Z-axis tilt: Return from -10 degrees to 0 during rapid rotation only
+                        setRotateZ(-10 * (1 - eased)); // -10 -> 0
 
                         // Fade out white light quickly as rotation starts
                         setWhiteness(Math.max(1 - progress * 3, 0));
@@ -978,8 +981,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                             ? 2 * slowProgress * slowProgress
                             : 1 - Math.pow(-2 * slowProgress + 2, 2) / 2;
                         setRotateY(170 + slowEased * 10); // 170 to 180
-                        // Gradually return Z-axis tilt to 0
-                        setRotateZ(-10 * (1 - slowEased));
+                        // No Z-axis rotation during slow phase - keep at 0
+                        // (Z-axis already returned to 0 during rapid phase)
 
                         // Ensure whiteness is 0
                         setWhiteness(0);
@@ -5382,6 +5385,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
                         40%, 60% { transform: translate3d(4px, 0, 0); }
                     }
+                    @keyframes attackRotate {
+                        0% { transform: translateX(var(--offsetX)) rotateY(0deg); }
+                        100% { transform: translateX(var(--offsetX)) rotateY(360deg); }
+                    }
+                    .attack-rotating {
+                        animation: attackRotate 0.3s ease-out forwards !important;
+                        transform-style: preserve-3d;
+                    }
                     @keyframes cardDie {
                         0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 white); opacity: 1; }
                         40% { transform: scale(1.15); filter: brightness(3) drop-shadow(0 0 20px white); opacity: 0.9; }
@@ -5778,10 +5789,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             position: 'absolute',
                                             left: '50%',
                                             top: 0,
-                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''} ${attackingFollowerInstanceId === c?.instanceId ? 'rotateY(360deg)' : ''}`,
-                                            transition: attackingFollowerInstanceId === c?.instanceId
-                                                ? 'transform 0.3s ease-out, left 0.4s ease'
-                                                : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
+                                            '--offsetX': `calc(-50% + ${offsetX}px)`,
+                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
+                                            transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             cursor: 'pointer',
                                             pointerEvents: 'auto',
                                             width: CARD_WIDTH * scale,
@@ -5792,7 +5802,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1,
                                             opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
                                             transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
-                                        }}>
+                                        } as React.CSSProperties}
+                                        className={attackingFollowerInstanceId === c?.instanceId ? 'attack-rotating' : ''}>
                                         {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
 
                                         {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
@@ -6552,6 +6563,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     left: playingCardAnim.targetX,
                                     top: playingCardAnim.targetY,
                                     transform: 'translate(-50%, -50%)',
+                                    transformStyle: 'preserve-3d',
+                                    perspective: '1000px',
                                     animation: playingCardAnim.card.type === 'SPELL'
                                         ? 'playSpellSequence 1s forwards'
                                         : 'playCardSequence 0.8s forwards'
