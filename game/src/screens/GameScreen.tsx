@@ -1329,6 +1329,15 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 const yorukaWinImg = getAssetUrl('/cards/yoRuka_win2.png');
 const yorukaLoseImg = getAssetUrl('/cards/yoRuka_lose.png');
 
+// Battle statistics interface
+interface BattleStats {
+    turnCount: number;
+    damageDealtToOpponent: number;
+    damageReceivedFromOpponent: number;
+    followersDestroyed: number;
+    myFollowersDestroyed: number;
+}
+
 // Simple internal component for Game Over
 interface GameOverScreenProps {
     winnerId: string;
@@ -1338,14 +1347,16 @@ interface GameOverScreenProps {
     isOnline: boolean;
     myRematchRequested: boolean;
     opponentRematchRequested: boolean;
+    battleStats: BattleStats;
+    selectedCardInfo: CardModel | null;
+    onCardInfoClick: (card: CardModel | null) => void;
 }
 
-const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested }: GameOverScreenProps) => {
+const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
     const [timeLeft, setTimeLeft] = React.useState(15);
     const [showDeckSelect, setShowDeckSelect] = React.useState(false);
     const [selectedDeck, setSelectedDeck] = React.useState<ClassType | null>(null);
-    const [yorukaHovered, setYorukaHovered] = React.useState(false);
 
     // For online: stop countdown when either player requests rematch or deck selection is shown
     const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : (myRematchRequested || showDeckSelect);
@@ -1422,10 +1433,10 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
         };
     };
 
-    // Deck selection button style - larger size (180px)
+    // Deck selection button style - larger size (220px)
     const getDeckButtonStyle = (deckType: ClassType, isHovered: boolean) => ({
-        width: 180,
-        height: 180,
+        width: 220,
+        height: 220,
         borderRadius: '50%',
         border: selectedDeck === deckType ? '5px solid #f6e05e' : '4px solid rgba(255,255,255,0.4)',
         background: `url(${getLeaderImg(deckType)}) center/cover`,
@@ -1439,9 +1450,8 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
         <div style={{
             position: 'absolute', inset: 0, zIndex: 5000,
             background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
-            display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.5s ease-out',
-            gap: 60
+            display: 'flex', flexDirection: 'row', alignItems: 'stretch',
+            animation: 'fadeIn 0.5s ease-out'
         }} onClick={() => { /* background click */ }}>
             <style>{`
                 @keyframes pulse {
@@ -1454,69 +1464,171 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                 }
             `}</style>
 
-            {/* Left: yoRuka Image (Hidden element - clickable only during deck select) */}
-            <div
-                onClick={() => {
-                    if (showDeckSelect && !myRematchRequested) {
-                        handleDeckSelect('YORUKA');
-                    }
-                }}
-                onMouseEnter={() => setYorukaHovered(true)}
-                onMouseLeave={() => setYorukaHovered(false)}
-                style={{
-                    width: 300,
-                    height: 400,
-                    backgroundImage: `url(${isVictory ? yorukaWinImg : yorukaLoseImg})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    borderRadius: 16,
-                    cursor: showDeckSelect && !myRematchRequested ? 'pointer' : 'default',
-                    opacity: showDeckSelect && !myRematchRequested ? (yorukaHovered ? 1 : 0.9) : 0.7,
-                    transform: showDeckSelect && yorukaHovered ? 'scale(1.05)' : 'scale(1)',
-                    transition: 'all 0.3s ease',
-                    boxShadow: showDeckSelect && yorukaHovered
-                        ? '0 0 40px rgba(147, 112, 219, 0.8)'
-                        : '0 8px 30px rgba(0,0,0,0.6)',
-                    border: showDeckSelect && yorukaHovered
-                        ? '4px solid rgba(147, 112, 219, 0.8)'
-                        : '2px solid rgba(255,255,255,0.2)',
-                    position: 'relative'
-                }}
-            >
-                {/* yoRuka message */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: -50,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    fontFamily: 'var(--font-tamanegi)',
-                    fontSize: '1.8rem',
-                    color: isVictory ? '#f6e05e' : '#e53e3e',
-                    textShadow: isVictory
-                        ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
-                        : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
-                    whiteSpace: 'nowrap'
-                }}>
-                    {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
-                </div>
+            {/* Left Column: Card Info / Future character images (せんか/あじゃ) */}
+            <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 40,
+                borderRight: '1px solid rgba(255,255,255,0.1)'
+            }}>
+                {selectedCardInfo ? (
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 16,
+                        maxWidth: 320
+                    }}>
+                        {/* Card image - no hover zoom */}
+                        <div style={{
+                            width: 200,
+                            height: 280,
+                            backgroundImage: `url(${getAssetUrl(`/cards/${selectedCardInfo.id}.png`)})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            borderRadius: 12,
+                            boxShadow: '0 8px 30px rgba(0,0,0,0.6)'
+                        }} />
+                        {/* Card name */}
+                        <div style={{
+                            fontFamily: 'var(--font-tamanegi)',
+                            fontSize: '1.6rem',
+                            color: 'white',
+                            textShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                            textAlign: 'center'
+                        }}>
+                            {selectedCardInfo.name}
+                        </div>
+                        {/* Card stats */}
+                        <div style={{
+                            display: 'flex',
+                            gap: 20,
+                            fontSize: '1.2rem',
+                            color: 'rgba(255,255,255,0.9)'
+                        }}>
+                            <span>コスト: {selectedCardInfo.cost}</span>
+                            {selectedCardInfo.type === 'FOLLOWER' && (
+                                <>
+                                    <span>攻撃力: {selectedCardInfo.attack}</span>
+                                    <span>体力: {selectedCardInfo.health}</span>
+                                </>
+                            )}
+                        </div>
+                        {/* Card description */}
+                        <div style={{
+                            fontSize: '1rem',
+                            color: 'rgba(255,255,255,0.7)',
+                            textAlign: 'center',
+                            lineHeight: 1.5,
+                            maxHeight: 120,
+                            overflow: 'auto'
+                        }}>
+                            {selectedCardInfo.description || 'テキストなし'}
+                        </div>
+                        {/* Close button */}
+                        <button
+                            onClick={() => onCardInfoClick(null)}
+                            style={{
+                                padding: '8px 24px',
+                                fontSize: '1rem',
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                color: 'white',
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                marginTop: 10
+                            }}
+                        >
+                            閉じる
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{
+                        color: 'rgba(255,255,255,0.3)',
+                        fontSize: '1.2rem',
+                        textAlign: 'center'
+                    }}>
+                        バトルログのカード名を<br />クリックすると詳細表示
+                    </div>
+                )}
             </div>
 
-            {/* Right: Main Content */}
+            {/* Right Column: Main Content + yoRuka */}
             <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center'
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 40,
+                position: 'relative'
             }}>
                 {/* Result Text with Tamanegi font */}
                 <div style={{
                     fontFamily: 'var(--font-tamanegi)',
-                    fontSize: '6rem',
+                    fontSize: '5rem',
                     color: isVictory ? '#f6e05e' : '#a0aec0',
                     textShadow: isVictory
                         ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
                         : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
-                    marginBottom: 40,
+                    marginBottom: 20,
                     animation: 'float 3s ease-in-out infinite'
                 }}>
                     {isVictory ? '勝利' : '敗北'}
+                </div>
+
+                {/* Battle Statistics */}
+                <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    gap: 16,
+                    marginBottom: 30,
+                    padding: '16px 24px',
+                    background: 'rgba(0,0,0,0.3)',
+                    borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                    <div style={{ textAlign: 'center', minWidth: 80 }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f6e05e' }}>
+                            {Math.ceil(battleStats.turnCount / 2)}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>ターン</div>
+                    </div>
+                    <div style={{ textAlign: 'center', minWidth: 80 }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#48bb78' }}>
+                            {battleStats.damageDealtToOpponent}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>与ダメージ</div>
+                    </div>
+                    <div style={{ textAlign: 'center', minWidth: 80 }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#e53e3e' }}>
+                            {battleStats.damageReceivedFromOpponent}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>被ダメージ</div>
+                    </div>
+                    <div style={{ textAlign: 'center', minWidth: 80 }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#63b3ed' }}>
+                            {battleStats.followersDestroyed}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>撃破数</div>
+                    </div>
+                </div>
+
+                {/* yoRuka message */}
+                <div style={{
+                    fontFamily: 'var(--font-tamanegi)',
+                    fontSize: '1.6rem',
+                    color: isVictory ? '#f6e05e' : '#e53e3e',
+                    textShadow: isVictory
+                        ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
+                        : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
+                    marginBottom: 20
+                }}>
+                    {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
                 </div>
 
                 {/* Deck Selection UI */}
@@ -1527,12 +1639,12 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                     }}>
                         <div style={{
                             fontFamily: 'var(--font-tamanegi)',
-                            fontSize: '1.8rem', color: 'white',
-                            marginBottom: 30, textShadow: '0 2px 6px rgba(0,0,0,0.6)'
+                            fontSize: '1.6rem', color: 'white',
+                            marginBottom: 24, textShadow: '0 2px 6px rgba(0,0,0,0.6)'
                         }}>
                             デッキを選択してください
                         </div>
-                        <div style={{ display: 'flex', gap: 50, marginBottom: 30 }}>
+                        <div style={{ display: 'flex', gap: 40, marginBottom: 24 }}>
                             {/* せんかデッキ */}
                             <DeckSelectButton
                                 deckType="SENKA"
@@ -1551,17 +1663,17 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                         <button
                             onClick={() => setShowDeckSelect(false)}
                             style={{
-                                padding: '12px 40px', fontSize: '1.2rem', fontWeight: 'bold',
+                                padding: '10px 36px', fontSize: '1.1rem', fontWeight: 'bold',
                                 background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
                                 color: 'white', borderRadius: 10,
-                                cursor: 'pointer', marginTop: 10
+                                cursor: 'pointer', marginTop: 8
                             }}
                         >
                             キャンセル
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', gap: 25 }}>
+                    <div style={{ display: 'flex', gap: 20 }}>
                         <button
                             onClick={() => {
                                 if (!myRematchRequested) {
@@ -1588,6 +1700,30 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                         </button>
                     </div>
                 )}
+
+                {/* yoRuka Image - Hidden element at right side, no border/hover effects */}
+                <div
+                    onClick={() => {
+                        if (showDeckSelect && !myRematchRequested) {
+                            handleDeckSelect('YORUKA');
+                        }
+                    }}
+                    style={{
+                        position: 'absolute',
+                        right: 20,
+                        bottom: 20,
+                        width: 180,
+                        height: 240,
+                        backgroundImage: `url(${isVictory ? yorukaWinImg : yorukaLoseImg})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderRadius: 12,
+                        cursor: showDeckSelect && !myRematchRequested ? 'pointer' : 'default',
+                        opacity: 0.7,
+                        transition: 'opacity 0.3s ease',
+                        boxShadow: '0 8px 20px rgba(0,0,0,0.4)'
+                    }}
+                />
             </div>
         </div>
     );
@@ -1740,6 +1876,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Current player class (can be changed on rematch)
     const [currentPlayerClass, setCurrentPlayerClass] = React.useState<ClassType>(playerClass);
 
+    // Battle statistics tracking
+    const [battleStats, setBattleStats] = React.useState<BattleStats>({
+        turnCount: 0,
+        damageDealtToOpponent: 0,
+        damageReceivedFromOpponent: 0,
+        followersDestroyed: 0,
+        myFollowersDestroyed: 0
+    });
+
+    // Card info display for result screen (when clicking card names in log)
+    const [resultCardInfo, setResultCardInfo] = React.useState<CardModel | null>(null);
+
     // HOST: Send initial game state when connected AND coin toss is complete
     const initialStateSentRef = useRef(false);
     useEffect(() => {
@@ -1812,9 +1960,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // カード名からカード定義を検索
         const cardDef = getCardDefinition(cardName);
         if (cardDef) {
-            setSelectedCard({ card: cardDef, owner: 'OPPONENT' }); // バトルログからは相手カードとして扱う
+            // ゲームオーバー時はリザルト画面の左カラムに表示
+            if (gameState.winnerId) {
+                setResultCardInfo(cardDef as CardModel);
+            } else {
+                setSelectedCard({ card: cardDef, owner: 'OPPONENT' }); // バトルログからは相手カードとして扱う
+            }
         }
-    }, []);
+    }, [gameState.winnerId]);
 
     interface ActiveEffectState {
         type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE' | 'BUFF';
@@ -2006,6 +2159,57 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- Damage Tracking Logic ---
     const [damageNumbers, setDamageNumbers] = React.useState<{ id: number, value: string | number, x: number, y: number, color?: string }[]>([]);
+
+    // --- Battle Statistics Tracking ---
+    const prevLeaderHPRef = React.useRef<{ player: number, opponent: number }>({ player: 20, opponent: 20 });
+    const prevBoardCountRef = React.useRef<{ player: number, opponent: number }>({ player: 0, opponent: 0 });
+
+    React.useEffect(() => {
+        if (!player || !opponent) return;
+
+        // Track damage dealt to opponent's leader
+        const opponentHPDiff = prevLeaderHPRef.current.opponent - opponent.hp;
+        if (opponentHPDiff > 0) {
+            setBattleStats(prev => ({
+                ...prev,
+                damageDealtToOpponent: prev.damageDealtToOpponent + opponentHPDiff
+            }));
+        }
+
+        // Track damage received from opponent
+        const playerHPDiff = prevLeaderHPRef.current.player - player.hp;
+        if (playerHPDiff > 0) {
+            setBattleStats(prev => ({
+                ...prev,
+                damageReceivedFromOpponent: prev.damageReceivedFromOpponent + playerHPDiff
+            }));
+        }
+
+        // Track followers destroyed (opponent's board decreased = our kills)
+        const opponentBoardDiff = prevBoardCountRef.current.opponent - (opponent.board?.filter(c => c).length || 0);
+        if (opponentBoardDiff > 0) {
+            setBattleStats(prev => ({
+                ...prev,
+                followersDestroyed: prev.followersDestroyed + opponentBoardDiff
+            }));
+        }
+
+        // Track our followers destroyed
+        const playerBoardDiff = prevBoardCountRef.current.player - (player.board?.filter(c => c).length || 0);
+        if (playerBoardDiff > 0) {
+            setBattleStats(prev => ({
+                ...prev,
+                myFollowersDestroyed: prev.myFollowersDestroyed + playerBoardDiff
+            }));
+        }
+
+        // Update refs
+        prevLeaderHPRef.current = { player: player.hp, opponent: opponent.hp };
+        prevBoardCountRef.current = {
+            player: player.board?.filter(c => c).length || 0,
+            opponent: opponent.board?.filter(c => c).length || 0
+        };
+    }, [player?.hp, opponent?.hp, player?.board?.length, opponent?.board?.length]);
 
     // --- Effect Queue Processing ---
     const effectTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2580,7 +2784,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         aiProcessing.current = false;
         lastProcessedTurn.current = null;
 
-        // 2. Reset rematch states
+        // 2. Reset battle stats for new game
+        setBattleStats({
+            turnCount: 0,
+            damageDealtToOpponent: 0,
+            damageReceivedFromOpponent: 0,
+            followersDestroyed: 0,
+            myFollowersDestroyed: 0
+        });
+        // Reset battle stats tracking refs
+        prevLeaderHPRef.current = { player: 20, opponent: 20 };
+        prevBoardCountRef.current = { player: 0, opponent: 0 };
+        // Reset result card info
+        setResultCardInfo(null);
+
+        // 3. Reset rematch states
         setMyRematchRequested(false);
         setOpponentRematchRequested(false);
 
@@ -6471,6 +6689,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             isOnline={opponentType === 'ONLINE'}
                             myRematchRequested={myRematchRequested}
                             opponentRematchRequested={opponentRematchRequested}
+                            battleStats={{
+                                turnCount: gameState.turnCount,
+                                damageDealtToOpponent: battleStats.damageDealtToOpponent,
+                                damageReceivedFromOpponent: battleStats.damageReceivedFromOpponent,
+                                followersDestroyed: battleStats.followersDestroyed,
+                                myFollowersDestroyed: battleStats.myFollowersDestroyed
+                            }}
+                            selectedCardInfo={resultCardInfo}
+                            onCardInfoClick={setResultCardInfo}
                             onRematch={(deckType: ClassType) => {
                                 if (opponentType === 'ONLINE') {
                                     // Online mode: Send rematch request to opponent

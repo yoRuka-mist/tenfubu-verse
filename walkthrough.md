@@ -1753,3 +1753,121 @@ cursor: 'default',
   - 1457-1502行目: yoRuka画像エリア（クリックでYORUKAデッキ選択）
   - 1508-1520行目: 「勝利」「敗北」表示（tamanegiフォント、6rem）
   - 1596-1625行目: DeckSelectButton（tamanegiフォント使用）
+
+---
+
+## 修正日
+2025年12月31日
+
+## 修正内容
+
+### 25. リザルト画面の大幅リニューアル
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **要求**:
+  - 画面を左右に二分割（左: カード情報表示/将来のキャラ画像用、右: メインコンテンツ）
+  - yoRuka画像を右側に移動し、枠とホバー効果を削除（隠し要素として目立たせない）
+  - クラスアイコンを220pxに拡大
+  - 戦闘記録の表示（ターン数、与ダメージ、被ダメージ、撃破数）
+  - バトルログのカード名クリックで左カラムにカード情報表示
+  - 左カラムのカード画像はマウスオーバーで拡大しない
+
+#### 実装内容
+
+1. **BattleStats インターフェースの追加**（1332-1339行目）
+   ```typescript
+   interface BattleStats {
+       turnCount: number;
+       damageDealtToOpponent: number;
+       damageReceivedFromOpponent: number;
+       followersDestroyed: number;
+       myFollowersDestroyed: number;
+   }
+   ```
+
+2. **GameOverScreenProps の拡張**（1341-1353行目）
+   - battleStats: BattleStats を追加
+   - selectedCardInfo: CardModel | null を追加
+   - onCardInfoClick: (card: CardModel | null) => void を追加
+
+3. **レイアウト変更**（1449-1729行目）
+   - 左右二分割レイアウト（flex: 1で均等分割）
+   - 左カラム: カード情報表示（バトルログからクリック時）
+   - 右カラム: 勝敗表示、戦闘記録、デッキ選択、ボタン、yoRuka画像
+
+4. **yoRuka画像の変更**（1704-1726行目）
+   - 右下に絶対配置（position: absolute, right: 20, bottom: 20）
+   - サイズ縮小（180x240px）
+   - border/hover効果を削除
+   - opacity: 0.7で控えめに表示
+   - デッキ選択中のみクリック可能
+
+5. **クラスアイコン拡大**（1436-1447行目）
+   - 180px→220pxに拡大
+   - getDeckButtonStyle更新
+
+6. **戦闘記録UI**（1583-1619行目）
+   - ターン数、与ダメージ、被ダメージ、撃破数を表示
+   - 色分け（ターン: 金、与ダメ: 緑、被ダメ: 赤、撃破: 青）
+
+7. **左カラムのカード情報表示**（1467-1557行目）
+   - カード画像（200x280px、ホバー拡大なし）
+   - カード名、コスト、攻撃力、体力
+   - カード説明文
+   - 閉じるボタン
+
+8. **戦闘統計追跡ロジック**（1879-1889行目、2158-2207行目）
+   - battleStats state追加
+   - resultCardInfo state追加
+   - useEffectでリーダーHP変化とボード変化を監視
+   - ダメージ・撃破数を自動カウント
+
+9. **バトルログクリック対応**（1959-1970行目）
+   - handleCardNameClickFromLog更新
+   - ゲームオーバー時は setResultCardInfo を呼び出し
+   - 通常時は setSelectedCard を呼び出し
+
+10. **GameOverScreen呼び出し更新**（6622-6630行目）
+    - battleStats props追加
+    - selectedCardInfo props追加
+    - onCardInfoClick props追加
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 1332-1339行目: BattleStats インターフェース
+  - 1341-1353行目: GameOverScreenProps（拡張）
+  - 1355-1730行目: GameOverScreen（左右二分割レイアウト）
+  - 1436-1447行目: getDeckButtonStyle（220px）
+  - 1467-1557行目: 左カラム（カード情報表示）
+  - 1583-1619行目: 戦闘記録UI
+  - 1704-1726行目: yoRuka画像（右下配置、枠なし）
+  - 1879-1889行目: battleStats, resultCardInfo state
+  - 1959-1970行目: handleCardNameClickFromLog（ゲームオーバー対応）
+  - 2158-2207行目: 戦闘統計追跡useEffect
+  - 2787-2799行目: startRematch内でbattleStatsリセット追加
+  - 6622-6630行目: GameOverScreen呼び出し（新props追加）
+
+### dual-review結果
+
+| レビュアー | ok状態 | blocking | advisory | 備考 |
+|-----------|--------|----------|----------|------|
+| Codex (OpenAI) | 不完全 | - | - | タイムアウト |
+| Gemini (Google) | false | 1 | 0 | startRematchでのリセット漏れ |
+| Claude Code | 統合判断 | - | - | Geminiの指摘は一部誤検知、一部妥当 |
+
+#### Gemini指摘への対応
+1. **ターン数の更新漏れ** → **誤検知**: ターン数は`gameState.turnCount`から直接取得しているため問題なし
+2. **再戦時のリセット漏れ** → **妥当**: startRematch関数にbattleStatsリセット処理を追加
+
+### auto-test結果
+- テストフレームワーク未設定のため、自動テストはスキップ
+- UI変更が中心のため、手動テストを推奨
+
+#### 手動テストチェックリスト
+- [ ] リザルト画面で左右二分割レイアウトが正しく表示されること
+- [ ] yoRuka画像が右下に表示され、枠がなく、ホバーで拡大しないこと
+- [ ] デッキ選択時のみyoRukaがクリック可能なこと
+- [ ] クラスアイコンが大きく表示されること（220px）
+- [ ] 戦闘統計（ターン数、与ダメージ、被ダメージ、撃破数）が表示されること
+- [ ] バトルログのカード名クリックで左カラムにカード情報が表示されること
+- [ ] 左カラムのカード画像がホバーで拡大しないこと
+- [ ] 再戦時に戦闘統計がリセットされること
