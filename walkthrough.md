@@ -3096,3 +3096,83 @@ const baseCardDef = getCardDefinition(card.name);
 ## 構造の記録（更新）
 - `game/src/core/engine.ts`
   - 1662行目: DESTROY_AND_GENERATEでgetCardDefinition(card.name)を使用
+---
+
+## 修正日
+2026年1月2日（続き4）
+
+## 修正内容
+
+### AoEダメージ表記が3体以上で表示されない問題の修正
+
+#### 1. 問題の原因（Gemini分析）
+- 死亡したカードの座標を`refs[idx]`から取得しようとしていた
+- `idx`は「前の」ボードのインデックスだが、useEffect実行時にはDOMは「現在の」状態に更新済み
+- 結果として、死亡したカードの座標が取得できない、または間違った位置（隣のカード）を参照していた
+
+#### 2. 修正内容
+
+##### cardPositionsRefの追加（2460行目付近）
+```typescript
+const cardPositionsRef = React.useRef<Map<string, { x: number, y: number }>>(new Map());
+```
+
+##### ダメージ検出ロジックの修正（2945-3012行目）
+- 生存カードの処理時に座標をキャッシュに保存
+- 死亡カードの座標取得を`refs[idx]`からキャッシュ参照に変更
+- 死亡したカードはキャッシュから削除
+
+**修正前**:
+```typescript
+const el = refs[idx]; // 既に無効なインデックス参照
+if (el) {
+    const coords = getScreenCoordsFromElement(el);
+    // ...
+}
+```
+
+**修正後**:
+```typescript
+const cachedCoords = cardPositionsRef.current.get(prevCard.instanceId);
+if (cachedCoords && (cachedCoords.x !== 0 || cachedCoords.y !== 0)) {
+    // キャッシュから座標を取得
+}
+```
+
+##### 座標キャッシュ更新のuseEffect追加（3622-3655行目）
+- ボードの変更時に全カードの座標をキャッシュ
+- これにより、初回ダメージで即死するカードも正しく座標を持つ
+
+#### 3. 技術的詳細
+- Reactのレンダリングサイクル上、useEffect実行時にDOMは既に更新済み
+- 死亡したカードはDOMから消えており、`refs`配列にも存在しない
+- 事前にキャッシュした座標を使用することで、AoEで複数同時死亡しても正しい位置に表示
+
+---
+
+### 手札カードのホバー・選択時の移動量を半分に修正
+
+#### 1. 修正箇所
+
+##### 7005行目: 選択時の持ち上げ量
+**修正前**: `translateY = selectedHandIndex === i ? -15 * scale : 0;`
+**修正後**: `translateY = selectedHandIndex === i ? -8 * scale : 0;`
+
+##### 7028行目: ドラッグ中・ホバー時のtransform
+**修正前**: `scale(1.1) translateY(-30px)` / `translateY(-10px)`
+**修正後**: `scale(1.05) translateY(-15px)` / `translateY(-5px)`
+
+#### 2. 変更サマリー
+| 状態 | 変更前 | 変更後 |
+|------|--------|--------|
+| ホバー（展開時） | -10px | -5px |
+| 選択 | -15 * scale | -8 * scale |
+| ドラッグ中 | scale(1.1) -30px | scale(1.05) -15px |
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 2460行目: cardPositionsRef定義（カード座標キャッシュ）
+  - 2945-3012行目: ダメージ検出ロジック（キャッシュ使用に変更）
+  - 3622-3655行目: 座標キャッシュ更新useEffect
+  - 7005行目: 選択時の持ち上げ量（-8 * scale）
+  - 7028行目: ドラッグ・ホバー時のtransform

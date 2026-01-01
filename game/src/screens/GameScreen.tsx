@@ -2456,6 +2456,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // --- Battle Statistics Tracking ---
     const prevLeaderHPRef = React.useRef<{ player: number, opponent: number }>({ player: 20, opponent: 20 });
     const prevBoardCountRef = React.useRef<{ player: number, opponent: number }>({ player: 0, opponent: 0 });
+    // カード座標のキャッシュ（死亡時にも正しい位置にダメージ表記を出すため）
+    const cardPositionsRef = React.useRef<Map<string, { x: number, y: number }>>(new Map());
 
     React.useEffect(() => {
         if (!player || !opponent) return;
@@ -2942,7 +2944,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // 2. Board Damage & Death Tracking
             // Check previous board for damage or death
-            prev?.board.forEach((prevCard, idx) => {
+            prev?.board.forEach((prevCard) => {
                 if (!prevCard) return;
 
                 // Search for this card in current board
@@ -2950,42 +2952,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 if (currCard) {
                     // Still on board. Check HP.
-                    if (currCard.currentHealth < prevCard.currentHealth) {
-                        const damage = prevCard.currentHealth - currCard.currentHealth;
-                        const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
-                        const isMe = pid === currentPlayerId;
-                        const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                        const el = refs[currIdx];
-                        if (el) {
-                            const coords = getScreenCoordsFromElement(el);
+                    const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
+                    const isMe = pid === currentPlayerId;
+                    const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
+                    const el = refs[currIdx];
+
+                    if (el) {
+                        const coords = getScreenCoordsFromElement(el);
+                        // 生存カードの座標をキャッシュに保存（次回の死亡判定用）
+                        cardPositionsRef.current.set(prevCard.instanceId, coords);
+
+                        if (currCard.currentHealth < prevCard.currentHealth) {
+                            const damage = prevCard.currentHealth - currCard.currentHealth;
                             newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
-                        }
-                    } else if (currCard.currentHealth > prevCard.currentHealth) {
-                        // Heal - but skip if this is from evolution (hasEvolved changed to true)
-                        const isEvolution = currCard.hasEvolved && !prevCard.hasEvolved;
-                        // Skip heal effect if this is from a buff (attack or maxHealth changed)
-                        const isBuff = currCard.currentAttack !== prevCard.currentAttack || currCard.maxHealth !== prevCard.maxHealth;
-                        if (!isEvolution && !isBuff) {
-                            const heal = currCard.currentHealth - prevCard.currentHealth;
-                            const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
-                            const isMe = pid === currentPlayerId;
-                            const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                            const el = refs[currIdx];
-                            if (el) {
-                                const coords = getScreenCoordsFromElement(el);
+                        } else if (currCard.currentHealth > prevCard.currentHealth) {
+                            // Heal - but skip if this is from evolution (hasEvolved changed to true)
+                            const isEvolution = currCard.hasEvolved && !prevCard.hasEvolved;
+                            // Skip heal effect if this is from a buff (attack or maxHealth changed)
+                            const isBuff = currCard.currentAttack !== prevCard.currentAttack || currCard.maxHealth !== prevCard.maxHealth;
+                            if (!isEvolution && !isBuff) {
+                                const heal = currCard.currentHealth - prevCard.currentHealth;
                                 newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: coords.x, y: coords.y, color: '#48bb78' });
                             }
                         }
                     }
                 } else {
-                    // Not found -> Check Graveyard
+                    // Not found -> Check Graveyard (card was destroyed)
                     const inGraveyard = curr.graveyard.find(g => (g as any).instanceId === prevCard.instanceId);
 
                     // If in graveyard (or just missing), assume damage if it was on board.
                     // For AoE visibility, we want to see damage numbers on dying units.
-                    // If it's dead, assume damage = prevCard.currentHealth (or calculate if possible).
-                    // We accept that it might be bounce, but usually bounce is specific effect.
-                    // Prioritize showing damage for AoE.
                     let damage = 0;
                     if (inGraveyard) {
                         const finalHP = (inGraveyard as any).currentHealth || 0;
@@ -2996,26 +2992,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             damage = 0; // Destroy effect, no red damage text
                         }
                     } else {
-                        // Not in graveyard? Maybe banished or just missing. Assume damaged?
-                        // If we can't find it, safe to say 0 or full?
-                        // Let's assume full damage if missing entirely from board and grave (unlikely unless banished)
+                        // Not in graveyard? Maybe banished or just missing.
                         damage = prevCard.currentHealth;
                     }
 
                     if (damage > 0) {
-                        // Get coordinates first - only add damage if we can get valid coordinates
-                        const isMe = pid === currentPlayerId;
-                        const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
-                        const el = refs[idx];
-                        if (el) {
-                            const coords = getScreenCoordsFromElement(el);
-                            // Only add damage if coordinates are valid (not 0,0)
-                            if (coords.x !== 0 || coords.y !== 0) {
-                                newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
-                            }
+                        // 死亡したカードの座標をキャッシュから取得（refs[idx]は既に無効）
+                        const cachedCoords = cardPositionsRef.current.get(prevCard.instanceId);
+
+                        if (cachedCoords && (cachedCoords.x !== 0 || cachedCoords.y !== 0)) {
+                            newDamages.push({ id: Date.now() + Math.random(), value: damage, x: cachedCoords.x, y: cachedCoords.y, color: '#e53e3e' });
                         }
-                        // If el is null or coords are 0,0, skip adding damage text to avoid left-top corner display
+                        // キャッシュから座標を取得できない場合はダメージ表示をスキップ
                     }
+
+                    // 死亡したカードはキャッシュから削除
+                    cardPositionsRef.current.delete(prevCard.instanceId);
                 }
             });
         });
@@ -3625,6 +3617,41 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     useEffect(() => {
         visualPlayerBoardRef.current = visualPlayerBoard;
         visualOpponentBoardRef.current = visualOpponentBoard;
+    }, [visualPlayerBoard, visualOpponentBoard]);
+
+    // カード座標キャッシュの更新（AoEダメージ表示用）
+    // ボードのカードが変更された時に、全カードの座標をキャッシュする
+    useEffect(() => {
+        // ローカルな座標取得関数
+        const getCoordsFromElement = (el: HTMLElement) => {
+            const rect = el.getBoundingClientRect();
+            return { x: rect.left + rect.width / 2, y: rect.top };
+        };
+
+        // プレイヤーボードのカード座標をキャッシュ
+        visualPlayerBoard.forEach((card, idx) => {
+            if (card && card.instanceId) {
+                const el = playerBoardRefs.current[idx];
+                if (el) {
+                    const coords = getCoordsFromElement(el);
+                    if (coords.x !== 0 || coords.y !== 0) {
+                        cardPositionsRef.current.set(card.instanceId, coords);
+                    }
+                }
+            }
+        });
+        // 相手ボードのカード座標をキャッシュ
+        visualOpponentBoard.forEach((card, idx) => {
+            if (card && card.instanceId) {
+                const el = opponentBoardRefs.current[idx];
+                if (el) {
+                    const coords = getCoordsFromElement(el);
+                    if (coords.x !== 0 || coords.y !== 0) {
+                        cardPositionsRef.current.set(card.instanceId, coords);
+                    }
+                }
+            }
+        });
     }, [visualPlayerBoard, visualOpponentBoard]);
 
     // Handle Evolve with Animation
@@ -6981,7 +7008,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 }
 
                                 offsetX = (i - (handSize - 1) / 2) * spacing;
-                                translateY = selectedHandIndex === i ? -15 * scale : 0; // Half lift (-15)
+                                translateY = selectedHandIndex === i ? -8 * scale : 0; // 選択時の持ち上げ量（半分に）
                                 rotate = 0;
                             }
 
@@ -7004,7 +7031,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         // So offsetX=0 means center of screen.
                                         left: '50%',
                                         bottom: 5 * scale, // Slightly higher to avoid cut-off
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.1) translateY(-30px)' : (isHandExpanded ? 'translateY(-10px)' : '')}`,
+                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.05) translateY(-15px)' : (isHandExpanded ? 'translateY(-5px)' : '')}`,
                                         transition: cancellingDragIndex === i
                                             ? 'all 0.3s ease-in' // Ease-in for falling animation
                                             : (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'none' : 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'),

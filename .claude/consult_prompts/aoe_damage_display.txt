@@ -1,0 +1,93 @@
+以下の問題について、あなたの視点で分析と解決策を提示してください。
+
+## 問題の状況
+デジタルカードゲームで、AoE（全体攻撃）ダメージを与えた際に、3体以上のフォロワーにダメージを与えても2体までしか赤文字のダメージ表記が表示されないという報告があります。
+
+## 関連コード
+
+### damageNumbers state定義:
+```typescript
+const [damageNumbers, setDamageNumbers] = React.useState<{ id: number, value: string | number, x: number, y: number, color?: string }[]>([]);
+```
+
+### ダメージ検出ロジック（Board Damage & Death Tracking）:
+```typescript
+// 2. Board Damage & Death Tracking
+// Check previous board for damage or death
+prev?.board.forEach((prevCard, idx) => {
+    if (!prevCard) return;
+
+    // Search for this card in current board
+    const currCard = curr.board.find(c => c?.instanceId === prevCard.instanceId);
+
+    if (currCard) {
+        // Still on board. Check HP.
+        if (currCard.currentHealth < prevCard.currentHealth) {
+            const damage = prevCard.currentHealth - currCard.currentHealth;
+            const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
+            const isMe = pid === currentPlayerId;
+            const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
+            const el = refs[currIdx];
+            if (el) {
+                const coords = getScreenCoordsFromElement(el);
+                newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
+            }
+        }
+        // ... heal detection ...
+    } else {
+        // Not found -> Check Graveyard (card was destroyed)
+        // ... graveyard logic ...
+        if (damage > 0) {
+            const isMe = pid === currentPlayerId;
+            const refs = isMe ? playerBoardRefs.current : opponentBoardRefs.current;
+            const el = refs[idx];  // ← ここが問題の可能性？
+            if (el) {
+                const coords = getScreenCoordsFromElement(el);
+                if (coords.x !== 0 || coords.y !== 0) {
+                    newDamages.push({ id: Date.now() + Math.random(), value: damage, x: coords.x, y: coords.y, color: '#e53e3e' });
+                }
+            }
+        }
+    }
+});
+```
+
+### ダメージテキストの追加:
+```typescript
+if (newDamages.length > 0) {
+    setDamageNumbers(prev => [...prev, ...newDamages]);
+}
+```
+
+### DamageText コンポーネント:
+```typescript
+const DamageText = ({ value, x, y, color, onComplete }: { ... }) => {
+    React.useEffect(() => {
+        const timer = setTimeout(onComplete, 1200);
+        return () => clearTimeout(timer);
+    }, [onComplete]);
+    // ... render ...
+};
+
+// 表示部分
+damageNumbers.map(d => (
+    <DamageText key={d.id} value={d.value} x={d.x} y={d.y} color={d.color} onComplete={() => setDamageNumbers(prev => prev.filter(p => p.id !== d.id))} />
+))
+```
+
+## 疑わしい点
+
+1. **ID生成の衝突**: `Date.now() + Math.random()` は同一ミリ秒内に複数回呼ばれると衝突する可能性がある。Reactの`key`が重複すると表示が正しく行われない。
+
+2. **死亡時のref参照**: カードが破壊された場合、`refs[idx]`を使用しているが、`idx`は前の状態のインデックス。現在のボードでは既にそのインデックスにカードがない可能性がある。
+
+3. **座標が0,0の場合のスキップ**: `coords.x !== 0 || coords.y !== 0` の条件で、座標が取得できないケースがスキップされている。
+
+## 質問
+1. 問題の根本原因は何ですか？
+2. ID生成方法を改善すべきですか？（例：UUID、連番カウンター、crypto.randomUUID()など）
+3. 死亡したカードの座標取得方法に問題はありますか？
+4. 他に見落としている可能性のある原因は？
+5. 推奨する解決策は？
+
+自由に分析し、あなた独自の観点で回答してください。
