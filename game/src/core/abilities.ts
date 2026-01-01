@@ -72,7 +72,11 @@ function processSingleEffect(
                 const opponent = { ...newState.players[opponentId] };
                 opponent.board = opponent.board.map(c => {
                     if (!c) return null;
-                    const newCard = { ...c };
+                    // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
+                    const newCard = {
+                        ...c,
+                        passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                    };
                     newCard.currentHealth -= (effect.value || 0);
                     return newCard;
                 });
@@ -100,7 +104,11 @@ function processSingleEffect(
                     const boardIndex = opponent.board.findIndex(c => c?.instanceId === target.instanceId);
 
                     if (boardIndex !== -1) {
-                        const newCard = { ...target };
+                        // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
+                        const newCard = {
+                            ...target,
+                            passiveAbilities: target.passiveAbilities ? [...target.passiveAbilities] : []
+                        };
                         newCard.currentHealth -= (effect.value || 0);
                         opponent.board[boardIndex] = newCard;
 
@@ -179,7 +187,11 @@ function processSingleEffect(
             if (effect.targetType === 'ALL_FOLLOWERS') {
                 p.board = p.board.map(c => {
                     if (!c) return null;
-                    const newCard = { ...c };
+                    // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
+                    const newCard = {
+                        ...c,
+                        passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                    };
                     newCard.currentHealth = Math.min(newCard.maxHealth, newCard.currentHealth + (effect.value || 0));
                     return newCard;
                 });
@@ -193,7 +205,11 @@ function processSingleEffect(
                     const target = validTargets[idx] as BoardCard;
                     const bIdx = p.board.findIndex(c => c?.instanceId === target.instanceId);
                     if (bIdx !== -1) {
-                        const newCard = { ...target };
+                        // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
+                        const newCard = {
+                            ...target,
+                            passiveAbilities: target.passiveAbilities ? [...target.passiveAbilities] : []
+                        };
                         newCard.currentHealth = Math.min(newCard.maxHealth, newCard.currentHealth + (effect.value || 0));
                         p.board[bIdx] = newCard;
                         newState.players = { ...newState.players, [playerId]: p };

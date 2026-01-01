@@ -27,6 +27,14 @@
     z-index: 10;
 }
 
+/* Disable hover effect for cards on board */
+.card.on-board:hover {
+    transform: none;
+    box-shadow: inherit;
+    border-color: inherit;
+    z-index: inherit;
+}
+
 /* Card Cost */
 .card-cost {
     position: absolute;

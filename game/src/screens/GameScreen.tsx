@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
-import { initializeGame, gameReducer, getCardDefinition } from '../core/engine';
+import { initializeGame, gameReducer, getCardDefinition, getAllCardNames } from '../core/engine';
 import { ClassType, Player, Card as CardModel } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
@@ -18,11 +18,23 @@ const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
 
+// Sleeve Images (Card Back)
+const azyaSleeve = getAssetUrl('/sleeves/azya_sleeve.png');
+const senkaSleeve = getAssetUrl('/sleeves/senka_sleeve.png');
+const yorukaSleeve = getAssetUrl('/sleeves/yoruka_sleeve.png');
+
 // Helper to get leader image by class
 const getLeaderImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return yorukaLeaderImg;
     if (cls === 'AJA') return azyaLeaderImg;
     return senkaLeaderImg;
+};
+
+// Helper to get sleeve image by class
+const getSleeveImg = (cls: ClassType): string => {
+    if (cls === 'YORUKA') return yorukaSleeve;
+    if (cls === 'AJA') return azyaSleeve;
+    return senkaSleeve;
 };
 
 // --- Scale Factor Hook for 4K/Multi-resolution Support ---
@@ -174,16 +186,17 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
         : 'radial-gradient(circle, rgba(255,230,100,0.9) 0%, rgba(255,200,50,0.4) 50%, transparent 80%)';
     const sparkleColor = isDebuff ? '#ff4444' : '#ffd93d';
 
-    // Color for attack value: positive = red, negative = blue, zero = gray
-    const atkColor = atkBuff > 0 ? '#ff6b6b' : atkBuff < 0 ? '#6b9fff' : '#888888';
-    const atkGlow = atkBuff > 0 ? 'rgba(255,100,100,0.8)' : atkBuff < 0 ? 'rgba(100,150,255,0.8)' : 'rgba(128,128,128,0.5)';
-
-    // Color for HP value: positive = green, negative = purple, zero = gray
-    const hpColor = hpBuff > 0 ? '#6bff6b' : hpBuff < 0 ? '#ff6bff' : '#888888';
-    const hpGlow = hpBuff > 0 ? 'rgba(100,255,100,0.8)' : hpBuff < 0 ? 'rgba(255,100,255,0.8)' : 'rgba(128,128,128,0.5)';
+    // All buff values shown in yellow
+    const buffColor = '#ffd93d';
+    const buffGlow = 'rgba(255,217,61,0.8)';
 
     // Format number with sign
     const formatValue = (val: number) => val >= 0 ? `+${val}` : `${val}`;
+
+    // Card dimensions for positioning (approximate card size on board)
+    // Attack is displayed at bottom-left, HP at bottom-right of the card
+    const cardWidth = 80; // Approximate card width
+    const cardHeight = 110; // Approximate card height
 
     return (
         <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
@@ -196,7 +209,7 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
                 @keyframes buffNumberRise {
                     0% { transform: translateY(0); opacity: 0; }
                     20% { opacity: 1; }
-                    100% { transform: translateY(-40px); opacity: 0; }
+                    100% { transform: translateY(-30px); opacity: 0; }
                 }
                 @keyframes buffSparkle {
                     0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
@@ -216,46 +229,41 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
                 filter: 'blur(8px)'
             }} />
 
-            {/* Buff/Debuff Numbers */}
-            <div style={{
-                position: 'absolute',
-                left: 0, top: -20,
-                display: 'flex',
-                gap: '20px',
-                transform: 'translateX(-50%)',
-                animation: 'buffNumberRise 1.2s ease-out forwards'
-            }}>
-                {/* Attack Value */}
+            {/* Attack Value - positioned at bottom-left of card */}
+            {atkBuff !== 0 && (
                 <div style={{
-                    fontSize: '28px',
+                    position: 'absolute',
+                    left: -cardWidth / 2 + 12,
+                    top: cardHeight / 2 - 20,
+                    fontSize: '24px',
                     fontWeight: 'bold',
-                    color: atkColor,
-                    textShadow: `0 0 10px ${atkGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
-                    fontFamily: 'Tamanegi, sans-serif'
+                    color: buffColor,
+                    textShadow: `0 0 10px ${buffGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
+                    fontFamily: 'Tamanegi, sans-serif',
+                    animation: 'buffNumberRise 1.2s ease-out forwards',
+                    textAlign: 'center'
                 }}>
                     {formatValue(atkBuff)}
                 </div>
-                {/* Separator */}
+            )}
+
+            {/* HP Value - positioned at bottom-right of card */}
+            {hpBuff !== 0 && (
                 <div style={{
-                    fontSize: '28px',
+                    position: 'absolute',
+                    left: cardWidth / 2 - 28,
+                    top: cardHeight / 2 - 20,
+                    fontSize: '24px',
                     fontWeight: 'bold',
-                    color: isDebuff ? '#ff8888' : '#ffd93d',
-                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                    fontFamily: 'Tamanegi, sans-serif'
-                }}>
-                    /
-                </div>
-                {/* HP Value */}
-                <div style={{
-                    fontSize: '28px',
-                    fontWeight: 'bold',
-                    color: hpColor,
-                    textShadow: `0 0 10px ${hpGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
-                    fontFamily: 'Tamanegi, sans-serif'
+                    color: buffColor,
+                    textShadow: `0 0 10px ${buffGlow}, 2px 2px 4px rgba(0,0,0,0.8)`,
+                    fontFamily: 'Tamanegi, sans-serif',
+                    animation: 'buffNumberRise 1.2s ease-out forwards',
+                    textAlign: 'center'
                 }}>
                     {formatValue(hpBuff)}
                 </div>
-            </div>
+            )}
 
             {/* Sparkle particles */}
             {[...Array(8)].map((_, i) => (
@@ -275,6 +283,69 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
 };
 
 // --- Visual Effects ---
+// BANE effect component - Purple skull animation
+const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComplete: () => void }) => {
+    React.useEffect(() => {
+        const timer = setTimeout(onComplete, 1200);
+        return () => clearTimeout(timer);
+    }, [onComplete]);
+
+    return (
+        <div style={{
+            position: 'absolute',
+            left: x,
+            top: y,
+            transform: 'translate(-50%, -50%)',
+            width: 200,
+            height: 200,
+            pointerEvents: 'none',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+        }}>
+            {/* Purple skull icon using emoji or custom drawing */}
+            <div style={{
+                fontSize: '120px',
+                animation: 'baneSkullAppear 1.2s ease-out forwards',
+                textShadow: '0 0 30px #9b59b6, 0 0 60px #8e44ad, 0 0 90px #6c3483',
+                filter: 'drop-shadow(0 0 20px #9b59b6) hue-rotate(-10deg)',
+            }}>
+                💀
+            </div>
+            {/* Purple particle effects */}
+            {[...Array(12)].map((_, i) => (
+                <div key={i} style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: 8,
+                    height: 8,
+                    background: 'radial-gradient(circle, #9b59b6, #6c3483)',
+                    borderRadius: '50%',
+                    boxShadow: '0 0 10px #9b59b6, 0 0 20px #8e44ad',
+                    animation: `baneParticle 1s ease-out ${i * 0.08}s forwards`,
+                    transform: `rotate(${i * 30}deg) translateX(0)`,
+                }} />
+            ))}
+            <style>{`
+                @keyframes baneSkullAppear {
+                    0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+                    20% { transform: scale(1.3) rotate(10deg); opacity: 1; }
+                    40% { transform: scale(1) rotate(-5deg); opacity: 1; }
+                    60% { transform: scale(1.1) rotate(0deg); opacity: 1; }
+                    80% { transform: scale(1) rotate(0deg); opacity: 0.8; }
+                    100% { transform: scale(1.5) rotate(0deg); opacity: 0; }
+                }
+                @keyframes baneParticle {
+                    0% { transform: rotate(${0}deg) translateX(0); opacity: 1; }
+                    100% { transform: rotate(${0}deg) translateX(100px); opacity: 0; }
+                }
+            `}</style>
+        </div>
+    );
+};
+
 const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
     // Sprite Configuration (Updated for 8x8 standardization)
     const spriteConfig = React.useMemo(() => {
@@ -336,14 +407,20 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         } else if (type === 'SUMI') {
             playSE('yami.mp3', 0.6);
         } else if (type === 'HEAL') {
-            playSE('water.mp3', 0.6);
+            playSE('heal.mp3', 0.6);
         } else if (type === 'BLUE_FIRE') {
             playSE('fire.mp3', 0.5);
+        } else if (type === 'BANE') {
+            playSE('yami.mp3', 0.7); // Use dark/death sound for BANE
         }
     }, [type, audioSettings]);
 
     if (type === 'HEAL') {
         return <HealEffectVisual x={x} y={y} onComplete={onComplete} />;
+    }
+
+    if (type === 'BANE') {
+        return <BaneEffectVisual x={x} y={y} onComplete={onComplete} />;
     }
 
     const style: React.CSSProperties = {
@@ -652,95 +729,111 @@ const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
         }
     }, [logs.length]); // Scroll on length change
 
-    // カード名を検出してクリック可能にする
+    // カード名を検出してクリック可能にする（カード名データベースマッチング方式）
     const renderLogWithCardLinks = (log: string, _index: number) => {
-        // カード名パターン: 「」で囲まれた部分、または「は」「を」「に」の前の名前
-        // 複雑なパターンマッチングの代わりに、"は"の前の部分をカード名候補とする
+        const cardNameStyle: React.CSSProperties = {
+            color: '#ffd700',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: '2px',
+            fontWeight: 'bold',
+        };
+
+        const handleMouseEnter = (e: React.MouseEvent) => {
+            (e.target as HTMLElement).style.color = '#ffec8b';
+            (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
+        };
+
+        const handleMouseLeave = (e: React.MouseEvent) => {
+            (e.target as HTMLElement).style.color = '#ffd700';
+            (e.target as HTMLElement).style.textShadow = 'none';
+        };
+
+        const createClickableCardName = (cardName: string, key: number) => (
+            <span
+                key={key}
+                style={cardNameStyle}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onCardNameClick?.(cardName);
+                }}
+            >
+                {cardName}
+            </span>
+        );
+
+        // カード名データベースから全カード名を取得（長い名前優先でソート済み）
+        const allCardNames = getAllCardNames();
+
+        // カード名の境界をチェックする関数
+        // 前後に単語の一部となる文字（英数字、ひらがな、カタカナ、漢字）がある場合はマッチしない
+        const isWordBoundary = (char: string | undefined): boolean => {
+            if (!char) return true; // 文字列の端は境界
+            // 英数字
+            if (/[a-zA-Z0-9]/.test(char)) return false;
+            // ひらがな・カタカナ・漢字
+            if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(char)) return false;
+            // その他（スペース、句読点など）は境界
+            return true;
+        };
+
+        // ログ内のすべてのカード名の位置を検出
+        const matches: { start: number; end: number; name: string }[] = [];
+
+        for (const cardName of allCardNames) {
+            let searchStart = 0;
+            while (true) {
+                const idx = log.indexOf(cardName, searchStart);
+                if (idx === -1) break;
+
+                // 単語境界チェック：カード名の前後が境界であることを確認
+                const charBefore = idx > 0 ? log[idx - 1] : undefined;
+                const charAfter = idx + cardName.length < log.length ? log[idx + cardName.length] : undefined;
+                const isValidBoundary = isWordBoundary(charBefore) && isWordBoundary(charAfter);
+
+                // 既存のマッチと重複していないかチェック
+                const overlaps = matches.some(m =>
+                    (idx >= m.start && idx < m.end) ||
+                    (idx + cardName.length > m.start && idx + cardName.length <= m.end) ||
+                    (idx <= m.start && idx + cardName.length >= m.end)
+                );
+
+                if (isValidBoundary && !overlaps) {
+                    matches.push({ start: idx, end: idx + cardName.length, name: cardName });
+                }
+
+                searchStart = idx + 1;
+            }
+        }
+
+        // マッチが見つからない場合はそのまま表示
+        if (matches.length === 0) {
+            return <span>{log}</span>;
+        }
+
+        // 開始位置でソート
+        matches.sort((a, b) => a.start - b.start);
+
+        // パーツを組み立て
         const parts: React.ReactNode[] = [];
-        let remaining = log;
+        let lastEnd = 0;
         let key = 0;
 
-        // パターン: 「XXX」形式のカード名を検出
-        const bracketPattern = /「([^」]+)」/g;
-        let match;
-        let lastIndex = 0;
-
-        while ((match = bracketPattern.exec(remaining)) !== null) {
-            // マッチ前のテキスト
-            if (match.index > lastIndex) {
-                parts.push(<span key={key++}>{remaining.slice(lastIndex, match.index)}</span>);
+        for (const match of matches) {
+            // マッチの前のテキスト
+            if (match.start > lastEnd) {
+                parts.push(<span key={key++}>{log.slice(lastEnd, match.start)}</span>);
             }
             // カード名（クリック可能）
-            const cardName = match[1];
-            parts.push(
-                <span
-                    key={key++}
-                    style={{
-                        color: '#ffd700', // Yellow color for visibility
-                        cursor: 'pointer',
-                        textDecoration: 'underline',
-                        textUnderlineOffset: '2px',
-                        fontWeight: 'bold',
-                    }}
-                    onMouseEnter={(e) => {
-                        (e.target as HTMLElement).style.color = '#ffec8b';
-                        (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
-                    }}
-                    onMouseLeave={(e) => {
-                        (e.target as HTMLElement).style.color = '#ffd700';
-                        (e.target as HTMLElement).style.textShadow = 'none';
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onCardNameClick?.(cardName);
-                    }}
-                >
-                    「{cardName}」
-                </span>
-            );
-            lastIndex = match.index + match[0].length;
+            parts.push(createClickableCardName(match.name, key++));
+            lastEnd = match.end;
         }
 
-        // 残りのテキスト
-        if (lastIndex < remaining.length) {
-            parts.push(<span key={key++}>{remaining.slice(lastIndex)}</span>);
-        }
-
-        // パターンマッチがなければ、"は"の前をカード名として扱う
-        if (parts.length === 0) {
-            const haMatch = log.match(/^(.+?) は /);
-            if (haMatch && onCardNameClick) {
-                const cardName = haMatch[1];
-                parts.push(
-                    <span
-                        key={key++}
-                        style={{
-                            color: '#ffd700', // Yellow color for visibility
-                            cursor: 'pointer',
-                            textDecoration: 'underline',
-                            textUnderlineOffset: '2px',
-                            fontWeight: 'bold',
-                        }}
-                        onMouseEnter={(e) => {
-                            (e.target as HTMLElement).style.color = '#ffec8b';
-                            (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
-                        }}
-                        onMouseLeave={(e) => {
-                            (e.target as HTMLElement).style.color = '#ffd700';
-                            (e.target as HTMLElement).style.textShadow = 'none';
-                        }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onCardNameClick(cardName);
-                        }}
-                    >
-                        {cardName}
-                    </span>
-                );
-                parts.push(<span key={key++}>{log.slice(haMatch[1].length)}</span>);
-            } else {
-                parts.push(<span key={key++}>{log}</span>);
-            }
+        // 最後のマッチの後のテキスト
+        if (lastEnd < log.length) {
+            parts.push(<span key={key++}>{log.slice(lastEnd)}</span>);
         }
 
         return <>{parts}</>;
@@ -822,6 +915,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
     const [vibrate, setVibrate] = React.useState(false);
     const burstCreatedRef = React.useRef(false); // Track if burst particles have been created
 
+    // Ref for kirakira audio to enable fadeout during FLIP phase
+    const kirakiraAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
     // Use refs to avoid stale closures
     const onPhaseChangeRef = React.useRef(onPhaseChange);
@@ -844,11 +939,25 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
         let intervalId: ReturnType<typeof setInterval> | null = null;
 
         switch (phase) {
-            case 'ZOOM_IN':
+            case 'ZOOM_IN': {
                 // Start at card position, scale to match board card size initially
                 setPosition({ x: startX, y: startY });
                 setCurrentScale(0.25); // Match board card size (90/360)
-                setRotateZ(-10); // Start tilted -10 degrees (to the right)
+                setRotateZ(0); // Start at 0 degrees (no tilt) - will animate to -5 during move
+
+                // Animate Z-axis tilt during ZOOM_IN phase (0 -> -5 degrees)
+                const zoomInStartTime = Date.now();
+                const zoomInDuration = 650; // Match the movement duration
+                const zoomInInterval = setInterval(() => {
+                    const elapsed = Date.now() - zoomInStartTime;
+                    const progress = Math.min(elapsed / zoomInDuration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 2); // Ease-out
+                    setRotateZ(-5 * eased); // 0 -> -5
+                    if (progress >= 1) {
+                        clearInterval(zoomInInterval);
+                    }
+                }, 16);
+
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
                     // Move to left-center of board area (slightly left of center)
@@ -857,9 +966,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
                     setCurrentScale(0.75); // Target 3/4 size during animation (270/360)
                 }, 50);
-                // Play kirakira sound when card arrives
+                // Play kirakira sound when card arrives (store ref for fadeout in FLIP phase)
                 const kirakiraTimer = setTimeout(() => {
-                    playSERef.current?.('kirakira.mp3', 0.7);
+                    // Create audio directly instead of using playSE to enable fadeout control
+                    const audio = new Audio(getAssetUrl('/se/kirakira.mp3'));
+                    audio.volume = 0.7;
+                    audio.play().catch(() => { /* ignore autoplay restrictions */ });
+                    kirakiraAudioRef.current = audio;
                 }, 600);
                 // Transition to next phase after animation completes
                 const zoomTimer = setTimeout(() => {
@@ -869,7 +982,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     clearTimeout(timer);
                     clearTimeout(zoomTimer);
                     clearTimeout(kirakiraTimer);
+                    clearInterval(zoomInInterval);
                 };
+            }
 
             case 'WHITE_FADE':
                 // Create charge particles that will converge toward the card
@@ -925,6 +1040,24 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             case 'FLIP':
                 // Play syakin sound at start of flip
                 playSERef.current?.('syakin.mp3', 0.8);
+                // Fadeout kirakira sound when flip starts
+                if (kirakiraAudioRef.current) {
+                    const audio = kirakiraAudioRef.current;
+                    const fadeOutDuration = 300; // 300ms fadeout
+                    const fadeInterval = 30;
+                    const steps = fadeOutDuration / fadeInterval;
+                    const volumeStep = audio.volume / steps;
+                    let currentStep = 0;
+                    const fadeOut = setInterval(() => {
+                        currentStep++;
+                        audio.volume = Math.max(0, audio.volume - volumeStep);
+                        if (currentStep >= steps) {
+                            clearInterval(fadeOut);
+                            audio.pause();
+                            kirakiraAudioRef.current = null;
+                        }
+                    }, fadeInterval);
+                }
                 // Clear charge particles
                 setChargeParticles([]);
 
@@ -946,9 +1079,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
                         setRotateY(currentRotateY); // 10 to 170
                         // Scale up to 1.1x during rapid rotation (enhanced evolution animation)
-                        setCurrentScale(0.75 + eased * 0.35); // Scale up from 0.75 to 1.1
-                        // Z-axis tilt: Return from -10 degrees to 0 during rapid rotation only
-                        setRotateZ(-10 * (1 - eased)); // -10 -> 0
+                        // Scale up: 1.1x for normal evolution, 1.2x for super evolution (useSep)
+                        const targetScale = useSep ? 1.2 : 1.1;
+                        setCurrentScale(0.75 + eased * (targetScale - 0.75)); // Scale up from 0.75 to targetScale
+                        // Z-axis tilt: Animate from -5 degrees to -3 degrees during rapid rotation
+                        // Note: After Y-axis 180° rotation, positive Z values appear as left tilt
+                        // So we use negative value (-3) for right tilt after rotation
+                        setRotateZ(-5 + eased * 2); // -5 -> -3
 
                         // Fade out white light quickly as rotation starts
                         setWhiteness(Math.max(1 - progress * 3, 0));
@@ -1030,7 +1167,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 }, 40);
                 return () => { if (intervalId) clearInterval(intervalId); };
 
-            case 'ZOOM_OUT':
+            case 'ZOOM_OUT': {
                 // Gradually return to original position, size, and rotation
                 setPosition({ x: startX, y: startY });
 
@@ -1039,6 +1176,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 const zoomOutDuration = 250; // Quicker landing (Was 500ms)
 
                 const startScale = currentScale; // Current scale (should be ~1)
+                const startRotateZ = -3; // Current Z rotation after FLIP phase (-5 -> -3)
 
                 intervalId = setInterval(() => {
                     const elapsed = Date.now() - zoomOutStart;
@@ -1050,16 +1188,21 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     // Gradually reduce scale to 0.25 (board card size)
                     setCurrentScale(startScale - (startScale - 0.25) * eased);
 
+                    // Gradually return Z rotation to 0 (3 -> 0)
+                    setRotateZ(startRotateZ * (1 - eased));
+
                     if (progress >= 1) {
                         if (intervalId) clearInterval(intervalId);
                         // Keep rotation at 180 (flipped state)
                         setRotateY(180);
                         setChargeRotate(0); // Reset charge rotation
                         setCurrentScale(0.25); // Ensure exact board size
+                        setRotateZ(0); // Ensure exact 0 degrees
                         onPhaseChangeRef.current('LAND');
                     }
                 }, 16);
                 return () => { if (intervalId) clearInterval(intervalId); };
+            }
 
             case 'LAND':
                 onShakeRef.current();
@@ -1073,6 +1216,11 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
         return () => {
             if (timer) clearTimeout(timer);
             if (intervalId) clearInterval(intervalId);
+            // Stop kirakira if still playing when animation is interrupted
+            if (kirakiraAudioRef.current) {
+                kirakiraAudioRef.current.pause();
+                kirakiraAudioRef.current = null;
+            }
         };
     }, [phase]); // Only depend on phase to avoid reset loops on state updates
 
@@ -1335,9 +1483,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
 
 
-// yoRuka result images
-const yorukaWinImg = getAssetUrl('/cards/yoRuka_win2.png');
-const yorukaLoseImg = getAssetUrl('/cards/yoRuka_lose.png');
+// Result images for each class
+const yorukaWinImg = getAssetUrl('/leaders/yoRuka_win.png');
+const yorukaLoseImg = getAssetUrl('/leaders/yoRuka_lose.png');
+const senkaWinImg = getAssetUrl('/leaders/senka_win.png');
+const senkaLoseImg = getAssetUrl('/leaders/senka_lose.png');
+const azyaWinImg = getAssetUrl('/leaders/azya_win.png');
+const azyaLoseImg = getAssetUrl('/leaders/azya_lose.png');
 
 // Battle statistics interface
 interface BattleStats {
@@ -1352,6 +1504,7 @@ interface BattleStats {
 interface GameOverScreenProps {
     winnerId: string;
     playerId: string;
+    playerClass: ClassType;
     onRematch: (deckType: ClassType) => void;
     onLeave: () => void;
     isOnline: boolean;
@@ -1362,8 +1515,20 @@ interface GameOverScreenProps {
     onCardInfoClick: (card: CardModel | null) => void;
 }
 
-const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
+const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
+
+    // Get result image based on player class and victory status
+    const getResultImage = () => {
+        if (playerClass === 'SENKA') {
+            return isVictory ? senkaWinImg : senkaLoseImg;
+        } else if (playerClass === 'AJA') {
+            return isVictory ? azyaWinImg : azyaLoseImg;
+        } else {
+            // YORUKA
+            return isVictory ? yorukaWinImg : yorukaLoseImg;
+        }
+    };
     const [timeLeft, setTimeLeft] = React.useState(15);
     const [showDeckSelect, setShowDeckSelect] = React.useState(false);
     const [selectedDeck, setSelectedDeck] = React.useState<ClassType | null>(null);
@@ -1557,12 +1722,14 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                     </div>
                 ) : (
                     <div style={{
-                        color: 'rgba(255,255,255,0.3)',
-                        fontSize: '1.2rem',
-                        textAlign: 'center'
-                    }}>
-                        バトルログのカード名を<br />クリックすると詳細表示
-                    </div>
+                        width: '100%',
+                        height: '100%',
+                        backgroundImage: `url(${getResultImage()})`,
+                        backgroundSize: 'contain',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        opacity: 0.9
+                    }} />
                 )}
             </div>
 
@@ -1628,15 +1795,20 @@ const GameOverScreen = ({ winnerId, playerId, onRematch, onLeave, isOnline, myRe
                     </div>
                 </div>
 
-                {/* yoRuka message */}
+                {/* yoRuka message - positioned above the yoRuka image */}
                 <div style={{
+                    position: 'absolute',
+                    right: 20,
+                    bottom: 270,
+                    width: 180,
+                    textAlign: 'center',
                     fontFamily: 'var(--font-tamanegi)',
-                    fontSize: '1.6rem',
+                    fontSize: '1.4rem',
                     color: isVictory ? '#f6e05e' : '#e53e3e',
                     textShadow: isVictory
                         ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
                         : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
-                    marginBottom: 20
+                    zIndex: 10
                 }}>
                     {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
                 </div>
@@ -1771,6 +1943,8 @@ const DeckSelectButton = ({ deckType, label, onSelect, getStyle }: DeckSelectBut
 };
 
 // --- Custom Hook for Visual Board ---
+// NOTE: Deep copy passiveAbilities to ensure React detects changes correctly
+// This fixes the issue where effects (AURA, BARRIER) don't display during rapid updates
 const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
     const [visualBoard, setVisualBoard] = React.useState<(any & { isDying?: boolean })[]>([]);
     // Track previous real board to detect removals
@@ -1784,17 +1958,28 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
                 if (!v) return;
                 const real = realMap.get((v as any).instanceId);
                 if (real) {
-                    next.push({ ...real, isDying: false });
+                    // Deep copy passiveAbilities to ensure React detects changes
+                    next.push({
+                        ...real,
+                        passiveAbilities: real.passiveAbilities ? [...real.passiveAbilities] : [],
+                        isDying: false
+                    });
                     realMap.delete((v as any).instanceId);
                 } else {
                     // Removed from real board -> Mark Dying
-                    next.push({ ...v, isDying: true });
+                    // Preserve killedByBane flag for BANE death effect
+                    next.push({ ...v, isDying: true, killedByBane: (v as any).killedByBane });
                 }
             });
 
             // 2. Add new cards (Appended)
             realMap.forEach(real => {
-                next.push({ ...real, isDying: false });
+                // Deep copy passiveAbilities for new cards too
+                next.push({
+                    ...real,
+                    passiveAbilities: real.passiveAbilities ? [...real.passiveAbilities] : [],
+                    isDying: false
+                });
             });
 
             return next;
@@ -1898,6 +2083,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Card info display for result screen (when clicking card names in log)
     const [resultCardInfo, setResultCardInfo] = React.useState<CardModel | null>(null);
 
+    // Necromance effect state - shows -X on graveyard when necromance is activated
+    interface NecromanceEffect {
+        playerId: string;
+        amount: number;
+        key: number;
+    }
+    const [necromanceEffects, setNecromanceEffects] = React.useState<NecromanceEffect[]>([]);
+    const necromanceKeyRef = React.useRef(0);
+
+    // Track previous logs to detect necromance activation
+    const prevLogsLengthRef = React.useRef(gameState.logs.length);
+
     // HOST: Send initial game state when connected AND coin toss is complete
     const initialStateSentRef = useRef(false);
     useEffect(() => {
@@ -1914,6 +2111,38 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
 
+    // Detect necromance activation from logs and trigger visual effect
+    useEffect(() => {
+        const currentLength = gameState.logs.length;
+        if (currentLength > prevLogsLengthRef.current) {
+            // Check new logs for necromance pattern: "XXX はネクロマンス Y を発動！"
+            for (let i = prevLogsLengthRef.current; i < currentLength; i++) {
+                const log = gameState.logs[i];
+                const necroMatch = log.match(/(.+?) はネクロマンス (\d+) を発動/);
+                if (necroMatch) {
+                    const playerName = necroMatch[1];
+                    const amount = parseInt(necroMatch[2], 10);
+                    // Determine which player triggered necromance
+                    const triggerPlayerId = player?.name === playerName ? currentPlayerId : opponentPlayerId;
+
+                    // Add necromance effect
+                    const effectKey = necromanceKeyRef.current++;
+                    setNecromanceEffects(prev => [...prev, {
+                        playerId: triggerPlayerId,
+                        amount,
+                        key: effectKey
+                    }]);
+
+                    // Remove effect after animation
+                    setTimeout(() => {
+                        setNecromanceEffects(prev => prev.filter(e => e.key !== effectKey));
+                    }, 1500);
+                }
+            }
+        }
+        prevLogsLengthRef.current = currentLength;
+    }, [gameState.logs.length, currentPlayerId, opponentPlayerId, player?.name]);
+
     const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || []);
     const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || []);
 
@@ -1928,13 +2157,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [notifiedTurn, setNotifiedTurn] = React.useState<number>(-1); // Track notified turn
     const processingHandledRef = React.useRef<any>(null);
 
-    // Generic Card Animation (e.g. Draw, Generate)
-    const [animatingCard, setAnimatingCard] = React.useState<{
+    // Generic Card Animation (e.g. Draw, Generate) - Array for multiple simultaneous cards
+    const [animatingCards, setAnimatingCards] = React.useState<{
         card: CardModel;
         status: 'APPEAR' | 'FLY';
         targetX?: number;
         targetY?: number;
-    } | null>(null);
+        xOffset: number; // X offset for simultaneous display
+    }[]>([]);
 
     // Interaction State
     const [dragState, setDragState] = React.useState<{
@@ -1962,6 +2192,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Attack Animation State (for Y-axis rotation during attack)
     const [attackingFollowerInstanceId, setAttackingFollowerInstanceId] = React.useState<string | null>(null);
+    // Counter-Attack Animation State (for Y-axis rotation during counter-attack / being attacked)
+    const [counterAttackingFollowerInstanceId, setCounterAttackingFollowerInstanceId] = React.useState<string | null>(null);
 
     // Drag Cancel Animation State (for ease-in falling animation)
     const [cancellingDragIndex, setCancellingDragIndex] = React.useState<number | null>(null);
@@ -1986,7 +2218,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [gameState.winnerId]);
 
     interface ActiveEffectState {
-        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE' | 'BUFF';
+        type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE' | 'BUFF' | 'BANE';
         x: number;
         y: number;
         key: number;
@@ -2097,12 +2329,57 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }]);
     };
 
+    // --- BANE Death Effect Detection ---
+    // Track previous board states to detect BANE deaths
+    const prevPlayerBoardRef = React.useRef<any[]>([]);
+    const prevOpponentBoardRef = React.useRef<any[]>([]);
 
-    // --- Draw Animation State ---
+    React.useEffect(() => {
+        // Check for cards that just started dying with killedByBane flag
+        const checkBaneDeaths = (currentBoard: any[], prevBoard: any[], playerId: string) => {
+            prevBoard.forEach((prevCard: any) => {
+                if (!prevCard) return;
+                const stillExists = currentBoard.find((c: any) => c && c.instanceId === prevCard.instanceId);
+                // Card was removed and had killedByBane flag
+                if (!stillExists && prevCard.killedByBane) {
+                    // Find position from visual board refs
+                    const isOpponent = playerId === opponentPlayerId;
+                    const refs = isOpponent ? opponentBoardRefs : playerBoardRefs;
+                    const visualBoard = isOpponent ? visualOpponentBoardRef.current : visualPlayerBoardRef.current;
+                    const visualIndex = visualBoard.findIndex((c: any) => c && c.instanceId === prevCard.instanceId);
+
+                    if (visualIndex >= 0 && refs.current[visualIndex]) {
+                        const el = refs.current[visualIndex];
+                        const rect = el.getBoundingClientRect();
+                        const gameCoords = screenToGameCoords(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                        // Play BANE effect at card position
+                        setActiveEffects(prev => [...prev, {
+                            type: 'BANE' as const,
+                            x: gameCoords.x,
+                            y: gameCoords.y,
+                            key: Date.now() + Math.random()
+                        }]);
+                    }
+                }
+            });
+        };
+
+        const playerBoard = gameState.players[currentPlayerId]?.board || [];
+        const opponentBoard = gameState.players[opponentPlayerId]?.board || [];
+
+        checkBaneDeaths(playerBoard, prevPlayerBoardRef.current, currentPlayerId);
+        checkBaneDeaths(opponentBoard, prevOpponentBoardRef.current, opponentPlayerId);
+
+        // Update refs for next comparison
+        prevPlayerBoardRef.current = playerBoard.map((c: any) => c ? { ...c } : null);
+        prevOpponentBoardRef.current = opponentBoard.map((c: any) => c ? { ...c } : null);
+    }, [gameState.players, currentPlayerId, opponentPlayerId]);
+
+    // --- Draw Animation State (Single batch for simultaneous display) ---
+    const DRAW_ANIMATION_DURATION = 600; // ms for animation
     const [drawAnimation, setDrawAnimation] = React.useState<{
         isPlayer: boolean;
-        count: number;
-        status: 'FLYING' | 'DONE';
+        count: number; // Number of cards to show simultaneously
     } | null>(null);
     const prevHandSizeRef = React.useRef<{ player: number, opponent: number }>({ player: 0, opponent: 0 });
 
@@ -2278,32 +2555,59 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             setIsProcessingEffect(true);
             isProcessingEffectRef.current = true;
 
-            // case A: GENERATE_CARD with animation
+            // case A: GENERATE_CARD with animation - batch process consecutive GENERATE_CARDs from same source
             if (current.effect.type === 'GENERATE_CARD' && current.effect.targetCardId) {
-                const cardDef = getCardDefinition(current.effect.targetCardId);
-                if (cardDef) {
-                    // Determine if the card is generated for the player or opponent
-                    const isForPlayer = current.sourcePlayerId === currentPlayerId;
+                // Collect all consecutive GENERATE_CARD effects from the same source
+                const generateEffects = [current];
+                const pendingEffects = gameState.pendingEffects || [];
+                for (let i = 1; i < pendingEffects.length; i++) {
+                    const nextEffect = pendingEffects[i];
+                    if (nextEffect.effect.type === 'GENERATE_CARD' &&
+                        nextEffect.sourceCard.id === current.sourceCard.id &&
+                        nextEffect.sourcePlayerId === current.sourcePlayerId) {
+                        generateEffects.push(nextEffect);
+                    } else {
+                        break; // Stop at first non-matching effect
+                    }
+                }
 
-                    // Use actual screen coordinates for proper positioning with window scaling
-                    // Player hand is bottom-right, Opponent hand is top-left
-                    const flyTargetX = isForPlayer ? window.innerWidth - 200 * scale : 200 * scale;
-                    const flyTargetY = isForPlayer ? window.innerHeight - 100 * scale : 100 * scale;
+                // Calculate card positions for simultaneous display
+                const cardWidth = 120;
+                const cardGap = 20;
+                const totalWidth = generateEffects.length * cardWidth + (generateEffects.length - 1) * cardGap;
+                const startOffset = -(totalWidth - cardWidth) / 2;
 
-                    setAnimatingCard({ card: cardDef, status: 'APPEAR', targetX: flyTargetX, targetY: flyTargetY });
+                const isForPlayer = current.sourcePlayerId === currentPlayerId;
+                const flyTargetX = isForPlayer ? window.innerWidth - 200 * scale : 200 * scale;
+                const flyTargetY = isForPlayer ? window.innerHeight - 100 * scale : 100 * scale;
+
+                // Create all animating cards with X offsets
+                const newAnimatingCards = generateEffects.map((eff, idx) => {
+                    const cardDef = getCardDefinition(eff.effect.targetCardId!);
+                    return {
+                        card: cardDef!,
+                        status: 'APPEAR' as const,
+                        targetX: flyTargetX,
+                        targetY: flyTargetY,
+                        xOffset: startOffset + idx * (cardWidth + cardGap)
+                    };
+                }).filter(c => c.card); // Filter out undefined cards
+
+                if (newAnimatingCards.length > 0) {
+                    setAnimatingCards(newAnimatingCards);
 
                     if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
                     effectTimeoutRef.current = setTimeout(() => {
-                        setAnimatingCard(prev => prev ? { ...prev, status: 'FLY' } : null);
+                        setAnimatingCards(prev => prev.map(c => ({ ...c, status: 'FLY' as const })));
                         effectTimeoutRef.current = setTimeout(() => {
-                            setAnimatingCard(null);
+                            setAnimatingCards([]);
                             setIsProcessingEffect(false);
                             isProcessingEffectRef.current = false;
-                            // Online mode synchronization:
-                            // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
-                            // - JOIN waits for state sync from HOST
+                            // Resolve ALL batched effects at once
                             if (gameMode === 'CPU' || gameMode === 'HOST') {
-                                dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+                                generateEffects.forEach(eff => {
+                                    dispatch({ type: 'RESOLVE_EFFECT', playerId: eff.sourcePlayerId, payload: { targetId: eff.targetId } });
+                                });
 
                                 if (gameMode === 'HOST' && connected && adapter) {
                                     setTimeout(() => {
@@ -2314,7 +2618,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
                             effectTimeoutRef.current = null;
                         }, 600);
-                    }, 1000);
+                    }, 800); // Reduced from 1000ms for snappier feel
                     return;
                 }
             }
@@ -2578,7 +2882,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         });
 
         if (newSummonIds.size > 0) {
-            setSummonedCardIds(newSummonIds);
+            setSummonedCardIds(prev => {
+                const merged = new Set([...prev, ...newSummonIds]);
+                return merged;
+            });
             const timer = setTimeout(() => {
                 setSummonedCardIds(new Set());
             }, 1000);
@@ -2656,7 +2963,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     } else if (currCard.currentHealth > prevCard.currentHealth) {
                         // Heal - but skip if this is from evolution (hasEvolved changed to true)
                         const isEvolution = currCard.hasEvolved && !prevCard.hasEvolved;
-                        if (!isEvolution) {
+                        // Skip heal effect if this is from a buff (attack or maxHealth changed)
+                        const isBuff = currCard.currentAttack !== prevCard.currentAttack || currCard.maxHealth !== prevCard.maxHealth;
+                        if (!isEvolution && !isBuff) {
                             const heal = currCard.currentHealth - prevCard.currentHealth;
                             const currIdx = curr.board.findIndex(c => c?.instanceId === currCard.instanceId);
                             const isMe = pid === currentPlayerId;
@@ -2792,7 +3101,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // 1. Reset visual and logic artifacts IMMEDIATELY
         setDamageNumbers([]);
         setActiveEffects([]);
-        setAnimatingCard(null);
+        setAnimatingCards([]);
         setPlayingCardAnim(null);
         setEvolveAnimation(null);
         setDrawAnimation(null);
@@ -3036,9 +3345,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 setIsProcessingEffect(false);
                 isProcessingEffectRef.current = false;
                 processingHandledRef.current = null;
-                // CRITICAL FIX: Clear animatingCard and its timeout to prevent frozen card display
+                // CRITICAL FIX: Clear animatingCards and its timeout to prevent frozen card display
                 // This ensures the card animation doesn't get stuck when HOST syncs state
-                setAnimatingCard(null);
+                setAnimatingCards([]);
                 if (effectTimeoutRef.current) {
                     clearTimeout(effectTimeoutRef.current);
                     effectTimeoutRef.current = null;
@@ -3135,10 +3444,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         // Spell animation - show card flying to center then fade
                         setPlayingCardAnim({
                             card,
+                            sourceIndex: -1, // Remote player's card
                             startX,
                             startY,
                             targetX,
                             targetY,
+                            playerClass: opponent?.class || 'SENKA',
                             onComplete: () => {
                                 setPlayingCardAnim(null);
                             }
@@ -3147,12 +3458,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         // Follower animation
                         setPlayingCardAnim({
                             card,
+                            sourceIndex: -1, // Remote player's card
                             startX,
                             startY,
                             targetX,
                             targetY,
                             finalX,
                             finalY,
+                            playerClass: opponent?.class || 'SENKA',
                             onComplete: () => {
                                 playSE('gan.mp3', 0.6);
                                 triggerShake();
@@ -3254,12 +3567,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Card Play Animation State
     const [playingCardAnim, setPlayingCardAnim] = React.useState<{
         card: any;
+        sourceIndex: number; // Index in hand (to hide during animation)
         startX: number; // Screen coordinates
         startY: number; // Screen coordinates
         targetX: number; // Screen coordinates (intermediate flying point)
         targetY: number; // Screen coordinates (intermediate flying point)
         finalX?: number; // Screen coordinates (Board destination X)
         finalY?: number; // Screen coordinates (Board destination Y)
+        playerClass: ClassType; // Class of the player playing the card (for sleeve)
         onComplete: () => void;
     } | null>(null);
 
@@ -3285,16 +3600,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- State Refs for AI Timing (Moved here to ensure access to all states) ---
     const activeEffectsRef = React.useRef(activeEffects);
-    const animatingCardRef = React.useRef(animatingCard);
+    const animatingCardsRef = React.useRef(animatingCards);
     const playingCardAnimRef = React.useRef(playingCardAnim);
     const evolveAnimationRef = React.useRef(evolveAnimation);
 
     useEffect(() => {
         activeEffectsRef.current = activeEffects;
-        animatingCardRef.current = animatingCard;
+        animatingCardsRef.current = animatingCards;
         playingCardAnimRef.current = playingCardAnim;
         evolveAnimationRef.current = evolveAnimation;
-    }, [activeEffects, animatingCard, playingCardAnim, evolveAnimation]);
+    }, [activeEffects, animatingCards, playingCardAnim, evolveAnimation]);
 
     // --- Final Cannon Special SE ---
     useEffect(() => {
@@ -3472,11 +3787,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             ));
 
         // Check valid targets on the appropriate board
+        // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
+        // Only STEALTH prevents targeting from opponent effects/spells
         const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
         const hasValidTargets = targetBoard.some(c =>
             c && (
                 allowedTargetPlayerId === currentPlayerId || // Own units are usually always valid
-                (!c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA'))
+                !c.passiveAbilities?.includes('STEALTH') // Only STEALTH prevents targeting
             )
         );
 
@@ -3541,12 +3858,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         setPlayingCardAnim({
             card,
+            sourceIndex: index,
             startX,
             startY,
             targetX,
             targetY,
             finalX,
             finalY,
+            playerClass: player?.class || 'SENKA',
             onComplete
         });
 
@@ -3611,16 +3930,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const currO = opponent.hand.length;
 
         if (currP > prev.player) {
-            // Player Drew
-            setDrawAnimation({ isPlayer: true, count: currP - prev.player, status: 'FLYING' });
+            // Player Drew - show all cards simultaneously
+            const count = currP - prev.player;
+            setDrawAnimation({ isPlayer: true, count });
             playSE('card.mp3', 0.5);
-            setTimeout(() => setDrawAnimation(null), 800);
+            setTimeout(() => setDrawAnimation(null), DRAW_ANIMATION_DURATION);
         }
         if (currO > prev.opponent) {
-            // Opponent Drew
-            setDrawAnimation({ isPlayer: false, count: currO - prev.opponent, status: 'FLYING' });
+            // Opponent Drew - show all cards simultaneously
+            const count = currO - prev.opponent;
+            setDrawAnimation({ isPlayer: false, count });
             playSE('card.mp3', 0.5);
-            setTimeout(() => setDrawAnimation(null), 800);
+            setTimeout(() => setDrawAnimation(null), DRAW_ANIMATION_DURATION);
         }
 
         prevHandSizeRef.current = { player: currP, opponent: currO };
@@ -3691,11 +4012,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const state = gameStateRef.current;
                         const hasPending = state.pendingEffects && state.pendingEffects.length > 0;
                         const hasActiveEffects = activeEffectsRef.current.length > 0;
-                        const isAnimatingCard = animatingCardRef.current !== null;
+                        const isAnimatingCards = animatingCardsRef.current.length > 0;
                         const isPlayingCard = playingCardAnimRef.current !== null;
                         const isEvolving = evolveAnimationRef.current !== null;
 
-                        return !hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving;
+                        return !hasPending && !hasActiveEffects && !isAnimatingCards && !isPlayingCard && !isEvolving;
                     };
 
                     // Wait until idle (with timeout to prevent infinite loop - increased for evolution animations)
@@ -4018,16 +4339,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                     setPlayingCardAnim({
                         card: bestCard,
+                        sourceIndex: -1, // CPU player's card (no hiding needed)
                         startX, startY,
                         targetX, targetY,
                         finalX,
                         finalY,
+                        playerClass: opponent?.class || 'SENKA',
                         onComplete: () => {
                             triggerShake();
                             dispatch({
                                 type: 'PLAY_CARD',
                                 playerId: opponentPlayerId,
-                                payload: { cardIndex: bestCard.originalIndex, targetId }
+                                payload: { cardIndex: bestCard.originalIndex, targetId, instanceId: bestCard.instanceId }
                             });
 
                             // --- AI amandava FANFARE Visuals ---
@@ -4264,14 +4587,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             // Visual Feedback
                             const targetCard = targetIsLeader ? null : playerBoard[targetIndex];
                             const targetInstanceId = targetCard ? (targetCard as any).instanceId : undefined;
+                            const attackerInstanceId = (attacker as any).instanceId;
+
+                            // Trigger CPU attacker Y-axis rotation animation
+                            if (attackerInstanceId) {
+                                setAttackingFollowerInstanceId(attackerInstanceId);
+                                setTimeout(() => setAttackingFollowerInstanceId(null), 300);
+                            }
+
                             playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
 
                             // Counter-Attack Visuals
                             if (!targetIsLeader && targetIndex >= 0) {
                                 const defender = playerBoard[targetIndex];
                                 if (defender && (defender.currentAttack || 0) > 0) {
-                                    const attackerInstanceId = (attacker as any).instanceId;
+                                    const defenderInstanceId = (defender as any).instanceId;
                                     setTimeout(() => {
+                                        // Trigger counter-attack Y-axis rotation animation for defender (player's card)
+                                        if (defenderInstanceId) {
+                                            setCounterAttackingFollowerInstanceId(defenderInstanceId);
+                                            setTimeout(() => setCounterAttackingFollowerInstanceId(null), 300);
+                                        }
                                         playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, i, attackerInstanceId);
                                     }, 200);
                                 }
@@ -4294,6 +4630,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
                 }
 
+                // ターン終了前にすべてのpendingEffects（ラストワード等）が処理されるまで待機
+                await waitForIdle(300);
+
                 dispatch({ type: 'END_TURN', playerId: opponentPlayerId });
                 aiProcessing.current = false;
             };
@@ -4308,7 +4647,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Hand Click / Drag Start
     const handleHandMouseDown = (e: React.MouseEvent, index: number) => {
         // --- PREVENTION: Do not start a new drag if one is active ---
-        if (dragStateRef.current || playingCardAnim || animatingCard) return;
+        if (dragStateRef.current || playingCardAnim || animatingCards.length > 0) return;
 
         const card = player.hand[index];
         e.stopPropagation();
@@ -4529,12 +4868,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 const allowedTargetPlayerId = (needsAllyTarget || needsOtherAllyTarget) ? currentPlayerId : opponentPlayerId;
 
                                 // Check if there are valid targets on the target board
+                                // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
+                                // Only STEALTH prevents targeting from opponent effects/spells
                                 const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
                                 const hasValidTargets = targetBoard.some(c => {
                                     if (!c) return false;
-                                    // For enemy targets, check STEALTH and AURA
+                                    // For enemy targets, check STEALTH only
                                     if (allowedTargetPlayerId !== currentPlayerId) {
-                                        if ((c as any).passiveAbilities?.includes('STEALTH') || (c as any).passiveAbilities?.includes('AURA')) {
+                                        if ((c as any).passiveAbilities?.includes('STEALTH')) {
                                             return false;
                                         }
                                     }
@@ -4693,7 +5034,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 if (!targetIsLeader && defender && (defender.currentAttack || 0) > 0) {
                                     // Defender (Opponent) attacks Attacker (Player)
                                     // Use instanceIds for accurate visual positioning
+                                    const defenderInstanceId = (defender as any).instanceId;
                                     setTimeout(() => {
+                                        // Trigger counter-attack Y-axis rotation animation for defender
+                                        if (defenderInstanceId) {
+                                            setCounterAttackingFollowerInstanceId(defenderInstanceId);
+                                            setTimeout(() => setCounterAttackingFollowerInstanceId(null), 300);
+                                        }
                                         playEffect(defender.attackEffectType || 'SLASH', currentPlayerId, actualAttackerIndex, attackerInstanceId);
                                     }, 200);
                                 }
@@ -4758,15 +5105,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const excludeSelf = targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
 
                     // Check valid targets based on target type
+                    // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
+                    // Only STEALTH prevents targeting from opponent effects/spells
                     const targetPlayerIdForValidation = needsAllyTarget ? currentPlayerId : opponentPlayerId;
                     const targetBoardForValidation = gameStateRef.current.players[targetPlayerIdForValidation].board;
                     const hasValidTargets = targetBoardForValidation.some(c => {
                         if (!c) return false;
                         // For ally targets, exclude self if SELECT_OTHER_ALLY_FOLLOWER
                         if (needsAllyTarget && excludeSelf && (c as any).instanceId === followerInstanceId) return false;
-                        // For enemy targets, check STEALTH and AURA
+                        // For enemy targets, check STEALTH only
                         if (!needsAllyTarget) {
-                            if (c.passiveAbilities?.includes('STEALTH') || c.passiveAbilities?.includes('AURA')) return false;
+                            if (c.passiveAbilities?.includes('STEALTH')) return false;
                         }
                         return true;
                     });
@@ -4840,8 +5189,43 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const getArrowPath = () => {
         if (!dragState || (dragState.sourceType !== 'BOARD' && dragState.sourceType !== 'EVOLVE')) return '';
         // HAND source removed from arrow logic
-        const cx = (dragState.startX + dragState.currentX) / 2;
-        const cy = (dragState.startY + dragState.currentY) / 2 - 50;
+        // Calculate distance for dynamic curve intensity
+        const dx = dragState.currentX - dragState.startX;
+        const dy = dragState.currentY - dragState.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 10) return ''; // Too short to draw
+
+        // Midpoint of the line
+        const midX = (dragState.startX + dragState.currentX) / 2;
+        const midY = (dragState.startY + dragState.currentY) / 2;
+
+        // Base curve intensity (always have some curve even when dx is small)
+        // Distance-based minimum ensures curves are visible for all directions
+        const baseCurve = Math.min(200, distance * 0.3);
+
+        // Additional curve based on horizontal offset (dx)
+        // The more horizontal the drag, the bigger the additional curve
+        const horizontalOffset = Math.abs(dx);
+        const additionalCurve = Math.min(150, horizontalOffset * 0.4);
+
+        // Total curve intensity
+        const curveIntensity = baseCurve + additionalCurve;
+
+        // Curve direction: always bulge in the same direction (e.g., left/up) for stability
+        // Use a smooth transition based on dx to avoid sudden direction changes
+        // When dx is near 0, curve slightly to the left (negative X direction)
+        // When dx is positive (target to the right), curve to the left
+        // When dx is negative (target to the left), curve to the right
+        // Use a smooth transition function to prevent "flipping"
+        const normalizedDx = dx / (distance + 1); // Normalize to [-1, 1] range
+        const horizontalCurve = -normalizedDx * curveIntensity * 0.5; // Opposite direction for nice arc
+
+        // Vertical curve: always go upward
+        const verticalCurve = -curveIntensity * 0.8;
+
+        const cx = midX + horizontalCurve;
+        const cy = midY + verticalCurve;
+
         return `M${dragState.startX},${dragState.startY} Q${cx},${cy} ${dragState.currentX},${dragState.currentY}`;
     };
 
@@ -4880,15 +5264,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (!targetValues) return;
             targetId = targetValues.instanceId;
 
-            // Check AURA (Cannot target opponent followers with Aura)
-            // Assuming AURA prevents ALL targeting from opponent effects/spells/attacks during selection
+            // Check STEALTH (Cannot target opponent followers with Stealth)
+            // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
+            // Only STEALTH prevents targeting from opponent effects/spells
             if (targetPlayerId !== currentPlayerId) {
                 const abilities = (targetValues as any).passiveAbilities || [];
-                if (abilities.includes('AURA')) {
-                    console.log("Cannot target unit with AURA");
-                    triggerShake();
-                    return;
-                }
                 if (abilities.includes('STEALTH')) {
                     console.log("Cannot target unit with STEALTH");
                     triggerShake();
@@ -5076,10 +5456,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             setPlayingCardAnim({
                 card: animCard,
+                sourceIndex: targetingState.sourceIndex ?? -1, // Index of card being played
                 startX, startY,
                 targetX, targetY,
                 finalX,
                 finalY,
+                playerClass: player?.class || 'SENKA',
                 onComplete
             });
 
@@ -5157,7 +5539,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const state = gameStateRef.current;
                 const hasPending = state.pendingEffects && state.pendingEffects.length > 0;
                 const hasActiveEffects = activeEffectsRef.current.length > 0;
-                const isAnimatingCard = animatingCardRef.current !== null;
+                const isAnimatingCards = animatingCardsRef.current.length > 0;
                 const isPlayingCard = playingCardAnimRef.current !== null;
                 const isEvolving = evolveAnimationRef.current !== null;
                 // CRITICAL: Use ref instead of state to get current value in async context
@@ -5165,7 +5547,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const hasCardLock = cardPlayLockRef.current;
 
                 // Debug log to help identify what's blocking
-                if (!hasPending && !hasActiveEffects && !isAnimatingCard && !isPlayingCard && !isEvolving && !isProcessing && !hasCardLock) {
+                if (!hasPending && !hasActiveEffects && !isAnimatingCards && !isPlayingCard && !isEvolving && !isProcessing && !hasCardLock) {
                     return true; // All idle
                 }
                 return false;
@@ -5386,11 +5768,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         40%, 60% { transform: translate3d(4px, 0, 0); }
                     }
                     @keyframes attackRotate {
-                        0% { transform: translateX(var(--offsetX)) rotateY(0deg); }
-                        100% { transform: translateX(var(--offsetX)) rotateY(360deg); }
+                        0% { transform: rotateY(0deg); }
+                        100% { transform: rotateY(360deg); }
                     }
                     .attack-rotating {
-                        animation: attackRotate 0.3s ease-out forwards !important;
+                        animation: attackRotate 0.2s linear forwards !important;
                         transform-style: preserve-3d;
                     }
                     @keyframes cardDie {
@@ -5399,6 +5781,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         100% { transform: scale(0.4) rotate(8deg); filter: brightness(5) drop-shadow(0 0 40px white); opacity: 0; }
                     }
                     .card-dying { animation: cardDie 0.7s forwards; }
+                    /* Necromance effect animations */
+                    @keyframes necromanceFloat {
+                        0% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+                        50% { transform: translateX(-50%) translateY(-20px) scale(1.2); opacity: 1; }
+                        100% { transform: translateX(-50%) translateY(-40px) scale(0.8); opacity: 0; }
+                    }
+                    @keyframes necromanceFloatOpponent {
+                        0% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+                        50% { transform: translateX(-50%) translateY(15px) scale(1.2); opacity: 1; }
+                        100% { transform: translateX(-50%) translateY(30px) scale(0.8); opacity: 0; }
+                    }
+                    @keyframes necroPulse {
+                        0%, 100% { box-shadow: 0 0 10px #d946ef, 0 0 20px #a855f7, inset 0 0 15px rgba(217, 70, 239, 0.3); }
+                        50% { box-shadow: 0 0 25px #d946ef, 0 0 40px #a855f7, 0 0 60px #7c3aed, inset 0 0 25px rgba(217, 70, 239, 0.5); }
+                    }
                 `}</style>
 
                 {/* <BattleLog logs={gameState.logs || []} /> */}
@@ -5506,9 +5903,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
 
                 {/* --- Left Sidebar: Card Info & Menu (Responsive width) --- */}
-                <div className={shake ? 'shake-target' : ''} style={{ width: 340 * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: `${50 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <div className={shake ? 'shake-target' : ''} style={{ width: 340 * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: `${20 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                     {/* Menu Button */}
-                    <div style={{ marginBottom: 30 * scale }}>
+                    <div style={{ marginBottom: 12 * scale }}>
                         <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 5 }}>
                             <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
                             <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
@@ -5516,67 +5913,73 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         </button>
                     </div>
 
-                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 10, marginTop: 0 }}>カード情報</h3>
+                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 8, marginTop: 0, marginBottom: 0 }}>カード情報</h3>
                     {selectedCard ? (
-                        <div style={{ marginTop: 20 }}>
-                            {/* Art Only */}
-                            <div style={{
-                                width: '100%', aspectRatio: '1/1', marginBottom: 20,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                <Card card={selectedCard.card} style={{ width: '100%', height: '100%' }} variant="art-only" />
-                            </div>
-
-                            {/* Name */}
-                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>{selectedCard.card.name}</div>
-
-                            {/* Stats with Icons */}
-                            {selectedCard.card.type === 'FOLLOWER' && (
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20 }}>
-                                    {/* Attack Spade */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                            <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
-                                        </svg>
-                                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#4299e1' }}>
-                                            {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
-                                        </span>
-                                    </div>
-                                    {/* Health Heart */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#f56565">
-                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                                        </svg>
-                                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f56565' }}>
-                                            {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
-                                        </span>
-                                    </div>
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                            {/* Main Card Info */}
+                            <div>
+                                {/* Art Only */}
+                                <div style={{
+                                    width: '100%', aspectRatio: '1/1', marginBottom: 12,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <Card card={selectedCard.card} style={{ width: '100%', height: '100%' }} variant="art-only" />
                                 </div>
-                            )}
 
+                                {/* Name */}
+                                <div style={{ fontSize: '1.4rem', fontWeight: 'bold', marginBottom: 6, textAlign: 'center' }}>{selectedCard.card.name}</div>
 
+                                {/* Stats with Icons */}
+                                {selectedCard.card.type === 'FOLLOWER' && (
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
+                                        {/* Attack Spade */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                                <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
+                                            </svg>
+                                            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4299e1' }}>
+                                                {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
+                                            </span>
+                                        </div>
+                                        {/* Health Heart */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="#f56565">
+                                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                            </svg>
+                                            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#f56565' }}>
+                                                {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
-                            <div style={{ fontSize: '1.05rem', color: '#cbd5e0', lineHeight: '1.6', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 10 }}>
-                                {selectedCard.card.description}
+                                <div style={{ fontSize: '0.95rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 8 }}>
+                                    {selectedCard.card.description}
+                                </div>
                             </div>
 
-                            {/* Flavor Text */}
+                            {/* Flavor Text - Bottom Aligned */}
                             {selectedCard.card.flavorText && (
                                 <div style={{
-                                    fontSize: '0.8rem',
-                                    color: '#718096',
-                                    lineHeight: '1.6',
-                                    fontStyle: 'italic',
-                                    marginTop: 15,
-                                    paddingTop: 10,
-                                    borderTop: '1px dashed #4a5568',
+                                    marginTop: 'auto',
+                                    paddingTop: 15,
+                                    paddingBottom: 10,
                                 }}>
-                                    {selectedCard.card.flavorText}
+                                    <div style={{
+                                        fontSize: '0.75rem',
+                                        color: 'rgba(160, 174, 192, 0.6)',
+                                        lineHeight: '1.5',
+                                        fontStyle: 'italic',
+                                        whiteSpace: 'pre-wrap',
+                                        textAlign: 'right',
+                                    }}>
+                                        {selectedCard.card.flavorText}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic' }}>カードを選択して詳細を表示</div>
+                        <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic', flex: 1 }}>カードを選択して詳細を表示</div>
                     )}
                 </div>
 
@@ -5648,12 +6051,88 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 })}
                             </div>
                         </div>
+
+                        {/* Attack Target Marker for Leader - Cyan glow */}
+                        <div style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: LEADER_SIZE * scale * 0.75,
+                            height: LEADER_SIZE * scale * 0.75,
+                            pointerEvents: 'none',
+                            zIndex: 20,
+                            opacity: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && dragState) ? 1 : 0,
+                            transition: 'opacity 0.1s ease-out'
+                        }}>
+                            <svg width="100%" height="100%" viewBox="0 0 100 100">
+                                <defs>
+                                    <filter id="leaderCyanMarkerGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+                                        <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                {/* Rotating group for circle and arrows */}
+                                <g style={{
+                                    transformOrigin: '50% 50%',
+                                    animation: 'leaderMarkerSpin 2s linear infinite'
+                                }}>
+                                    <circle cx="50" cy="50" r="45"
+                                        fill="none"
+                                        stroke="rgba(100, 200, 255, 0.9)"
+                                        strokeWidth="3"
+                                        strokeDasharray="15 8"
+                                        filter="url(#leaderCyanMarkerGlow)"
+                                    />
+                                    {/* Corner Arrows with glow - slightly larger */}
+                                    <polygon points="50,5 44,18 56,18"
+                                        fill="rgba(150, 220, 255, 1)"
+                                        filter="url(#leaderCyanMarkerGlow)" />
+                                    <polygon points="95,50 82,44 82,56"
+                                        fill="rgba(150, 220, 255, 1)"
+                                        filter="url(#leaderCyanMarkerGlow)" />
+                                    <polygon points="50,95 56,82 44,82"
+                                        fill="rgba(150, 220, 255, 1)"
+                                        filter="url(#leaderCyanMarkerGlow)" />
+                                    <polygon points="5,50 18,56 18,44"
+                                        fill="rgba(150, 220, 255, 1)"
+                                        filter="url(#leaderCyanMarkerGlow)" />
+                                </g>
+                            </svg>
+                            <style>{`
+                                @keyframes leaderMarkerSpin {
+                                    0% { transform: rotate(0deg); }
+                                    100% { transform: rotate(360deg); }
+                                }
+                            `}</style>
+                        </div>
                     </div>
 
-                    {/* Opponent Deck - Top Left */}
+                    {/* Opponent Deck - Top Left (with sleeve image) */}
                     <div style={{ position: 'absolute', top: 20 * scale, left: 20 * scale, width: 60 * scale, height: 85 * scale, zIndex: 50 }}>
                         {[...Array(Math.min(5, Math.ceil(opponent.deck.length / 5)))].map((_, i) => (
-                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096' }} />
+                            <div key={i} style={{
+                                position: 'absolute',
+                                inset: 0,
+                                transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`,
+                                borderRadius: 6,
+                                border: '1px solid #718096',
+                                overflow: 'hidden'
+                            }}>
+                                <img
+                                    src={getSleeveImg(opponent?.class || 'SENKA')}
+                                    alt="Deck"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement!.style.background = 'linear-gradient(45deg, #2d3748, #1a202c)';
+                                    }}
+                                />
+                            </div>
                         ))}
                         <div style={{ position: 'absolute', bottom: -20 * scale, width: '100%', textAlign: 'center', fontWeight: 'bold', color: '#a0aec0', fontSize: '0.9rem' }}>{opponent.deck.length}</div>
                     </div>
@@ -5694,9 +6173,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 fontSize: '0.85rem',
                                 fontWeight: 'bold',
                                 border: '1px solid rgba(167, 139, 250, 0.4)',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                                position: 'relative'
                             }}>
                                 墓地 {opponent.graveyard.length}
+                                {/* Necromance Effect - Purple -X animation */}
+                                {necromanceEffects.filter(e => e.playerId === opponentPlayerId).map(effect => (
+                                    <div
+                                        key={effect.key}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: -25,
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            color: '#d946ef',
+                                            fontSize: '1.2rem',
+                                            fontWeight: 'bold',
+                                            textShadow: '0 0 8px #d946ef, 0 0 15px #a855f7, 0 0 25px #7c3aed',
+                                            animation: 'necromanceFloatOpponent 1.5s ease-out forwards',
+                                            pointerEvents: 'none',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        -{effect.amount}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -5749,7 +6250,116 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
                                             transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === opponentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
                                         }}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                        {/* Card wrapper for 3D flip structure with sleeve (opponent's cards) */}
+                                        <div style={{ width: '100%', height: '100%', perspective: '800px' }}>
+                                            <div
+                                                className={(attackingFollowerInstanceId === c?.instanceId || counterAttackingFollowerInstanceId === c?.instanceId) ? 'attack-rotating' : ''}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    position: 'relative',
+                                                    transformStyle: 'preserve-3d'
+                                                }}>
+                                                {/* Front - Card */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    backfaceVisibility: 'hidden',
+                                                    WebkitBackfaceVisibility: 'hidden'
+                                                }}>
+                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                                </div>
+                                                {/* Back - Sleeve (opponent's cards use opponent's class sleeve) */}
+                                                {c && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        backfaceVisibility: 'hidden',
+                                                        WebkitBackfaceVisibility: 'hidden',
+                                                        transform: 'rotateY(180deg)',
+                                                        borderRadius: 12,
+                                                        overflow: 'hidden'
+                                                    }}>
+                                                        <img
+                                                            src={getSleeveImg(opponent?.class || 'SENKA')}
+                                                            alt="Card Sleeve"
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Attack Target Marker - Cyan glow (no outer ellipse) - Always rendered for fade transition */}
+                                        {c && dragState?.sourceType === 'BOARD' && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '50%',
+                                                left: '50%',
+                                                width: '100%',
+                                                height: '100%',
+                                                transform: 'translate(-50%, -50%)',
+                                                pointerEvents: 'none',
+                                                zIndex: 20,
+                                                opacity: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === opponentPlayerId) ? 1 : 0,
+                                                transition: 'opacity 0.1s ease-out'
+                                            }}>
+                                                <svg viewBox="0 0 100 100" style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    filter: 'drop-shadow(0 0 12px rgba(100, 200, 255, 0.9))'
+                                                }}>
+                                                    <defs>
+                                                        <filter id="cyanMarkerGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                                            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+                                                            <feMerge>
+                                                                <feMergeNode in="blur" />
+                                                                <feMergeNode in="blur" />
+                                                                <feMergeNode in="SourceGraphic" />
+                                                            </feMerge>
+                                                        </filter>
+                                                    </defs>
+                                                    {/* Rotating group for circle and arrows */}
+                                                    <g style={{
+                                                        transformOrigin: '50px 50px',
+                                                        animation: 'attackMarkerSpin 1.5s linear infinite reverse'
+                                                    }}>
+                                                        {/* Inner dashed circle */}
+                                                        <circle cx="50" cy="50" r="40" fill="none"
+                                                            stroke="rgba(100, 200, 255, 0.95)"
+                                                            strokeWidth="4"
+                                                            strokeDasharray="12 6"
+                                                            filter="url(#cyanMarkerGlow)"
+                                                        />
+                                                        {/* Corner Arrows with glow */}
+                                                        <polygon points="50,10 45,20 55,20"
+                                                            fill="rgba(150, 220, 255, 1)"
+                                                            filter="url(#cyanMarkerGlow)" />
+                                                        <polygon points="90,50 80,45 80,55"
+                                                            fill="rgba(150, 220, 255, 1)"
+                                                            filter="url(#cyanMarkerGlow)" />
+                                                        <polygon points="50,90 55,80 45,80"
+                                                            fill="rgba(150, 220, 255, 1)"
+                                                            filter="url(#cyanMarkerGlow)" />
+                                                        <polygon points="10,50 20,55 20,45"
+                                                            fill="rgba(150, 220, 255, 1)"
+                                                            filter="url(#cyanMarkerGlow)" />
+                                                    </g>
+                                                </svg>
+                                                <style>{`
+                                                    @keyframes attackMarkerSpin {
+                                                        0% { transform: rotate(0deg); }
+                                                        100% { transform: rotate(360deg); }
+                                                    }
+                                                `}</style>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -5803,11 +6413,56 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
                                             transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
                                         } as React.CSSProperties}
-                                        className={attackingFollowerInstanceId === c?.instanceId ? 'attack-rotating' : ''}>
-                                        {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                        >
+                                        {/* Card wrapper for attack rotation - 3D flip structure with sleeve */}
+                                        <div style={{ width: '100%', height: '100%', perspective: '800px' }}>
+                                            <div
+                                                className={(attackingFollowerInstanceId === c?.instanceId || counterAttackingFollowerInstanceId === c?.instanceId) ? 'attack-rotating' : ''}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    position: 'relative',
+                                                    transformStyle: 'preserve-3d'
+                                                }}
+                                            >
+                                                {/* Front - Card */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    backfaceVisibility: 'hidden',
+                                                    WebkitBackfaceVisibility: 'hidden'
+                                                }}>
+                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                                </div>
+                                                {/* Back - Sleeve (only for player's cards) */}
+                                                {c && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        backfaceVisibility: 'hidden',
+                                                        WebkitBackfaceVisibility: 'hidden',
+                                                        transform: 'rotateY(180deg)',
+                                                        borderRadius: 12,
+                                                        overflow: 'hidden'
+                                                    }}>
+                                                        <img
+                                                            src={getSleeveImg(player?.class || 'SENKA')}
+                                                            alt="Card Sleeve"
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                        {/* Evolve Target Marker - Rendered after Card for correct z-indexing */}
-                                        {c && dragState?.sourceType === 'EVOLVE' && hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId && !c.hasEvolved && (
+                                        {/* Evolve Target Marker - Always rendered for fade transition */}
+                                        {c && dragState?.sourceType === 'EVOLVE' && !c.hasEvolved && (
                                             <div style={{
                                                 position: 'absolute',
                                                 top: '50%',
@@ -5816,11 +6471,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                 height: '120%',
                                                 transform: 'translate(-50%, -50%)',
                                                 pointerEvents: 'none',
-                                                border: '2px dashed rgba(255, 230, 100, 0.9)',
+                                                border: dragState.useSep ? '2px dashed rgba(183, 148, 244, 0.9)' : '2px dashed rgba(255, 230, 100, 0.9)',
                                                 borderRadius: '50%',
-                                                boxShadow: '0 0 15px rgba(255, 200, 50, 0.8)',
+                                                boxShadow: dragState.useSep ? '0 0 15px rgba(159, 122, 234, 0.8)' : '0 0 15px rgba(255, 200, 50, 0.8)',
                                                 animation: 'evolveMarkerSpin 1.5s linear infinite',
-                                                zIndex: 20 // Higher than card's hover z-index (10)
+                                                zIndex: 20,
+                                                opacity: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && hoveredTarget.playerId === currentPlayerId) ? 1 : 0,
+                                                transition: 'opacity 0.1s ease-out'
                                             }}>
                                                 <svg viewBox="0 0 100 100" style={{
                                                     width: '100%',
@@ -6223,10 +6880,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         </div>
                     </div>
 
-                    {/* Player Deck - Bottom Right */}
+                    {/* Player Deck - Bottom Right (with sleeve image) */}
                     <div style={{ position: 'absolute', bottom: 10 * scale, right: 15 * scale, width: 60 * scale, height: 85 * scale, zIndex: 50 }}>
                         {[...Array(Math.min(5, Math.ceil(player.deck.length / 5)))].map((_, i) => (
-                            <div key={i} style={{ position: 'absolute', inset: 0, transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`, background: 'linear-gradient(45deg, #2d3748, #1a202c)', borderRadius: 6, border: '1px solid #718096', boxShadow: '1px 1px 3px rgba(0,0,0,0.5)' }} />
+                            <div key={i} style={{
+                                position: 'absolute',
+                                inset: 0,
+                                transform: `translate(${i * 2 * scale}px, ${-i * 2 * scale}px)`,
+                                borderRadius: 6,
+                                border: '1px solid #718096',
+                                boxShadow: '1px 1px 3px rgba(0,0,0,0.5)',
+                                overflow: 'hidden'
+                            }}>
+                                <img
+                                    src={getSleeveImg(player?.class || 'SENKA')}
+                                    alt="Deck"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement!.style.background = 'linear-gradient(45deg, #2d3748, #1a202c)';
+                                    }}
+                                />
+                            </div>
                         ))}
                         <div style={{ position: 'absolute', top: -20 * scale, width: '100%', textAlign: 'center', color: '#a0aec0', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 1px 2px black' }}>{player.deck.length}</div>
                     </div>
@@ -6249,6 +6924,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         zIndex: 500
                     }}>
                         {player.hand.map((c, i) => {
+                            // Hide card in hand if it's currently being animated (playing)
+                            const isBeingPlayed = playingCardAnim !== null && playingCardAnim.sourceIndex === i;
+                            if (isBeingPlayed) {
+                                return null; // Don't render this card - it's shown in the animation overlay
+                            }
+
                             const handSize = player.hand.length;
                             let offsetX = 0;
                             let translateY = 0;
@@ -6414,47 +7095,87 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 fontSize: '1rem',
                                 fontWeight: 'bold',
                                 boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
-                                border: '1px solid rgba(167, 139, 250, 0.5)'
+                                border: '1px solid rgba(167, 139, 250, 0.5)',
+                                position: 'relative'
                             }}>
                                 墓地 {player.graveyard.length}
+                                {/* Necromance Effect - Purple -X animation */}
+                                {necromanceEffects.filter(e => e.playerId === currentPlayerId).map(effect => (
+                                    <div
+                                        key={effect.key}
+                                        style={{
+                                            position: 'absolute',
+                                            top: -30,
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            color: '#d946ef',
+                                            fontSize: '1.5rem',
+                                            fontWeight: 'bold',
+                                            textShadow: '0 0 10px #d946ef, 0 0 20px #a855f7, 0 0 30px #7c3aed',
+                                            animation: 'necromanceFloat 1.5s ease-out forwards',
+                                            pointerEvents: 'none',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        -{effect.amount}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Draw Animation Overlay */}
+                    {/* Draw Animation Overlay - Show all cards simultaneously with X offset (with sleeve image) */}
                     {
-                        drawAnimation && (
-                            <div style={{
-                                position: 'absolute',
-                                left: drawAnimation.isPlayer ? 'calc(100% - 90px)' : 90,
-                                top: drawAnimation.isPlayer ? 'calc(100% - 105px)' : 105,
-                                width: 80, height: 110,
-                                background: '#4a5568',
-                                borderRadius: 8,
-                                border: '2px solid white',
-                                // Use CSS Animation for Fly Effect
-                                animation: `drawCard${drawAnimation.isPlayer ? 'Player' : 'Opponent'} 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
-                                zIndex: 9000,
-                                boxShadow: '0 0 10px rgba(255,255,255,0.5)'
-                            }}>
-                                <div style={{
-                                    width: '100%', height: '100%',
-                                    background: 'repeating-linear-gradient(45deg, #2d3748, #2d3748 10px, #1a202c 10px, #1a202c 20px)',
-                                    opacity: 0.5
-                                }} />
-                                <style>{`
+                        drawAnimation && Array.from({ length: drawAnimation.count }, (_, idx) => {
+                            const cardWidth = 80;
+                            const cardGap = 20; // Gap between cards
+                            const totalWidth = drawAnimation.count * cardWidth + (drawAnimation.count - 1) * cardGap;
+                            const startOffset = -(totalWidth - cardWidth) / 2; // Center the group
+                            const xOffset = startOffset + idx * (cardWidth + cardGap);
+                            // Use player or opponent sleeve based on who is drawing
+                            const sleeveImg = drawAnimation.isPlayer
+                                ? getSleeveImg(player?.class || 'SENKA')
+                                : getSleeveImg(opponent?.class || 'SENKA');
+
+                            return (
+                                <div key={idx} style={{
+                                    position: 'absolute',
+                                    left: drawAnimation.isPlayer ? 'calc(100% - 90px)' : 90,
+                                    top: drawAnimation.isPlayer ? 'calc(100% - 105px)' : 105,
+                                    width: cardWidth, height: 110,
+                                    borderRadius: 8,
+                                    border: '2px solid white',
+                                    overflow: 'hidden',
+                                    // All cards animate together, just offset in X
+                                    transform: `translateX(${xOffset}px)`,
+                                    animation: `drawCard${drawAnimation.isPlayer ? 'Player' : 'Opponent'} ${DRAW_ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+                                    zIndex: 9000 + idx,
+                                    boxShadow: '0 0 10px rgba(255,255,255,0.5)'
+                                }}>
+                                    <img
+                                        src={sleeveImg}
+                                        alt="Card Back"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).parentElement!.style.background = 'repeating-linear-gradient(45deg, #2d3748, #2d3748 10px, #1a202c 10px, #1a202c 20px)';
+                                        }}
+                                    />
+                                </div>
+                            );
+                        })
+                    }
+                    {/* Draw Animation Keyframes */}
+                    <style>{`
                         @keyframes drawCardPlayer {
-                            0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+                            0% { opacity: 1; }
                             100% { transform: translate(-50vw, -100px) scale(0.5) rotate(-10deg); opacity: 0; }
                         }
                         @keyframes drawCardOpponent {
-                            0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+                            0% { opacity: 1; }
                             100% { transform: translate(50vw, 200px) scale(0.5) rotate(10deg); opacity: 0; }
                         }
                     `}</style>
-                            </div>
-                        )
-                    }
 
                     {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
                 </div>
@@ -6500,13 +7221,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
                         <>
                             <defs>
-                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill={
-                                        (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#b794f4' :
-                                            (dragState.sourceType === 'EVOLVE' ? '#f6e05e' :
-                                                (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
-                                    } />
-                                </marker>
+                                {/* Cyan glow filter for attack line */}
+                                <filter id="cyanGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur stdDeviation="8" result="blur1" />
+                                    <feFlood floodColor="rgba(100, 200, 255, 0.9)" result="color1" />
+                                    <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
+                                    <feFlood floodColor="rgba(150, 220, 255, 0.7)" result="color2" />
+                                    <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
+                                    <feMerge>
+                                        <feMergeNode in="glow1" />
+                                        <feMergeNode in="glow2" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                                {/* Yellow glow filter for evolution */}
                                 <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
                                     <feGaussianBlur stdDeviation="6" result="blur" />
                                     <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
@@ -6516,6 +7245,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         <feMergeNode in="SourceGraphic" />
                                     </feMerge>
                                 </filter>
+                                {/* Purple glow filter for super evolution */}
                                 <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
                                     <feGaussianBlur stdDeviation="8" result="blur" />
                                     <feFlood floodColor="rgba(183, 148, 244, 0.8)" result="color" />
@@ -6526,22 +7256,82 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     </feMerge>
                                 </filter>
                             </defs>
-                            <path
-                                d={getArrowPath()}
-                                fill="none"
-                                stroke={
-                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? '#9f7aea' :
-                                        (dragState.sourceType === 'EVOLVE' ? '#ecc94b' :
-                                            (hoveredTarget?.type === 'LEADER' && dragState.sourceType === 'BOARD' ? '#48bb78' : '#e53e3e'))
-                                }
-                                strokeWidth="6"
-                                strokeDasharray="10,5"
-                                markerEnd="url(#arrowhead)"
-                                filter={
-                                    (dragState.sourceType === 'EVOLVE' && (dragState as any).useSep) ? 'url(#purpleGlow)' :
-                                        (dragState.sourceType === 'EVOLVE' ? 'url(#yellowGlow)' : 'none')
-                                }
-                            />
+                            {/* Attack/Board drag: Cyan glowing line (no arrow) */}
+                            {dragState.sourceType === 'BOARD' && (
+                                <>
+                                    {/* Outer glow layer */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke="rgba(100, 200, 255, 0.3)"
+                                        strokeWidth="20"
+                                        strokeLinecap="round"
+                                        filter="url(#cyanGlow)"
+                                    />
+                                    {/* Middle glow layer */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke="rgba(150, 220, 255, 0.5)"
+                                        strokeWidth="10"
+                                        strokeLinecap="round"
+                                    />
+                                    {/* Core bright line */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke="rgba(200, 240, 255, 0.9)"
+                                        strokeWidth="4"
+                                        strokeLinecap="round"
+                                    />
+                                    {/* Innermost white core */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke="rgba(255, 255, 255, 1)"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                    />
+                                </>
+                            )}
+                            {/* Evolve drag: Glowing light line (yellow for EP, purple for SEP) */}
+                            {dragState.sourceType === 'EVOLVE' && (
+                                <>
+                                    {/* Outer glow layer */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke={(dragState as any).useSep ? 'rgba(159, 122, 234, 0.3)' : 'rgba(236, 201, 75, 0.3)'}
+                                        strokeWidth="20"
+                                        strokeLinecap="round"
+                                        filter={(dragState as any).useSep ? 'url(#purpleGlow)' : 'url(#yellowGlow)'}
+                                    />
+                                    {/* Middle glow layer */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke={(dragState as any).useSep ? 'rgba(183, 148, 244, 0.5)' : 'rgba(246, 224, 94, 0.5)'}
+                                        strokeWidth="10"
+                                        strokeLinecap="round"
+                                    />
+                                    {/* Core bright line */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke={(dragState as any).useSep ? 'rgba(214, 188, 250, 0.9)' : 'rgba(250, 240, 137, 0.9)'}
+                                        strokeWidth="4"
+                                        strokeLinecap="round"
+                                    />
+                                    {/* Innermost white core */}
+                                    <path
+                                        d={getArrowPath()}
+                                        fill="none"
+                                        stroke="rgba(255, 255, 255, 1)"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                    />
+                                </>
+                            )}
                         </>
                     )}
                 </svg>
@@ -6554,53 +7344,168 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             inset: 0,
                             zIndex: 9999,
                             pointerEvents: 'auto',
-                            background: 'rgba(0,0,0,0.5)'
+                            background: 'rgba(0,0,0,0.5)',
+                            perspective: '1200px' // Perspective on parent container
                         }}>
-                            <div
-                                onAnimationEnd={playingCardAnim.onComplete}
-                                style={{
-                                    position: 'absolute',
-                                    left: playingCardAnim.targetX,
-                                    top: playingCardAnim.targetY,
-                                    transform: 'translate(-50%, -50%)',
-                                    transformStyle: 'preserve-3d',
-                                    perspective: '1000px',
-                                    animation: playingCardAnim.card.type === 'SPELL'
-                                        ? 'playSpellSequence 1s forwards'
-                                        : 'playCardSequence 0.8s forwards'
-                                }}
-                            >
-                                <style>{`
+                            <style>{`
                                 @keyframes playCardSequence {
                                     ${playingCardAnim.finalX !== undefined ? `
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
-                                    25% { transform: translate(-50%, -50%) scale(1.8) rotateY(360deg); opacity: 1; }
-                                    85% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
+                                    /* Phase 1: Start at hand position (0%) */
+                                    0% {
+                                        transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(1.0) rotateY(0deg);
+                                        opacity: 1;
+                                        animation-timing-function: linear;
+                                    }
+                                    /* Phase 1b: Mid-rotation during move (12.5%) - CRITICAL: explicit 180deg to force rotation direction */
+                                    12.5% {
+                                        transform: translate(${(playingCardAnim.startX - playingCardAnim.targetX) * 0.5}px, ${(playingCardAnim.startY - playingCardAnim.targetY) * 0.5}px) translate(-50%, -50%) scale(1.5) rotateY(180deg);
+                                        opacity: 1;
+                                        animation-timing-function: linear;
+                                    }
+                                    /* Phase 2: Arrive at center with rotation complete (25%) */
+                                    25% {
+                                        transform: translate(-50%, -50%) scale(1.8) rotateY(360deg);
+                                        opacity: 1;
+                                        animation-timing-function: ease-out;
+                                    }
+                                    /* Phase 3: Hold at center (25%-80%) */
+                                    80% {
+                                        transform: translate(-50%, -50%) scale(2.4) rotateY(360deg);
+                                        opacity: 1;
+                                    }
+                                    /* Phase 4: Move to board position (80%-100%) */
                                     100% {
                                         transform: translate(calc(-50% + ${playingCardAnim.finalX - playingCardAnim.targetX}px), calc(-50% + ${playingCardAnim.finalY! - playingCardAnim.targetY}px)) scale(1.0) rotateY(360deg);
                                         opacity: 1;
                                     }
                                     ` : `
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
-                                    30% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
-                                    85% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; }
-                                    100% { transform: translate(-50%, -50%) scale(2.5) rotateY(360deg); opacity: 0; }
+                                    /* Spell: Move to center while rotating, then fade */
+                                    0% {
+                                        transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(1.0) rotateY(0deg);
+                                        opacity: 1;
+                                        animation-timing-function: linear;
+                                    }
+                                    /* Mid-rotation during move (15%) - CRITICAL: explicit 180deg */
+                                    15% {
+                                        transform: translate(${(playingCardAnim.startX - playingCardAnim.targetX) * 0.5}px, ${(playingCardAnim.startY - playingCardAnim.targetY) * 0.5}px) translate(-50%, -50%) scale(1.7) rotateY(180deg);
+                                        opacity: 1;
+                                        animation-timing-function: linear;
+                                    }
+                                    30% {
+                                        transform: translate(-50%, -50%) scale(2.2) rotateY(360deg);
+                                        opacity: 1;
+                                        animation-timing-function: ease-out;
+                                    }
+                                    80% {
+                                        transform: translate(-50%, -50%) scale(2.4) rotateY(360deg);
+                                        opacity: 1;
+                                    }
+                                    100% {
+                                        transform: translate(-50%, -50%) scale(3.0) rotateY(360deg);
+                                        opacity: 0;
+                                    }
                                     `}
                                 }
-                                /* Add stronger ease-in for snappy takeoff and cushioned landing */
-                                div[style*="playCardSequence"] {
-                                    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); /* Faster exit from center */
-                                }
                                 @keyframes playSpellSequence {
-                                    0% { transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(0.2) rotateY(0deg); opacity: 1; }
-                                    30% { transform: translate(-50%, -50%) scale(2.0) rotateY(360deg); opacity: 1; filter: brightness(1); }
-                                    80% { transform: translate(-50%, -50%) scale(2.2) rotateY(360deg); opacity: 1; filter: brightness(1.2); }
-                                    100% { transform: translate(-50%, -50%) scale(2.5) rotateY(360deg); opacity: 0; filter: brightness(3); }
+                                    /* Move from hand to center while rotating (0-30%) */
+                                    0% {
+                                        transform: translate(${playingCardAnim.startX - playingCardAnim.targetX}px, ${playingCardAnim.startY - playingCardAnim.targetY}px) translate(-50%, -50%) scale(1.0) rotateY(0deg);
+                                        opacity: 1;
+                                        animation-timing-function: linear;
+                                    }
+                                    /* Mid-rotation during move (15%) - CRITICAL: explicit 180deg to force rotation direction */
+                                    15% {
+                                        transform: translate(${(playingCardAnim.startX - playingCardAnim.targetX) * 0.5}px, ${(playingCardAnim.startY - playingCardAnim.targetY) * 0.5}px) translate(-50%, -50%) scale(1.7) rotateY(180deg);
+                                        opacity: 1;
+                                        filter: brightness(1);
+                                        animation-timing-function: linear;
+                                    }
+                                    /* Arrive at center with rotation complete (30%) */
+                                    30% {
+                                        transform: translate(-50%, -50%) scale(2.2) rotateY(360deg);
+                                        opacity: 1;
+                                        filter: brightness(1);
+                                        animation-timing-function: ease-out;
+                                    }
+                                    /* Hold at center (30%-75%) */
+                                    75% {
+                                        transform: translate(-50%, -50%) scale(2.4) rotateY(360deg);
+                                        opacity: 1;
+                                        filter: brightness(1.2);
+                                    }
+                                    /* Fade out (75%-100%) */
+                                    100% {
+                                        transform: translate(-50%, -50%) scale(3.0) rotateY(360deg);
+                                        opacity: 0;
+                                        filter: brightness(3);
+                                    }
+                                }
+                                .play-card-flipper {
+                                    transform-style: preserve-3d !important;
+                                }
+                                .play-card-front, .play-card-back {
+                                    backface-visibility: hidden !important;
+                                    -webkit-backface-visibility: hidden !important;
+                                    position: absolute;
+                                    width: 100%;
+                                    height: 100%;
+                                }
+                                .play-card-back {
+                                    transform: rotateY(180deg) translateZ(1px);
                                 }
                             `}</style>
-                                <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' }} />
+                            {/* 3D Flip Card Container - This element receives the animation */}
+                            <div
+                                className="play-card-flipper"
+                                onAnimationEnd={playingCardAnim.onComplete}
+                                style={{
+                                    position: 'absolute',
+                                    left: playingCardAnim.targetX,
+                                    top: playingCardAnim.targetY,
+                                    width: CARD_WIDTH * scale,
+                                    height: CARD_HEIGHT * scale,
+                                    transformStyle: 'preserve-3d',
+                                    animation: playingCardAnim.card.type === 'SPELL'
+                                        ? 'playSpellSequence 1s forwards'
+                                        : 'playCardSequence 0.8s forwards'
+                                }}
+                            >
+                                {/* Front Face - Card */}
+                                <div
+                                    className="play-card-front"
+                                >
+                                    <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' } as React.CSSProperties} />
+                                </div>
+                                {/* Back Face - Sleeve Image */}
+                                <div
+                                    className="play-card-back"
+                                    style={{
+                                        borderRadius: 12,
+                                        boxShadow: '0 0 50px rgba(255,215,0,0.8)',
+                                        overflow: 'hidden'
+                                    }}
+                                >
+                                    <img
+                                        src={getSleeveImg(playingCardAnim.playerClass)}
+                                        alt="Card Sleeve"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            borderRadius: 12
+                                        }}
+                                        onError={(e) => {
+                                            // Fallback to gradient if image fails to load
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            if (target.parentElement) {
+                                                target.parentElement.style.background = 'linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 50%, #1e3a5f 100%)';
+                                            }
+                                        }}
+                                    />
+                                </div>
                                 {playingCardAnim.card.type === 'SPELL' && (
-                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                                         <SparkleBurst x={0} y={0} />
                                     </div>
                                 )}
@@ -6609,35 +7514,40 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )
                 }
 
-                {/* --- Card Generation Animation Overlay - Uses actual screen coordinates --- */}
+                {/* --- Card Generation Animation Overlay - Multiple cards with X offset --- */}
                 {
-                    animatingCard && (
-                        <div style={{
+                    animatingCards.length > 0 && animatingCards.map((animCard, idx) => (
+                        <div key={idx} style={{
                             position: 'absolute',
-                            left: animatingCard.status === 'FLY' && animatingCard.targetX !== undefined ? animatingCard.targetX : window.innerWidth / 2,
-                            top: animatingCard.status === 'FLY' && animatingCard.targetY !== undefined ? animatingCard.targetY : window.innerHeight / 2,
-                            transform: animatingCard.status === 'APPEAR'
+                            left: animCard.status === 'FLY' && animCard.targetX !== undefined
+                                ? animCard.targetX
+                                : window.innerWidth / 2 + animCard.xOffset,
+                            top: animCard.status === 'FLY' && animCard.targetY !== undefined
+                                ? animCard.targetY
+                                : window.innerHeight / 2,
+                            transform: animCard.status === 'APPEAR'
                                 ? 'translate(-50%, -50%) scale(1.2)'
                                 : 'translate(-50%, -50%) scale(0.2)', // Shrink to hand
-                            zIndex: 7000,
+                            zIndex: 7000 + idx,
                             pointerEvents: 'none',
-                            transition: animatingCard.status === 'FLY'
+                            transition: animCard.status === 'FLY'
                                 ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
                                 : 'none',
-                            opacity: animatingCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
-                            animation: animatingCard.status === 'APPEAR' ? 'cardAppear 1s ease-out' : undefined
+                            opacity: animCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
+                            animation: animCard.status === 'APPEAR' ? 'cardAppear 0.8s ease-out' : undefined
                         }}>
-                            <Card card={animatingCard.card as any} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }} />
-                            <style>{`
-                        @keyframes cardAppear {
-                            0% { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }
-                            50% { transform: translate(-50%, -50%) scale(1.3) rotate(5deg); opacity: 1; }
-                            100% { transform: translate(-50%, -50%) scale(1.2) rotate(0deg); opacity: 1; }
-                        }
-                    `}</style>
+                            <Card card={animCard.card as any} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }} />
                         </div>
-                    )
+                    ))
                 }
+                {/* Card Appear Animation Keyframes */}
+                <style>{`
+                    @keyframes cardAppear {
+                        0% { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }
+                        50% { transform: translate(-50%, -50%) scale(1.3) rotate(5deg); opacity: 1; }
+                        100% { transform: translate(-50%, -50%) scale(1.2) rotate(0deg); opacity: 1; }
+                    }
+                `}</style>
 
                 {/* --- Active Effects (Now using cached coordinates) --- */}
                 {
@@ -6747,6 +7657,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         <GameOverScreen
                             winnerId={gameState.winnerId}
                             playerId={currentPlayerId}
+                            playerClass={player?.class || 'SENKA'}
                             isOnline={opponentType === 'ONLINE'}
                             myRematchRequested={myRematchRequested}
                             opponentRematchRequested={opponentRematchRequested}

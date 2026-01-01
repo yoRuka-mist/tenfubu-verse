@@ -1,0 +1,86 @@
+以下の問題について、あなたの視点で分析と解決策を提示してください。
+
+## 問題の状況
+デジタルカードゲームで、CPU戦において相手のフォロワーのオーラやバリアのエフェクトが表示されないことがあります。効果は発動しているが、視覚的なエフェクトが表示されない。この問題は断続的に発生します。
+
+## これまでの試行
+1. Card.tsx でのパッシブ能力判定ロジックを確認
+2. hasBarrier の二重チェック（プロパティ値とpassiveAbilities配列の両方）を実装済み
+3. useVisualBoard フックでのデータコピー処理を確認
+
+## 関連コード
+
+### Card.tsx でのパッシブ能力判定（66-73行目）:
+```typescript
+const abilities: string[] = (card as any).passiveAbilities || (card as any).abilities || [];
+const isWard = abilities.includes('WARD');
+const isAura = abilities.includes('AURA');
+const isStealth = abilities.includes('STEALTH');
+const hasBarrier = (card as any).hasBarrier === true ||
+    (abilities.includes('BARRIER') && (card as any).hasBarrier !== false);
+```
+
+### エフェクト表示条件（304行目、332行目など）:
+```typescript
+{hasBarrier && isOnBoard && !playSummonAnim && !suppressPassives && (...)}
+{isAura && isOnBoard && !playSummonAnim && !suppressPassives && (...)}
+```
+
+### useVisualBoard フック（1833-1860行目）:
+```typescript
+const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
+    const [visualBoard, setVisualBoard] = React.useState<(any & { isDying?: boolean })[]>([]);
+    React.useEffect(() => {
+        setVisualBoard(prev => {
+            const next: (any & { isDying?: boolean })[] = [];
+            const realMap = new Map((realBoard || []).filter(c => c).map(c => [(c as any).instanceId, c]));
+            prev.forEach(v => {
+                if (!v) return;
+                const real = realMap.get((v as any).instanceId);
+                if (real) {
+                    next.push({ ...real, isDying: false }); // スプレッドでコピー
+                    realMap.delete((v as any).instanceId);
+                } else {
+                    next.push({ ...v, isDying: true });
+                }
+            });
+            realMap.forEach(real => {
+                next.push({ ...real, isDying: false });
+            });
+            return next;
+        });
+    }, [realBoard]);
+```
+
+### engine.ts でのカード生成（SUMMON_CARD: 1524-1533行目）:
+```typescript
+const newCard = {
+    ...template,
+    instanceId,
+    currentHealth: template.health,
+    maxHealth: template.health,
+    canAttack: template.passiveAbilities?.includes('STORM') || template.passiveAbilities?.includes('RUSH') || false,
+    attacksMade: 0,
+    hasEvolved: false,
+    turnPlayed: newState.turnCount,
+    hasBarrier: template.passiveAbilities?.includes('BARRIER'),
+    passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined,
+    hadStealth: template.passiveAbilities?.includes('STEALTH')
+};
+```
+
+### 相手ボード表示部分（GameScreen.tsx 6086行目）:
+```typescript
+{c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''}
+    style={{ ... }} isOnBoard={true} isSpecialSummoning={...} /> : ...}
+```
+
+## 質問
+1. この問題の根本原因は何ですか？特に「断続的に発生する」という点に注目してください。
+2. useVisualBoardのスプレッド構文で passiveAbilities 配列は正しくコピーされていますか？shallow copy の問題はないですか？
+3. engine.ts で passiveAbilities が undefined になるケースはありますか？
+4. React の再レンダリングタイミングとの関連性はありますか？
+5. 推奨する解決策は？
+6. Claude（別のAI）が見落としている可能性のある観点は？
+
+自由に分析し、あなた独自の観点で回答してください。

@@ -2051,3 +2051,1048 @@ cursor: 'default',
 - [ ] バトルログのカード名が黄色太字で表示され、クリック可能とわかること
 - [ ] バトルログのカード名クリックでカード情報が表示されること
 - [ ] 攻撃時の回転がドラッグリリース直後に開始されること
+
+---
+
+## 修正日
+2025年12月31日（アニメーションバグ修正）
+
+## 修正内容
+
+### 1. 攻撃時の回転アニメーションを0.2秒linearに修正
+- **変更前**: 0.3s ease-out
+- **変更後**: 0.2s linear
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対象行**: 5388-5395行目（@keyframes attackRotate, .attack-rotating）
+  ```css
+  @keyframes attackRotate {
+      0% { transform: translateX(var(--offsetX)) rotateY(0deg); }
+      100% { transform: translateX(var(--offsetX)) rotateY(360deg); }
+  }
+  .attack-rotating {
+      animation: attackRotate 0.2s linear forwards !important;
+      transform-style: preserve-3d;
+  }
+  ```
+
+### 2. バトルログのカード名クリック機能を根本から見直し
+- **問題**: 以前の実装はログフォーマットを誤解しており、カード名を正しく検出できなかった
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - ログフォーマット分析: `${player.name} は ${card.name} をプレイしました`
+  - 新しい正規表現パターンを実装:
+    - Pattern 1: `^(.+?) は (.+?) (をプレイしました|を場に出した|を進化させました)`
+    - Pattern 2: `^(.+?) は (\+?\d+\/\+?\d+ された|ダメージを受けた|破壊された)`
+    - Pattern 3: 括弧パターン `「([^」]+)」`
+  - カード名とプレイヤー名を区別してクリック可能に
+
+### 3. 盤面フォロワーのマウスオーバー浮き上がりを削除
+- **問題**: 盤面のカードにマウスを乗せると浮き上がる（ドラッグ時のみ浮くべき）
+- **対象ファイル**: `game/src/components/Card.css`, `game/src/components/Card.tsx`
+- **対策**:
+  - Card.cssに`.card.on-board:hover`セレクタを追加
+    ```css
+    .card.on-board:hover {
+        transform: none;
+        box-shadow: inherit;
+        border-color: inherit;
+        z-index: inherit;
+    }
+    ```
+  - Card.tsxに`isOnBoard`プロップに基づく`on-board`クラスを追加
+
+### 4. 進化時Z軸回転を-5度→3度に変更
+- **変更前**: -10度→0度
+- **変更後**: -5度→3度（8度の変化、以前の10度より少し控えめ）
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - 860行目: `setRotateZ(-5)` - 開始時の傾き
+  - 959-962行目: 高速回転フェーズで`setRotateZ(-5 + eased * 8)` (-5→3)
+
+### 5. 超進化時の拡大率を1.2倍に変更
+- **変更前**: 通常進化も超進化も1.1倍
+- **変更後**: 通常進化1.1倍、超進化1.2倍
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - 958-960行目:
+    ```typescript
+    const targetScale = useSep ? 1.2 : 1.1;
+    setCurrentScale(0.75 + eased * (targetScale - 0.75));
+    ```
+
+### 6. 手札プレイ時のカード非表示を実装
+- **問題**: カードプレイアニメーション中に手札の元カードが見えたまま
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - `playingCardAnim`のstateに`sourceIndex`プロパティを追加（3269行目）
+  - すべての`setPlayingCardAnim`呼び出しに`sourceIndex`を追加
+    - 自分のカードプレイ: `sourceIndex: index`（手札の位置）
+    - CPU/リモート: `sourceIndex: -1`（非表示不要）
+  - 手札レンダリング（6268-6273行目）でアニメーション中のカードをスキップ:
+    ```typescript
+    const isBeingPlayed = playingCardAnim !== null && playingCardAnim.sourceIndex === i;
+    if (isBeingPlayed) {
+        return null; // Don't render - shown in animation overlay
+    }
+    ```
+
+### 7. 手札プレイ時のY軸回転を0.2秒で実装
+- **問題**: Y軸回転が見えない（開始スケールが小さすぎた）
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - アニメーションを4フェーズに分割:
+    - Phase 1 (0-20%): 手札→中央へ移動、スケール1.0→1.5
+    - Phase 2 (20-45%): Y軸360度回転、スケール1.5→1.8（約0.2秒）
+    - Phase 3 (45-85%): 中央でホールド、スケール1.8→2.0
+    - Phase 4 (85-100%): ボード位置へ移動、スケール2.0→1.0
+
+### 8. 回転時の裏面を無地（山札スタイル）に実装
+- **問題**: Y軸回転時に裏面がないため回転が見えない
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - 3Dフリップカード構造を実装（6674-6725行目）
+    - 前面: `Card`コンポーネント + `backfaceVisibility: hidden`
+    - 背面: 山札スタイルのグラデーション背景 + `transform: rotateY(180deg)`
+  - 背面デザイン:
+    ```css
+    background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 50%, #1e3a5f 100%);
+    border: 3px solid #4a6fa5;
+    boxShadow: inset 0 0 30px rgba(74, 111, 165, 0.5);
+    ```
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 3267-3276行目: playingCardAnim state型定義（sourceIndex追加）
+  - 5388-5395行目: 攻撃回転アニメーション（0.2s linear）
+  - 6268-6273行目: 手札レンダリング時のプレイ中カード非表示
+  - 6596-6672行目: カードプレイアニメーションkeyframes
+  - 6674-6725行目: 3Dフリップカード構造
+
+- `game/src/components/Card.css`
+  - 30-36行目: `.card.on-board:hover`ホバー無効化
+
+- `game/src/components/Card.tsx`
+  - 143行目: `on-board`クラスの条件付き追加
+
+## 手動テストチェックリスト（更新）
+- [ ] 攻撃時の回転が0.2秒・等速で回転すること
+- [ ] バトルログ「XXX は カード名 をプレイしました」のカード名がクリック可能なこと
+- [ ] 盤面のカードにホバーしても浮き上がらないこと（ドラッグ時のみ浮く）
+- [ ] 進化アニメーションで-5度から3度に傾くこと
+- [ ] 超進化時に1.2倍に拡大されること（通常進化は1.1倍）
+- [ ] カードプレイ時に手札の元カードが消えること
+- [ ] カードプレイ時にY軸回転が視覚的に確認できること（裏面が見える）
+- [ ] カードプレイ時の裏面が山札と同じ青いデザインであること
+
+---
+
+## 修正日
+2025年12月31日（続き・Dual-review対応）
+
+## 修正内容
+
+### 1. 進化アニメーションZ軸回転を0度→-5度→3度→0度に修正
+- **問題**: 進化開始時にいきなり-5度に傾くのが不自然
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - ZOOM_INフェーズ開始時に`setRotateZ(0)`で0度から開始
+  - ZOOM_IN中に0度→-5度へアニメーション
+  - FLIPフェーズで-5度→3度へ回転
+  - ZOOM_OUTフェーズで3度→0度へ戻す
+
+### 2. BGM音量設定をタイトル画面と試合中で共通化
+- **問題**: 試合中とタイトル画面でBGM設定が別々だった
+- **対象ファイル**: `game/src/App.tsx`, `game/src/screens/TitleScreen.tsx`, `game/src/core/types.ts`
+- **対策**:
+  - `AudioSettings`型を`types.ts`に共通定義
+  - App.tsxでaudioSettings stateを管理し、localStorageに永続化
+  - TitleScreenにprops経由でaudioSettingsとonAudioSettingsChangeを渡す
+
+### 3. タイトル画面に設定ボタンを追加
+- **問題**: タイトル画面でBGM/SE設定ができなかった
+- **対象ファイル**: `game/src/screens/TitleScreen.tsx`
+- **対策**:
+  - 右上に⚙設定ボタンを追加
+  - クリックで音声設定モーダルを表示
+  - BGM/SE各自のオン/オフ切り替えと音量スライダー
+
+### 4. 攻撃対象選択時の矢印を水色の光の線に変更
+- **問題**: 赤い三角矢印が目立ちすぎて見にくい
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - 4層のSVG pathで水色グローラインを実装
+    - 層1: 外側グロー（20px, rgba(100, 200, 255, 0.3)）
+    - 層2: 中間グロー（10px, rgba(150, 220, 255, 0.5)）
+    - 層3: 明るいコア（4px, rgba(200, 240, 255, 0.9)）
+    - 層4: 白コア（2px, rgba(255, 255, 255, 1)）
+  - SVG filterでcyanGlowエフェクトを追加
+
+### 5. 攻撃可能エフェクトの表示条件確認
+- **確認結果**: 既に`isMyTurn`プロパティで制御済み
+- Card.tsx 77行目で`isReady && isMyTurn`の条件
+- 相手のボードには`isMyTurn`を渡していないため、相手カードにはエフェクトが表示されない
+
+### 6. AudioSettings型の共通化（Dual-review指摘対応）
+- **問題**: Geminiレビューで重複定義がblocking issueとして報告
+- **対象ファイル**: `game/src/core/types.ts`, `game/src/App.tsx`, `game/src/screens/TitleScreen.tsx`
+- **対策**:
+  - `types.ts`に`AudioSettings`インターフェースを定義
+  - App.tsxとTitleScreen.tsxの重複定義を削除し、インポートに変更
+
+## Dual-review結果
+
+### Codex (OpenAI GPT-5.2)
+- **結果**: ✅ OK
+- **blocking**: 0件
+- **advisory**: 1件（攻撃時アニメーションのtransform競合可能性）
+
+### Gemini (Google)
+- **初回結果**: ❌ NG（AudioSettings重複定義）
+- **修正後結果**: ✅ OK
+- **blocking**: 0件
+- **advisory**: 0件
+
+## 構造の記録（更新）
+- `game/src/core/types.ts`
+  - 5-11行目: `AudioSettings`インターフェース定義
+
+- `game/src/App.tsx`
+  - 6行目: `AudioSettings`をtypes.tsからインポート
+  - 19-35行目: defaultAudioSettings, loadAudioSettings
+  - 72-82行目: audioSettings state管理とlocalStorage永続化
+
+- `game/src/screens/TitleScreen.tsx`
+  - 2行目: `AudioSettings`をtypes.tsからインポート
+  - 200-231行目: 設定ボタン
+  - 234-365行目: 設定モーダル
+
+- `game/src/screens/GameScreen.tsx`
+  - 856-896行目: ZOOM_INフェーズZ軸回転アニメーション
+  - 1060-1095行目: ZOOM_OUTフェーズZ軸回転0度へ戻す
+  - 6543-6634行目: 攻撃矢印の水色グロー実装
+
+---
+
+## 修正日
+2025年12月31日（バグ修正 & Dual-review対応）
+
+## 修正内容
+
+### 1. バトルログのカード名クリック処理を全パターン対応に修正
+- **問題**: 同じカードでもログの表示形式によってクリック可能/不可能が混在していた
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - pattern1～5の包括的な正規表現パターンを実装
+  - pattern1: 「XXX は YYY をプレイしました/を場に出した/を進化させました/を召喚した」形式
+  - pattern2: 「YYY は+X/+Xされた/ダメージを受けた/破壊された」＋「XXX の効果で YYY を召喚」二重カード名対応
+  - pattern3: 「XXX に Y ダメージ/を破壊/を手札に戻」形式
+  - pattern4: 「XXX が YYY に ZZ ダメージ/を攻撃」攻撃者-被攻撃者形式（リーダー除外）
+  - pattern5: 「YYY」括弧形式（既存）
+- **修正箇所**: 656-808行目 `renderLogWithCardLinks`関数
+
+### 2. 進化アニメーションZ軸回転方向の修正
+- **問題**: Y軸180度回転後にZ軸+3度が左傾きになっていた（右傾きが期待）
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - FLIPフェーズ: -5度→-3度に変更（以前は-5度→+3度）
+  - ZOOM_OUTフェーズ: startRotateZを3から-3に修正してフェーズ遷移の不整合を解消
+- **修正箇所**:
+  - 1032行目: `setRotateZ(-5 + eased * 2);` // -5 -> -3
+  - 1123行目: `const startRotateZ = -3;` // フェーズ遷移整合性
+
+### 3. カードプレイ時の裏面を無地に修正
+- **問題**: Y軸360度回転中にカードの裏面（カード画像）が見えていた
+- **対象ファイル**: `game/src/components/Card.tsx`, `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - CardコンポーネントにbackfaceVisibility/WebkitBackfaceVisibilityの対応を追加
+  - カードプレイアニメーションでCardにbackfaceVisibility: 'hidden'を渡すよう修正
+- **修正箇所**:
+  - Card.tsx 159-161行目: backfaceVisibilityスタイル対応追加
+  - GameScreen.tsx 6813行目: backfaceVisibility/WebkitBackfaceVisibilityをCardに渡す
+
+## Dual-review結果
+
+### Codex (OpenAI GPT-5.2)
+- **結果**: ✅ OK (advisoryのみ)
+- **blocking**: 0件
+- **advisory**: 2件
+  1. pattern2の二重カード名検出でafterNameに先頭スペースが入り「XXXの効果でYYYを召喚」系がマッチしない → **修正済み**（effectPatternに`\s*`を追加）
+  2. FLIPフェーズ終端Z回転(-3)とZOOM_OUT開始値(3)の符号不整合 → **修正済み**（startRotateZを-3に変更）
+
+### Gemini (Google)
+- **初回結果**: ❌ NG
+- **blocking**: 1件（進化アニメーションのフェーズ遷移時Z軸角度ジャンプ）
+- **修正後**: ✅ OK
+- **対策**: startRotateZを3から-3に変更
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 656-808行目: `renderLogWithCardLinks`関数（5パターン対応に拡張）
+  - 1032行目: FLIPフェーズZ軸回転（-5→-3に変更）
+  - 1123行目: ZOOM_OUTフェーズ開始Z回転（-3に修正）
+  - 6813行目: カードプレイアニメーションbackfaceVisibility渡し
+
+- `game/src/components/Card.tsx`
+  - 159-161行目: backfaceVisibility/WebkitBackfaceVisibilityスタイル対応
+
+---
+
+## 修正日
+2025年12月31日（ネクロマンスエフェクト & ドキュメント整理）
+
+## 修正内容
+
+### 1. ネクロマンスエフェクトの視覚的改善
+- **問題**: ネクロマンス発動時に視覚的なフィードバックがなく分かりにくかった
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **対策**:
+  - ログから「XXX はネクロマンス Y を発動！」パターンを検知するuseEffectを追加
+  - 墓地表示の上に紫色の「-X」数字がフロートアップするアニメーションを実装
+  - プレイヤー用（上方向にフロート）と相手用（下方向にフロート）の2種類
+  - CSSアニメーション `necromanceFloat` / `necromanceFloatOpponent` を追加
+  - 紫色のグロー効果（text-shadow: #d946ef, #a855f7, #7c3aed）
+- **修正箇所**:
+  - 1989-1999行目: NecromanceEffect interface と state定義
+  - 2014-2047行目: ネクロマンス検知useEffect
+  - 5540-5554行目: ネクロマンスアニメーションCSS
+  - 5565-5585行目: プレイヤー墓地のネクロマンスエフェクト表示
+  - 5839-5859行目: 相手墓地のネクロマンスエフェクト表示
+
+### 2. プロジェクトドキュメントの整理
+- **問題**: 試行錯誤の過程で生成された個別のドキュメントが乱立していた
+- **対策**:
+  - `docs/archive/` フォルダを作成し、古いドキュメントを移動
+  - CLAUDE.mdのルールに則って3つの主要ドキュメントのみをルートに残す:
+    - `task.md` - タスクリスト
+    - `implementation_plan.md` - 実装計画書
+    - `walkthrough.md` - 修正内容の記録
+- **移動したファイル**:
+  - implementation_extra_pp.md
+  - implementation_plan_bgm.md
+  - implementation_plan_cards.md
+  - implementation_plan_online.md
+  - implementation_plan_web_deploy.md
+  - walkthrough_bgm.md
+  - walkthrough_card_index_fix.md
+  - walkthrough_cards.md
+  - walkthrough_evolution_limit.md
+  - walkthrough_evolution_polish.md
+  - walkthrough_project_map.md
+  - project_map.md
+  - 修正メモ.md
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 1989-1999行目: ネクロマンスエフェクトstate定義
+  - 2014-2047行目: ネクロマンス検知useEffect
+  - 5540-5554行目: ネクロマンスアニメーションCSS定義
+  - 5565-5585行目: プレイヤー墓地エフェクト表示
+  - 5839-5859行目: 相手墓地エフェクト表示
+
+- `docs/archive/` - 過去のドキュメントアーカイブ
+
+## Dual-review結果
+
+### Codex (OpenAI GPT-5.2)
+- **結果**: ✅ OK
+- **blocking**: 0件
+- **advisory**: 1件
+  - ネクロマンス発動の表示先をプレイヤー名一致で判定しているため、ログ表示名が異なる場合に誤表示の可能性
+  - **対応方針**: 現状はログがエンジン内で生成され`player.name`を使用しているため問題ないが、将来的にログにプレイヤーIDを含める改善を検討
+
+### Gemini (Google)
+- **結果**: ✅ OK
+- **blocking**: 0件
+- **advisory**: 0件
+- **notes**: GameScreen.tsxが7000行以上と大きいため、将来的にUIセクションの分割を推奨
+
+---
+
+## 修正日
+2025年12月31日
+
+## 修正内容
+
+### リーダー回復SEの変更
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: リーダーの体力回復時（HEAL_LEADER効果）のSEを`water.mp3`から`heal.mp3`へ変更
+
+#### 変更箇所
+- 339行目: `playSE('water.mp3', 0.6)` → `playSE('heal.mp3', 0.6)`
+
+---
+
+### カードプレイ時の回転タイミング修正
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: カードをプレイした際の3D回転アニメーションのタイミングを修正
+  - 変更前: 手札から中央に移動完了後に回転開始
+  - 変更後: 手札から移動開始と同時に回転開始、中央到着時に回転完了
+
+#### 変更箇所
+- 6914-6935行目: `@keyframes playCardSequence` の修正
+  - 0%: 手札位置から移動開始 + rotateY(0deg)
+  - 25%: 中央に到着 + rotateY(360deg) ← 回転完了
+  - 80%: 中央で待機
+  - 100%: ボード位置へ移動
+- 6956-6978行目: `@keyframes playSpellSequence` の修正
+  - 同様に移動と同時に回転するよう変更
+
+---
+
+### バトルログのカード名強調表示・クリック処理の修正
+- **対象ファイル**:
+  - `game/src/core/engine.ts`
+  - `game/src/screens/GameScreen.tsx`
+- **内容**: バトルログ内のカード名検出をパターンマッチングからカードデータベースマッチング方式に変更
+
+#### 変更箇所
+- `engine.ts` 940-943行目: `getAllCardNames()` 関数を追加
+  - 全カード名を長さ降順でソートして返す（長いカード名を優先マッチ）
+- `GameScreen.tsx` 2行目: `getAllCardNames` をインポートに追加
+- `GameScreen.tsx` 655-746行目: `renderLogWithCardLinks` 関数を全面書き換え
+  - カード名データベースから全カード名を取得
+  - ログ文字列内で全カード名を検索してマッチング
+  - 重複排除（長いカード名優先）
+  - 開始位置でソートしてパーツを組み立て
+
+---
+
+### 攻撃時の回転でカードのみ回転させる修正
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: 攻撃時のY軸回転アニメーションがカードのみに適用され、守護マーカー等のエフェクトは回転しないよう修正
+
+#### 変更箇所
+- 6050-6054行目: プレイヤーボードのカード描画部分
+  - 変更前: 親divに`attack-rotating`クラスを適用（カードとマーカー両方が回転）
+  - 変更後: Cardを別のdivでラップし、そのdivにのみ`attack-rotating`クラスを適用
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 338-339行目: HEALエフェクト時のSE再生（heal.mp3）
+  - 655-760行目: バトルログのカード名検出（データベースマッチング方式 + 単語境界チェック）
+  - 6050-6054行目: 攻撃時回転アニメーション用Cardラッパー
+  - 6933-7016行目: カードプレイ時のアニメーションキーフレーム（中間キーフレーム追加版）
+
+- `game/src/core/engine.ts`
+  - 940-943行目: `getAllCardNames()` 関数
+
+---
+
+### バトルログのカード名判定改善（単語境界チェック追加）
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **問題**: 「You」の中の「Y」が強調表示される等、カード名が単語の一部でもマッチしてしまう
+- **原因**: 単純なindexOf検索で、前後の文字を考慮していなかった
+- **修正内容**:
+  - `isWordBoundary()` 関数を追加
+  - カード名の前後が単語境界（スペース、句読点、文字列端など）であることを確認
+  - 英数字・ひらがな・カタカナ・漢字が隣接している場合はマッチしない
+
+#### 変更箇所
+- 693-703行目: `isWordBoundary()` 関数追加
+- 714-717行目: 単語境界チェックを追加
+
+---
+
+### カードプレイ時の回転が動作しない問題の修正
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **問題**: カードが手札から中央に移動する間に回転しない（中央到着後にのみ回転）
+- **原因分析（CodexおよびGeminiによる診断）**:
+  - CSS行列補間において、rotateY(0deg)からrotateY(360deg)への変化は、数学的に等価（同じ向き）の行列となる
+  - ブラウザは「最短経路」を選択して補間するため、「回転しない（0度差）」と解釈される
+- **修正内容**:
+  - 中間キーフレーム（12.5%/15%）を追加してrotateY(180deg)を明示的に指定
+  - これにより回転方向が強制され、0deg→180deg→360degと確実に回転する
+
+#### 変更箇所
+- 6941-6945行目: `playCardSequence` に12.5%キーフレーム追加（フォロワーカード用）
+- 6967-6971行目: `playCardSequence` のSpell分岐に15%キーフレーム追加
+- 6992-6997行目: `playSpellSequence` に15%キーフレーム追加（スペルカード用）
+
+---
+
+## 修正日
+2025年12月31日（続き）
+
+## 修正内容
+
+### スリーブ機能の実装
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: カードの裏面にスリーブ画像を表示する機能を実装。各リーダークラスごとに1種類のスリーブを用意。
+
+#### スリーブ画像の格納場所
+- **フォルダ**: `public/sleeves/`
+- **ファイル名**:
+  - `senka_sleeve.png` - センカ用スリーブ
+  - `aja_sleeve.png` - アジャ用スリーブ
+  - `yoruka_sleeve.png` - yoRuka用スリーブ
+
+#### 変更箇所
+
+##### 1. スリーブ画像インポートとヘルパー関数追加
+- 21-23行目: スリーブ画像のインポート
+  ```typescript
+  const ajaSleeve = getAssetUrl('/sleeves/aja_sleeve.png');
+  const senkaSleeve = getAssetUrl('/sleeves/senka_sleeve.png');
+  const yorukaSleeve = getAssetUrl('/sleeves/yoruka_sleeve.png');
+  ```
+- 33-38行目: `getSleeveImg(cls: ClassType)` ヘルパー関数を追加
+  ```typescript
+  const getSleeveImg = (cls: ClassType): string => {
+      if (cls === 'YORUKA') return yorukaSleeve;
+      if (cls === 'AJA') return ajaSleeve;
+      return senkaSleeve;
+  };
+  ```
+
+##### 2. カードプレイアニメーションへのスリーブ適用
+- 3394行目: `playingCardAnim` stateに `playerClass: ClassType` プロパティを追加
+- 以下の5箇所で `setPlayingCardAnim` 呼び出しに `playerClass` を追加:
+  - 3271行目: リモートプレイヤーのスペルプレイ時 (`opponent?.class || 'SENKA'`)
+  - 3287行目: リモートプレイヤーのフォロワープレイ時 (`opponent?.class || 'SENKA'`)
+  - 3685行目: プレイヤーのカードプレイ時 (`player?.class || 'SENKA'`)
+  - 4164行目: CPUのカードプレイ時 (`opponent?.class || 'SENKA'`)
+  - 5259行目: ターゲットクリック時のカードプレイ (`player?.class || 'SENKA'`)
+- 7181-7208行目: カードプレイアニメーションの裏面 (`.play-card-back`) を修正
+  - 変更前: 無地のグラデーション背景
+  - 変更後: スリーブ画像を表示（エラー時はグラデーションにフォールバック）
+
+##### 3. プレイヤーボードのカードに3D flip構造を適用
+- 6187-6232行目: プレイヤーボードの各カードを3D flip構造でラップ
+  - `perspective: '800px'` の親コンテナ
+  - `transformStyle: 'preserve-3d'` のフリッパー要素
+  - 表面: Cardコンポーネント（`backfaceVisibility: 'hidden'`）
+  - 裏面: スリーブ画像（`transform: 'rotateY(180deg)'`, `backfaceVisibility: 'hidden'`）
+  - 攻撃時の回転アニメーションで自動的にスリーブが表示される
+
+##### 4. 相手ボードのカードに3D flip構造を適用
+- 6025-6067行目: 相手ボードの各カードを3D flip構造でラップ（プレイヤーボードと同様）
+  - 相手のクラスのスリーブ画像を使用 (`opponent?.class || 'SENKA'`)
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 21-23行目: スリーブ画像インポート
+  - 33-38行目: `getSleeveImg()` ヘルパー関数
+  - 3394行目: `playingCardAnim` に `playerClass` プロパティ追加
+  - 6025-6067行目: 相手ボードカードの3D flip構造
+  - 6187-6232行目: プレイヤーボードカードの3D flip構造
+  - 7181-7208行目: カードプレイアニメーションの裏面にスリーブ表示
+
+## 備考
+- スリーブ画像はユーザーが `public/sleeves/` フォルダに配置する必要がある
+- 画像がない場合はエラーハンドリングでグラデーション背景にフォールバックする
+- アジャ用スリーブのファイル名は `azya_sleeve.png`（aja ではなく azya）
+
+---
+
+### 反撃時のY軸回転アニメーション追加
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: 攻撃されたカード（反撃側）にもY軸回転アニメーションを追加。反撃エフェクト発動と同時に回転開始。
+
+#### 変更箇所
+
+##### 1. 反撃アニメーション用state追加
+- 2065行目: `counterAttackingFollowerInstanceId` stateを追加
+  ```typescript
+  const [counterAttackingFollowerInstanceId, setCounterAttackingFollowerInstanceId] = React.useState<string | null>(null);
+  ```
+
+##### 2. プレイヤー攻撃時の反撃回転トリガー
+- 4838-4847行目: プレイヤーが相手フォロワーを攻撃した時、反撃エフェクト発動と同時に相手カードの回転をトリガー
+  ```typescript
+  const defenderInstanceId = (defender as any).instanceId;
+  setTimeout(() => {
+      if (defenderInstanceId) {
+          setCounterAttackingFollowerInstanceId(defenderInstanceId);
+          setTimeout(() => setCounterAttackingFollowerInstanceId(null), 300);
+      }
+      playEffect(...);
+  }, 200);
+  ```
+
+##### 3. CPU攻撃時の攻撃・反撃回転トリガー
+- 4411-4432行目: CPUがプレイヤーフォロワーを攻撃した時:
+  - CPU攻撃側カードの回転をトリガー
+  - 反撃エフェクト発動と同時にプレイヤーカード（反撃側）の回転をトリガー
+
+##### 4. ボードカードへの反撃回転クラス適用
+- 6049行目: 相手ボードカードの3D flipラッパーに `attack-rotating` クラス条件を拡張
+  ```typescript
+  className={(attackingFollowerInstanceId === c?.instanceId || counterAttackingFollowerInstanceId === c?.instanceId) ? 'attack-rotating' : ''}
+  ```
+- 6213行目: プレイヤーボードカードも同様に拡張
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 2065行目: `counterAttackingFollowerInstanceId` state追加
+  - 4411-4432行目: CPU攻撃時の攻撃・反撃回転トリガー
+  - 4838-4847行目: プレイヤー攻撃時の反撃回転トリガー
+  - 6049行目: 相手ボードカードの回転クラス条件拡張
+  - 6213行目: プレイヤーボードカードの回転クラス条件拡張
+
+---
+
+### 山札とドローアニメーションへのスリーブ適用
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **内容**: 山札の表示とドロー時のカードアニメーションにスリーブ画像を適用
+
+#### 変更箇所
+
+##### 1. 相手の山札にスリーブ適用
+- 5925-5948行目: 相手の山札表示を修正
+  - グラデーション背景からスリーブ画像（`getSleeveImg(opponent?.class)`）に変更
+  - 画像読み込みエラー時はグラデーションにフォールバック
+
+##### 2. プレイヤーの山札にスリーブ適用
+- 6693-6717行目: プレイヤーの山札表示を修正
+  - グラデーション背景からスリーブ画像（`getSleeveImg(player?.class)`）に変更
+  - 画像読み込みエラー時はグラデーションにフォールバック
+
+##### 3. ドローアニメーションにスリーブ適用
+- 6937-6977行目: ドローアニメーションのカード表示を修正
+  - ドローするプレイヤーに応じてスリーブ画像を切り替え
+    - プレイヤードロー時: `getSleeveImg(player?.class)`
+    - 相手ドロー時: `getSleeveImg(opponent?.class)`
+  - 画像読み込みエラー時はストライプパターンにフォールバック
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 5925-5948行目: 相手の山札表示（スリーブ画像）
+  - 6693-6717行目: プレイヤーの山札表示（スリーブ画像）
+  - 6937-6977行目: ドローアニメーション（スリーブ画像）
+
+---
+
+## 修正日
+2025年12月31日
+
+## 修正内容
+
+### 1. せんかのオーラ効果を常在効果に修正
+- **対象ファイル**: `game/src/core/engine.ts`
+- **内容**: せんかのカード効果「味方のナックラーすべては疾走を得る」がファンファーレ（場に出た時の一度きりの効果）ではなく常在効果（オーラ）であるべきだったため修正
+
+#### 変更箇所
+
+##### 1-1. カード定義の修正（34-52行目）
+- FANFAREトリガーを削除
+- `passiveAbilities`に`'AURA'`を追加
+- `description`を「ファンファーレ：〜」から「（常在効果）」に変更
+
+```typescript
+// 修正前
+triggers: [
+    { trigger: 'FANFARE', effects: [{ type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'ALL_FOLLOWERS', conditions: { tag: 'Knuckler' } }] },
+    { trigger: 'SUPER_EVOLVE', ... }
+]
+
+// 修正後
+passiveAbilities: ['STORM', 'DOUBLE_ATTACK', 'AURA'],
+triggers: [
+    { trigger: 'SUPER_EVOLVE', ... }  // FANFAREは削除
+]
+```
+
+##### 1-2. せんか召喚時に既存ナックラーへ疾走付与（2276-2290行目）
+- せんかが場に出た時、既に場にいる味方ナックラーすべてに疾走を付与
+- 元々のオーラ処理（ナックラーが後から場に出る時）は既存のまま
+
+```typescript
+// せんかがプレイされた時、既存の味方ナックラーすべてに疾走を付与（常在効果）
+if (newFollower.id === 'c_senka_knuckler') {
+    player.board.forEach(boardCard => {
+        if (boardCard && boardCard.tags?.includes('Knuckler') && boardCard.instanceId !== newFollower.instanceId) {
+            if (!boardCard.passiveAbilities?.includes('STORM')) {
+                if (!boardCard.passiveAbilities) {
+                    boardCard.passiveAbilities = [];
+                }
+                boardCard.passiveAbilities.push('STORM');
+                boardCard.canAttack = true;
+                newState.logs.push(`${boardCard.name} は せんか の効果で疾走を得た！`);
+            }
+        }
+    });
+}
+```
+
+### 2. エフェクト表示の整合性チェック機能改善
+- **対象ファイル**: `game/src/components/Card.tsx`
+- **内容**: バリアやオーラ、守護などのエフェクトが相手が出したカードや特殊召喚カードに表示されない問題を修正
+
+#### 変更箇所
+
+##### 2-1. バリアエフェクト判定の改善（65-73行目）
+- `hasBarrier`プロパティだけでなく、`passiveAbilities`にBARRIERが含まれる場合もバリアエフェクトを表示
+- エンジン側とUI側のデータ不整合を吸収
+
+```typescript
+// 修正前
+const hasBarrier = (card as any).hasBarrier === true;
+
+// 修正後
+const hasBarrier = (card as any).hasBarrier === true ||
+    (abilities.includes('BARRIER') && (card as any).hasBarrier !== false);
+```
+
+## オーラ効果の仕組み整理
+
+### せんかのオーラ効果が発動するタイミング
+1. **せんかがプレイされた時**: 既に場にいる味方ナックラーすべてに疾走を付与（新規追加）
+2. **ナックラーがプレイされた時**: 場にせんかがいれば疾走を付与（既存：2260-2271行目）
+3. **ナックラーがトークン召喚された時**: 場にせんかがいれば疾走を付与（既存：1536-1547行目、1577-1586行目）
+
+### 既存のオーラ処理コード（変更なし）
+- 1536-1547行目（SUMMON_CARD）
+- 1577-1586行目（SUMMON_CARD_RUSH）
+- 2260-2271行目（PLAY_CARD）
+
+### 3. せんかのオーラ効果のカードID比較を修正
+- **対象ファイル**: `game/src/core/engine.ts`
+- **内容**: デッキ構築時にカードIDが上書きされる問題を修正
+
+#### 問題の原因
+`buildDeckFromTemplate`関数（940-961行目）でカードをデッキに追加する際、
+```typescript
+deck.push({
+    ...cardDef,
+    id: `${playerId}_c${cardIndex}`,  // 元のカードIDが上書きされる！
+    instanceId: `inst_${playerId}_c${cardIndex}`
+} as Card);
+```
+これにより、元のカードID（例：`c_senka_knuckler`）が`p1_c0`のような形式に上書きされ、
+`c?.id === 'c_senka_knuckler'`の比較が常に`false`になっていた。
+
+#### 修正箇所
+すべてのカードID比較をカード名比較に変更：
+
+##### 3-1. SUMMON_CARD内のオーラ処理（1538-1539行目）
+##### 3-2. SUMMON_CARD_RUSH内のオーラ処理（1581-1582行目）
+##### 3-3. PLAY_CARD内のナックラープレイ時オーラ処理（2262-2263行目）
+- 変更: `c?.id === 'c_senka_knuckler'` → `c?.name === 'せんか'`
+
+##### 3-4. PLAY_CARD内のせんかプレイ時処理（2280-2281行目）
+- 変更: `newFollower.id === 'c_senka_knuckler'` → `newFollower.name === 'せんか'`
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 34-52行目: せんかのカード定義（AURA追加、FANFARE削除）
+  - 1538-1539行目: SUMMON_CARD内のオーラ処理（カード名で比較）
+  - 1581-1582行目: SUMMON_CARD_RUSH内のオーラ処理（カード名で比較）
+  - 2262-2263行目: ナックラープレイ時のオーラ処理（カード名で比較）
+  - 2280-2281行目: せんかプレイ時の既存ナックラーへの疾走付与（カード名で比較）
+- `game/src/components/Card.tsx`
+  - 65-73行目: パッシブエフェクト判定（バリア判定改善）
+
+---
+
+## 修正日
+2026年1月2日
+
+## 修正内容
+
+### オーラ/バリアエフェクトが高速処理時に表示されない問題の修正
+
+#### 問題
+- CPU戦や連続召喚（遙→悠霞→刹那など）のような高速処理時に、オーラやバリアのエフェクトが表示されないことがあった
+- 効果は発動しているが、視覚的なエフェクトが表示されない
+
+#### 根本原因
+Reactの状態変更検知の問題。ボードカードをコピーする際に `{ ...c }` のシャローコピーを使っていたため、`passiveAbilities` 配列の参照が同じままになり、Reactが変更を検知できなかった。
+
+特に問題となった箇所：
+1. `engine.ts` の `applyAbilityEffect` 関数（1051-1077行目）
+2. `engine.ts` の `internalGameReducer` 関数（1978-2011行目）
+3. `abilities.ts` の各エフェクト処理（AOE_DAMAGE, RANDOM_DAMAGE, HEAL_FOLLOWER）
+4. `GameScreen.tsx` の `useVisualBoard` フック
+
+高速処理時に複数のアクションが連続して発生すると、参照の変更が適切に伝播せず、Reactの再レンダリングがトリガーされないケースがあった。
+
+#### 修正箇所
+
+##### 1. engine.ts - applyAbilityEffect関数のボードコピー（1059-1072行目）
+```typescript
+// 変更前
+board: state.players.p1.board.map(c => c ? { ...c } : null),
+
+// 変更後
+board: state.players.p1.board.map(c => c ? {
+    ...c,
+    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+} : null),
+```
+
+##### 2. engine.ts - internalGameReducer関数のボードコピー（1993-2006行目）
+同様の修正を適用
+
+##### 3. abilities.ts - AOE_DAMAGEのカードコピー（76-79行目）
+```typescript
+// 変更前
+const newCard = { ...c };
+
+// 変更後
+const newCard = {
+    ...c,
+    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+};
+```
+
+##### 4. abilities.ts - RANDOM_DAMAGEのカードコピー（107-111行目）
+同様の修正を適用
+
+##### 5. abilities.ts - HEAL_FOLLOWER (ALL_FOLLOWERS)のカードコピー（190-194行目）
+同様の修正を適用
+
+##### 6. abilities.ts - HEAL_FOLLOWER (RANDOM_FOLLOWER)のカードコピー（208-212行目）
+同様の修正を適用
+
+##### 7. GameScreen.tsx - useVisualBoardフックのディープコピー（1877-1897行目）
+```typescript
+// 変更前
+next.push({ ...real, isDying: false });
+
+// 変更後
+next.push({
+    ...real,
+    passiveAbilities: real.passiveAbilities ? [...real.passiveAbilities] : [],
+    isDying: false
+});
+```
+
+#### 技術的解説
+- Reactは参照比較で変更を検知する
+- `{ ...obj }` はシャローコピーなので、ネストされた配列・オブジェクトは同じ参照を共有する
+- `passiveAbilities` 配列を `[...arr]` でディープコピーすることで、新しい参照が作成され、Reactが変更を検知できるようになる
+- 高速処理時には複数のreducerアクションが短時間で発生するため、参照の不変性がより重要になる
+
+#### TypeScriptエラー修正
+passiveAbilitiesを常に`[]`で初期化しているにも関わらず、TypeScriptが`undefined`の可能性を警告したため、非nullアサーション（`!`）を追加：
+- engine.ts 1546行目、1550行目: `newCard.passiveAbilities!`
+- engine.ts 2280行目、2284行目: `newFollower.passiveAbilities!`
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1051-1077行目: applyAbilityEffect内のボードディープコピー
+  - 1985-2011行目: internalGameReducer内のボードディープコピー
+  - 1544-1554行目: SUMMON_CARDのせんかオーラ処理
+  - 2278-2288行目: PLAY_CARDのせんかオーラ処理
+- `game/src/core/abilities.ts`
+  - 73-82行目: AOE_DAMAGEのディープコピー
+  - 106-114行目: RANDOM_DAMAGEのディープコピー
+  - 187-197行目: HEAL_FOLLOWER (ALL_FOLLOWERS)のディープコピー
+  - 207-216行目: HEAL_FOLLOWER (RANDOM_FOLLOWER)のディープコピー
+- `game/src/screens/GameScreen.tsx`
+  - 1877-1897行目: useVisualBoardフックのディープコピー
+
+---
+
+## 修正日
+2026年1月2日
+
+## 修正内容
+
+### CPU戦で相手のバリアエフェクトが表示されない問題の修正
+
+#### 1. 問題の原因
+- CPUがカードをプレイする際の`PLAY_CARD`アクションに`instanceId`が含まれていなかった
+- `instanceId`がundefinedのため、カードが手札から出されたものとして認識されず、特殊召喚と判定されていた
+- 特殊召喚と判定されると`isSpecialSummoning: true`となり、`playSummonAnim: true`が設定される
+- `playSummonAnim: true`の間は、バリア・オーラ等のパッシブエフェクトが表示されない仕様
+
+#### 2. 修正箇所
+- **対象ファイル**: `game/src/screens/GameScreen.tsx`
+- **修正内容**: CPUのPLAY_CARDアクションにinstanceIdを追加
+
+**修正前（4227行目付近）**:
+```typescript
+payload: { cardIndex: bestCard.originalIndex, targetId }
+```
+
+**修正後**:
+```typescript
+payload: { cardIndex: bestCard.originalIndex, targetId, instanceId: bestCard.instanceId }
+```
+
+#### 3. デバッグログ削除
+- `Card.tsx`: バリア持ちカード（ウララ、ヴァルキリー）のデバッグログを削除（75-84行目）
+- `GameScreen.tsx`: 特殊召喚検知のデバッグログを削除（2756-2763行目）
+
+## 構造の記録
+- `game/src/screens/GameScreen.tsx`
+  - 4224-4228行目: CPUのPLAY_CARDアクション（instanceId追加済み）
+  - 5273-5277行目: プレイヤーのPLAY_CARDアクション（元からinstanceIdあり）
+  - 2754-2763行目: summonedCardIds管理（デバッグログ削除済み）
+
+---
+
+## 修正日
+2026年1月2日（続き）
+
+## 修正内容
+
+### 必殺（BANE）による破壊時の紫ガイコツエフェクト追加
+
+#### 1. 実装概要
+必殺（BANE）能力によってフォロワーが即死した際に、紫色のガイコツ（💀）エフェクトを表示するアニメーションを実装。
+
+#### 2. 修正箇所
+
+##### GameScreen.tsx
+1. **BaneEffectVisualコンポーネント追加**（290-351行目）
+   - 紫色のガイコツ絵文字を使用
+   - スケール・回転アニメーション
+   - 紫色のパーティクルエフェクト
+   - 紫色のグロー効果（#9b59b6, #8e44ad, #6c3483）
+
+2. **ActiveEffectStateにBANEタイプ追加**（2206行目）
+   ```typescript
+   type: '...' | 'BANE';
+   ```
+
+3. **AttackEffectでBANE処理追加**（417-428行目）
+   - 効果音: yami.mp3（0.7ボリューム）
+   - BaneEffectVisualコンポーネントを返す
+
+4. **BANE死亡検出用useEffect追加**（2317-2361行目）
+   - 前フレームのボード状態と比較
+   - `killedByBane`フラグを持つカードが消えた時にエフェクト再生
+   - visualBoardRefを使用して正確な位置を取得
+
+5. **useVisualBoardでkilledByBaneフラグ保持**（1955-1956行目）
+   - 死亡時にkilledByBaneフラグをコピー
+
+##### engine.ts
+1. **攻撃者のBANE発動時**（2748行目）
+   ```typescript
+   (defender as any).killedByBane = true;
+   ```
+
+2. **防御者のBANE発動時**（2782行目）
+   ```typescript
+   (attacker as any).killedByBane = true;
+   ```
+
+#### 3. エフェクト仕様
+- 表示時間: 1.2秒
+- アニメーション:
+  - 0%: スケール0、回転-30度、透明
+  - 20%: スケール1.3、回転10度、不透明
+  - 40%: スケール1、回転-5度
+  - 60%: スケール1.1、回転0度
+  - 80%: スケール1、透明度0.8
+  - 100%: スケール1.5、透明
+- パーティクル: 12個の紫色の円が放射状に拡散
+
+## 構造の記録（更新）
+- `game/src/screens/GameScreen.tsx`
+  - 290-351行目: BaneEffectVisualコンポーネント
+  - 2206行目: ActiveEffectState型にBANE追加
+  - 2317-2361行目: BANE死亡検出useEffect
+  - 1955-1956行目: useVisualBoardでkilledByBane保持
+- `game/src/core/engine.ts`
+  - 2748行目: 攻撃者BANEでdefenderにkilledByBane設定
+  - 2782行目: 防御者BANEでattackerにkilledByBane設定
+
+---
+
+## 修正日
+2026年1月2日（続き2）
+
+## 修正内容
+
+### 画像ファイルの移動・リネーム対応
+
+#### 1. 移動・リネームされたファイル
+- `cards/yoruka_secret.png` → `leaders/yoRuka_secret.png`
+- `cards/yoRuka_win2.png` → `leaders/yoRuka_win.png`
+- `cards/yoRuka_lose.png` → `leaders/yoRuka_lose.png`
+
+#### 2. 追加された画像ファイル
+- `leaders/senka_win.png`
+- `leaders/senka_lose.png`
+- `leaders/azya_win.png`
+- `leaders/azya_lose.png`
+
+### リザルト画面でクラス別勝敗イラスト表示
+
+#### 1. 実装概要
+リザルト画面の左半分の領域に、使用したクラス（リーダー）に応じた勝敗イラストを表示するように変更。
+
+#### 2. 修正箇所
+
+##### ClassSelectScreen.tsx
+- 15行目: `yorukaSecretImg`のパスを`/leaders/yoRuka_secret.png`に更新
+
+##### GameScreen.tsx
+1. **リザルト画像定義**（1490-1496行目）
+   ```typescript
+   const yorukaWinImg = getAssetUrl('/leaders/yoRuka_win.png');
+   const yorukaLoseImg = getAssetUrl('/leaders/yoRuka_lose.png');
+   const senkaWinImg = getAssetUrl('/leaders/senka_win.png');
+   const senkaLoseImg = getAssetUrl('/leaders/senka_lose.png');
+   const azyaWinImg = getAssetUrl('/leaders/azya_win.png');
+   const azyaLoseImg = getAssetUrl('/leaders/azya_lose.png');
+   ```
+
+2. **GameOverScreenPropsにplayerClass追加**（1511行目）
+   ```typescript
+   playerClass: ClassType;
+   ```
+
+3. **getResultImage関数追加**（1525-1535行目）
+   - SENKA: senkaWinImg / senkaLoseImg
+   - AJA: azyaWinImg / azyaLoseImg
+   - YORUKA: yorukaWinImg / yorukaLoseImg
+
+4. **左側領域の表示変更**（1728-1736行目）
+   - `selectedCardInfo`がない場合、クラス別勝敗イラストを全面表示
+   - backgroundSize: 'contain'で画像を領域内に収める
+
+5. **GameOverScreen呼び出し時にplayerClass追加**（7658行目）
+   ```typescript
+   playerClass={player?.class || 'SENKA'}
+   ```
+
+## 構造の記録（更新）
+- `game/src/screens/ClassSelectScreen.tsx`
+  - 15行目: yorukaSecretImgパス更新
+- `game/src/screens/GameScreen.tsx`
+  - 1490-1496行目: クラス別リザルト画像定義
+  - 1511行目: GameOverScreenPropsにplayerClass追加
+  - 1522-1535行目: getResultImage関数
+  - 1728-1736行目: 左側領域にクラス別イラスト表示
+  - 7658行目: playerClass prop追加
+
+---
+
+## 修正日
+2026年1月2日（続き3）
+
+## 修正内容
+
+### 「継承される力」の効果が正しく動作しない問題の修正
+
+#### 1. 問題の原因
+- `DESTROY_AND_GENERATE`効果で、破壊したカードの定義を取得する際に`card.id`を使用していた
+- `card.id`はインスタンスID（例：`p2_c5`）であり、カード定義のID（例：`c_azya`）ではない
+- そのため`MOCK_CARDS.find(c => c.id === card.id)`が常にundefinedを返し、手札にカードが追加されなかった
+
+#### 2. 修正箇所
+- **対象ファイル**: `game/src/core/engine.ts`
+- **修正行**: 1662行目
+
+**修正前**:
+```typescript
+const baseCardDef = MOCK_CARDS.find(c => c.id === card.id);
+```
+
+**修正後**:
+```typescript
+const baseCardDef = getCardDefinition(card.name);
+```
+
+#### 3. 修正理由
+- `getCardDefinition`関数はカード名でも検索可能
+- ボード上のカードは`name`プロパティを持っているため、これを使用して正しくカード定義を取得できる
+
+## 構造の記録（更新）
+- `game/src/core/engine.ts`
+  - 1662行目: DESTROY_AND_GENERATEでgetCardDefinition(card.name)を使用

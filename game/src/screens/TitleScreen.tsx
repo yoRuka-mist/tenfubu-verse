@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AudioSettings } from '../core/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -13,11 +14,14 @@ const BASE_HEIGHT = 720;
 
 interface TitleScreenProps {
     onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN', roomId?: string) => void;
+    audioSettings: AudioSettings;
+    onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
 }
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
+export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSettings, onAudioSettingsChange }) => {
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
+    const [showSettings, setShowSettings] = useState(false);
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -184,6 +188,173 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig }) => {
                     <p style={{ marginTop: `${1.5 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 0.2.0 P2P Alpha</p>
                 </div>
             </div>
+
+            {/* Settings Button - Top Right Corner */}
+            <button
+                onClick={() => setShowSettings(true)}
+                style={{
+                    position: 'absolute',
+                    top: 20 * scale,
+                    right: 20 * scale,
+                    zIndex: 10,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: 8 * scale,
+                    padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                    color: 'white',
+                    fontSize: `${1 * scale}rem`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8 * scale,
+                    transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(233, 69, 96, 0.6)';
+                    e.currentTarget.style.borderColor = '#e94560';
+                }}
+                onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                }}
+            >
+                <span style={{ fontSize: `${1.2 * scale}rem` }}>⚙</span>
+                設定
+            </button>
+
+            {/* Settings Modal */}
+            {showSettings && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0, 0, 0, 0.8)',
+                        zIndex: 100,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                    onClick={() => setShowSettings(false)}
+                >
+                    <div
+                        style={{
+                            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                            borderRadius: 12 * scale,
+                            padding: `${2 * scale}rem`,
+                            minWidth: 400 * scale,
+                            maxWidth: 500 * scale,
+                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 style={{
+                            margin: 0,
+                            marginBottom: `${1.5 * scale}rem`,
+                            fontSize: `${1.8 * scale}rem`,
+                            color: 'white',
+                            textAlign: 'center'
+                        }}>
+                            音声設定
+                        </h2>
+
+                        {/* BGM Section */}
+                        <div style={{ marginBottom: `${1.5 * scale}rem` }}>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: `${0.5 * scale}rem`
+                            }}>
+                                <span style={{ color: 'white', fontSize: `${1 * scale}rem` }}>BGM</span>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8 * scale, cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={audioSettings.bgmEnabled}
+                                        onChange={(e) => onAudioSettingsChange({ bgmEnabled: e.target.checked })}
+                                        style={{ width: 18 * scale, height: 18 * scale, cursor: 'pointer' }}
+                                    />
+                                    <span style={{ color: audioSettings.bgmEnabled ? '#4ade80' : '#888', fontSize: `${0.9 * scale}rem` }}>
+                                        {audioSettings.bgmEnabled ? 'ON' : 'OFF'}
+                                    </span>
+                                </label>
+                            </div>
+                            <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                value={audioSettings.bgm}
+                                onChange={(e) => onAudioSettingsChange({ bgm: parseFloat(e.target.value) })}
+                                disabled={!audioSettings.bgmEnabled}
+                                style={{
+                                    width: '100%',
+                                    height: 8 * scale,
+                                    cursor: audioSettings.bgmEnabled ? 'pointer' : 'not-allowed',
+                                    opacity: audioSettings.bgmEnabled ? 1 : 0.5
+                                }}
+                            />
+                        </div>
+
+                        {/* SE Section */}
+                        <div style={{ marginBottom: `${1.5 * scale}rem` }}>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: `${0.5 * scale}rem`
+                            }}>
+                                <span style={{ color: 'white', fontSize: `${1 * scale}rem` }}>効果音</span>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8 * scale, cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={audioSettings.seEnabled}
+                                        onChange={(e) => onAudioSettingsChange({ seEnabled: e.target.checked })}
+                                        style={{ width: 18 * scale, height: 18 * scale, cursor: 'pointer' }}
+                                    />
+                                    <span style={{ color: audioSettings.seEnabled ? '#4ade80' : '#888', fontSize: `${0.9 * scale}rem` }}>
+                                        {audioSettings.seEnabled ? 'ON' : 'OFF'}
+                                    </span>
+                                </label>
+                            </div>
+                            <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                value={audioSettings.se}
+                                onChange={(e) => onAudioSettingsChange({ se: parseFloat(e.target.value) })}
+                                disabled={!audioSettings.seEnabled}
+                                style={{
+                                    width: '100%',
+                                    height: 8 * scale,
+                                    cursor: audioSettings.seEnabled ? 'pointer' : 'not-allowed',
+                                    opacity: audioSettings.seEnabled ? 1 : 0.5
+                                }}
+                            />
+                        </div>
+
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setShowSettings(false)}
+                            style={{
+                                width: '100%',
+                                padding: `${0.8 * scale}rem`,
+                                fontSize: `${1 * scale}rem`,
+                                background: '#e94560',
+                                border: 'none',
+                                borderRadius: 6 * scale,
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                marginTop: `${0.5 * scale}rem`
+                            }}
+                        >
+                            閉じる
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -2,6 +2,15 @@ export type ClassType = 'SENKA' | 'AJA' | 'YORUKA';
 
 export type AIDifficulty = 'EASY' | 'NORMAL' | 'HARD';
 
+// Audio settings type (shared across screens)
+export interface AudioSettings {
+    bgm: number;
+    se: number;
+    voice: number;
+    bgmEnabled: boolean;
+    seEnabled: boolean;
+}
+
 export type CardType = 'FOLLOWER' | 'SPELL';
 
 // Card Abilities

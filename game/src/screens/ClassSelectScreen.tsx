@@ -12,7 +12,7 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
-const yorukaSecretImg = getAssetUrl('/cards/yoruka_secret.png');
+const yorukaSecretImg = getAssetUrl('/leaders/yoRuka_secret.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -183,7 +183,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                 </div>
             )}
 
-            <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${1 * scale}rem` }}>タイトルに戻る</button>
+            <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${1 * scale}rem`, marginBottom: `${1.5 * scale}rem` }}>タイトルに戻る</button>
 
             {/* Hidden Character - yoRuka Secret Entry */}
             <div

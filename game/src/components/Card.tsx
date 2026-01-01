@@ -62,12 +62,15 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     let glowColor = style?.boxShadow;
     let borderColor = undefined;
 
-    // Use proper property check
+    // Use proper property check - check both hasBarrier property AND passiveAbilities for consistency
     const abilities: string[] = (card as any).passiveAbilities || (card as any).abilities || [];
     const isWard = abilities.includes('WARD');
     const isAura = abilities.includes('AURA');
     const isStealth = abilities.includes('STEALTH');
-    const hasBarrier = (card as any).hasBarrier === true;
+    // hasBarrier: true if hasBarrier property is true, OR if passiveAbilities includes BARRIER and hasBarrier is not explicitly false
+    // This ensures consistency when either property is set
+    const hasBarrier = (card as any).hasBarrier === true ||
+        (abilities.includes('BARRIER') && (card as any).hasBarrier !== false);
 
     if (isSelected) {
         glowColor = '0 0 15px rgba(255, 255, 255, 0.8)';
@@ -140,7 +143,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     // --- Normal Variant (On Board / Hand) ---
     return (
         <div
-            className={`card card-container ${isReady ? 'ready' : ''} ${className || ''}`}
+            className={`card card-container ${isReady ? 'ready' : ''} ${isOnBoard ? 'on-board' : ''} ${className || ''}`}
             style={{
                 width: 140, height: 200, // Default size
                 ...style,
@@ -155,7 +158,11 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 display: 'flex', flexDirection: 'column',
                 background: '#1a202c', // Fallback bg
                 overflow: 'visible', // Allow effects to render outside card bounds
-                animation: playSummonAnim ? 'cardSummonAppear 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards' : style?.animation
+                animation: playSummonAnim ? 'cardSummonAppear 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards' : style?.animation,
+                // 3D flip animation support - ALWAYS hide backface to prevent mirror image during rotation
+                // This is critical for proper 3D flip behavior when parent uses transform-style: preserve-3d
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden'
             }}
             onClick={onClick}
         >
@@ -263,13 +270,19 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 )}
 
                 {/* 2d. Effects (Outside clipping container) */}
-                {/* WARD EFFECT */}
-                {isWard && isOnBoard && !suppressPassives && (
+                {/* NOTE: 条件付きレンダリングからCSS opacity制御に変更 */}
+                {/* DOM要素を常に維持し、表示/非表示をopacityで制御することで */}
+                {/* CPU戦での高速連続更新時のエフェクト消失問題を解決 */}
+
+                {/* WARD EFFECT - 常にレンダリング、opacityで表示制御 */}
+                {isOnBoard && (
                     <div style={{
                         position: 'absolute',
                         top: -15, left: -15, right: -15, bottom: -15,
                         zIndex: 50,
-                        pointerEvents: 'none'
+                        pointerEvents: 'none',
+                        opacity: (isWard && !suppressPassives) ? 1 : 0,
+                        transition: 'opacity 0.2s ease-in-out'
                     }}>
                         <div style={{
                             position: 'absolute',
@@ -293,13 +306,15 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     </div>
                 )}
 
-                {/* BARRIER EFFECT */}
-                {hasBarrier && isOnBoard && !playSummonAnim && !suppressPassives && (
+                {/* BARRIER EFFECT - 常にレンダリング、opacityで表示制御 */}
+                {isOnBoard && (
                     <div style={{
                         position: 'absolute',
                         top: -12, left: -12, right: -12, bottom: -12,
                         zIndex: 21,
-                        pointerEvents: 'none'
+                        pointerEvents: 'none',
+                        opacity: (hasBarrier && !playSummonAnim && !suppressPassives) ? 1 : 0,
+                        transition: 'opacity 0.2s ease-in-out'
                     }}>
                         {/* Outer glow layer */}
                         <div style={{
@@ -321,8 +336,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     </div>
                 )}
 
-                {/* AURA EFFECT */}
-                {isAura && isOnBoard && !playSummonAnim && !suppressPassives && (
+                {/* AURA EFFECT - 常にレンダリング、opacityで表示制御 */}
+                {isOnBoard && (
                     <div style={{
                         position: 'absolute',
                         top: -15, left: -15, right: -15, bottom: -15,
@@ -330,7 +345,9 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         pointerEvents: 'none',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        opacity: (isAura && !playSummonAnim && !suppressPassives) ? 1 : 0,
+                        transition: 'opacity 0.2s ease-in-out'
                     }}>
                         <div style={{
                             width: '100%',
@@ -355,15 +372,17 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     </div>
                 )}
 
-                {/* STEALTH EFFECT */}
-                {isStealth && isOnBoard && !playSummonAnim && !suppressPassives && (
+                {/* STEALTH EFFECT - 常にレンダリング、opacityで表示制御 */}
+                {isOnBoard && (
                     <div style={{
                         position: 'absolute',
                         top: 0, left: 0, right: 0, bottom: 0,
                         zIndex: 13,
                         pointerEvents: 'none',
                         overflow: 'hidden',
-                        borderRadius: '0 0 8px 8px'
+                        borderRadius: '0 0 8px 8px',
+                        opacity: (isStealth && !playSummonAnim && !suppressPassives) ? 1 : 0,
+                        transition: 'opacity 0.2s ease-in-out'
                     }}>
                         {/* Central Inky Circle (Black) - Stronger */}
                         <div style={{
@@ -473,6 +492,11 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 @keyframes stealthPulse {
                     0%, 100% { opacity: 0.6; box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7); }
                     50% { opacity: 1; box-shadow: inset 0 0 70px rgba(0, 0, 0, 1), 0 0 40px rgba(0, 0, 0, 0.9); }
+                }
+                /* 3D flip support - ensure all child elements inherit backface-visibility */
+                .card, .card * {
+                    backface-visibility: hidden !important;
+                    -webkit-backface-visibility: hidden !important;
                 }
             `}</style>
         </div >

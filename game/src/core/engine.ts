@@ -11,6 +11,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_3cats', name: '茶トラ', cost: 2, type: 'SPELL',
         description: '「茶トラ猫の日向ぼっこ」「サバトラ猫の散歩」「キジトラ猫のごはん」を1枚ずつ手札に加える。',
+        flavorText: 'ホカホカ～パンチ！！',
         imageUrl: '/cards/chatora_three_cats.png',
         triggers: [{
             trigger: 'FANFARE', effects: [
@@ -23,6 +24,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_final_cannon', name: '天下布舞・ファイナルキャノン', cost: 10, type: 'SPELL',
         description: '相手のリーダーの最大体力を1にする。',
+        flavorText: '盞華「では皆さん、自分が"天下布舞～"って言ったら、その後に続いて"ファイナルキャノン！"と大きな声で言ってください。その後、地球へ向けてファイナルキャノンを発射してください。」',
         imageUrl: '/cards/final_cannon.png',
         triggers: [{
             trigger: 'FANFARE', effects: [
@@ -33,19 +35,13 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_senka_knuckler', name: 'せんか', cost: 8, type: 'FOLLOWER',
         attack: 3, health: 5,
-        description: '[疾走] [ダブル]\n手札のナックラーすべてのコストを2軽減する。\nファンファーレ：自分のナックラーすべては[疾走]を得る。\n超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
+        description: '[疾走] [ダブル]\n手札のナックラーすべてのコストを2軽減する。\n自分のナックラーすべては[疾走]を得る。（常在効果）\n超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
         imageUrl: '/cards/senka.png',
         evolvedImageUrl: '/cards/senka_2.png',
         tags: ['Knuckler'],
         passiveAbilities: ['STORM', 'DOUBLE_ATTACK'],
         attackEffectType: 'IMPACT',
         triggers: [
-            {
-                trigger: 'FANFARE',
-                effects: [
-                    { type: 'GRANT_PASSIVE', targetPassive: 'STORM', targetType: 'ALL_FOLLOWERS', conditions: { tag: 'Knuckler' } }
-                ]
-            },
             {
                 trigger: 'SUPER_EVOLVE',
                 effects: [
@@ -60,6 +56,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 7, type: 'FOLLOWER',
         attack: 5, health: 5,
         description: 'ファンファーレ：自分のリーダーを4回復する。「cyoriena」1体を出す。\n進化時：自分のリーダーを4回復する。',
+        flavorText: '働きて　声なき功を　積みし尾に\n　花の香落ちて　盃あたたか',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
         attackEffectType: 'BLUE_FIRE',
@@ -108,6 +105,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_tsubumaru', name: 'つぶまる', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 3,
         description: '[守護]\n進化時：「退職代行」1枚を手札に加える。',
+        flavorText: 'ﾊﾑﾁｭﾜｧｰﾝ……ｵｩｲｪ……\nｳｫｳｳｫｳﾊﾑﾁｬｧﾝ……ｼｬﾌﾞｯ……\nﾊﾑﾊﾑﾊﾑﾁｬﾝ……ﾍﾞｲﾍﾞﾍﾞｲﾍﾞ……',
         imageUrl: '/cards/tsubumaru.png',
         evolvedImageUrl: '/cards/tsubumaru_2.png',
         passiveAbilities: ['WARD'],
@@ -139,14 +137,15 @@ const MOCK_CARDS: Card[] = [
         ]
     },
     // --- Tokens ---
-    { id: 'TOKEN_CHATORA', name: '茶トラ猫の日向ぼっこ', cost: 0, type: 'FOLLOWER', attack: 1, health: 1, description: '', imageUrl: '/cards/chatora.png', attackEffectType: 'SLASH' },
-    { id: 'TOKEN_SABATORA', name: 'サバトラ猫の散歩', cost: 1, type: 'FOLLOWER', attack: 1, health: 2, description: '[突進]', passiveAbilities: ['RUSH'], imageUrl: '/cards/sabatora.png', attackEffectType: 'SLASH' },
+    { id: 'TOKEN_CHATORA', name: '茶トラ猫の日向ぼっこ', cost: 0, type: 'FOLLOWER', attack: 1, health: 1, description: '', flavorText: 'ずっと寝ていたい。', imageUrl: '/cards/chatora.png', attackEffectType: 'SLASH' },
+    { id: 'TOKEN_SABATORA', name: 'サバトラ猫の散歩', cost: 1, type: 'FOLLOWER', attack: 1, health: 2, description: '[突進]', flavorText: '「ラーメン屋多くね…？」', passiveAbilities: ['RUSH'], imageUrl: '/cards/sabatora.png', attackEffectType: 'SLASH' },
     { id: 'TOKEN_KIJITORA', name: 'キジトラ猫のごはん', cost: 3, type: 'FOLLOWER', attack: 2, health: 3, description: '[守護]', passiveAbilities: ['WARD'], imageUrl: '/cards/kijitora.png', attackEffectType: 'SLASH' },
 
     // --- New Cards ---
     {
         id: 'TOKEN_RICE', name: '米', cost: 0, type: 'SPELL',
         description: '自分のリーダーを1回復する。',
+        flavorText: '宮城の米 ひとめぼれ',
         imageUrl: '/cards/rice.png',
         triggers: [{
             trigger: 'FANFARE',
@@ -157,6 +156,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_yunagi', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
         description: 'ファンファーレ：「米」1枚を手札に加える。\n進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」1枚を手札に加える。',
+        flavorText: '先日、｢私が将来農家やってる未来が想像できない｣と言われ彼女にフラれました。\n\n今年の白菜も美味しそうですね',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
         attackEffectType: 'SLASH',
@@ -177,6 +177,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_OOMORI_RICE', name: '大盛りごはん', cost: 1, type: 'SPELL',
         description: '自分のリーダーを3回復する。',
+        flavorText: '上手に炊けました～！',
         imageUrl: '/cards/oomoririce.png',
         tags: ['Token'],
         triggers: [{
@@ -220,6 +221,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
         description: 'ファンファーレ：相手のリーダーに3ダメージ。ランダムな相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護][突進]を得る。',
+        flavorText: 'あじゃ「お前たち、俺を守れ」\nつぶまる&ゆうなぎ&なゆた「ｳｽ」',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
@@ -248,6 +250,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_yuki', name: 'ユキ', cost: 3, type: 'FOLLOWER',
         attack: 3, health: 2,
         description: '[突進]\n進化時：自分のフォロワーすべてを+1/+1する。',
+        flavorText: '一緒にクエストにいきましょう！！！',
         imageUrl: '/cards/yuki.png',
         evolvedImageUrl: '/cards/yuki_2.png',
         tags: ['Knuckler'],
@@ -266,6 +269,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_white_tsubaki', name: '白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
         description: '[突進]\n相手のターン中、このフォロワーはフォロワーからのダメージを受けない。\n進化時：「しゑこ」1体を出す。',
+        flavorText: '何を言われようとも、認めなければ敗北にはならない\nゆえに　ー「無敵」ー',
         imageUrl: '/cards/white_tsubaki.png',
         evolvedImageUrl: '/cards/white_tsubaki_2.png',
         tags: ['Knuckler'],
@@ -302,6 +306,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
         description: '[守護] [バリア]\n進化時：相手のフォロワー1体に2ダメージ。',
+        flavorText: '体の傷はアルコールで消毒\n心の傷もアルコールで治る',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
         passiveAbilities: ['WARD', 'BARRIER'],
@@ -319,6 +324,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_kasuga', name: 'かすが', cost: 10, type: 'FOLLOWER',
         attack: 8, health: 8,
         description: 'ファンファーレ：他のフォロワーすべてを破壊する。',
+        flavorText: '盞華「なんか規則的すぎるんですよね」\nかすが「おぎゃああ、おぎゃ、おぎゃああーーー」\n盞華「うわ、適応してきたんですけど！」',
         imageUrl: '/cards/kasuga.png',
         evolvedImageUrl: '/cards/kasuga_2.png',
         triggers: [
@@ -350,6 +356,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_sia', name: 'しあ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 1,
         description: 'ファンファーレ：ランダムな相手のフォロワー2体に1ダメージ。',
+        flavorText: 'みてみてっ♪おっぱいぷるんぷる～んっ♪',
         imageUrl: '/cards/sia.png',
         evolvedImageUrl: '/cards/sia_2.png',
         attackEffectType: 'SLASH',
@@ -362,6 +369,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_BACKHAND_SMASH', name: 'バックハンドスマッシュ', cost: 0, type: 'SPELL',
         description: '相手のフォロワー1体に6ダメージ。',
+        flavorText: '侍が刀の道を極めるように、彼は「ナックル」の道を10年以上にわたり追求してきた。\nその腕前は、伝説的な一撃に象徴される。',
         imageUrl: '/cards/BackhandSmash.jpg',
         tags: ['Token'],
         attackEffectType: 'IMPACT',
@@ -373,6 +381,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_QUAKE_HOWLING', name: 'クエイクハウリング', cost: 0, type: 'SPELL',
         description: '相手のフォロワーすべてに2ダメージ。',
+        flavorText: 'ドンドコドンドコｗｗ',
         imageUrl: '/cards/QuakeHowling.png',
         tags: ['Token'],
         attackEffectType: 'IMPACT',
@@ -397,6 +406,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_bucchi', name: 'ぶっちー', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 3,
         description: 'ファンファーレ：「まなりー」3体を出す。',
+        flavorText: 'ぶっちー「やはりてんふぶバースか…私も同行しよう」\n盞華「ぶっち院」',
         imageUrl: '/cards/bucchi.png',
         evolvedImageUrl: '/cards/bucchi_2.png',
         attackEffectType: 'SLASH',
@@ -440,6 +450,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_potechi', name: 'ぽてち', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 3,
         description: '[守護]\nファンファーレ：カードを1枚引く。',
+        flavorText: '心のおちんちんがキングギドラ',
         imageUrl: '/cards/potechi.png',
         evolvedImageUrl: '/cards/potechi_2.png',
         passiveAbilities: ['WARD'],
@@ -453,6 +464,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_mono', name: 'Mono', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 1,
         description: 'ファンファーレ：相手のフォロワー1体に5ダメージ。\n進化時：相手のフォロワー1体に5ダメージ。',
+        flavorText: '俺は四字熟語アンチですよ',
         imageUrl: '/cards/Mono.png',
         evolvedImageUrl: '/cards/Mono_2.png',
         attackEffectType: 'SHOT',
@@ -472,6 +484,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_sara', name: 'sara', cost: 7, type: 'FOLLOWER',
         attack: 4, health: 6,
         description: 'ファンファーレ：ランダムな相手のフォロワー2体を破壊する。11ターン以降なら、「すみませんが、これで終わりです。」1枚を手札に加える。\n超進化時：相手のフォロワー1体を破壊する。',
+        flavorText: '有罪w',
         imageUrl: '/cards/sara.png',
         evolvedImageUrl: '/cards/sara_2.png',
         attackEffectType: 'SHOT',
@@ -494,6 +507,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_SORRY_THE_END', name: 'すみませんが、これで終わりです。', cost: 3, type: 'SPELL',
         description: '相手のフォロワーすべてに5ダメージ。相手のリーダーに5ダメージ。カードを3枚引く。「sara」1体を出す。',
+        flavorText: '"それ"が聞こえたら、終わり。',
         imageUrl: '/cards/sorryTheEnd.png',
         tags: ['Token'],
         triggers: [{
@@ -510,6 +524,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_blue_tsubaki', name: '青ツバキ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
         description: 'ファンファーレ：カードを1枚引く。\n進化時：ランダムな相手のフォロワー1体を破壊する。',
+        flavorText: '禁煙のコツは推し活をすることです',
         imageUrl: '/cards/blue_tsubaki.png',
         evolvedImageUrl: '/cards/blue_tsubaki_2.png',
         attackEffectType: 'SLASH',
@@ -527,6 +542,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_resignation_proxy', name: '退職代行', cost: 0, type: 'SPELL',
         description: '相手のフォロワー1体を破壊する。ランダムな自分のフォロワー1体を破壊する。',
+        flavorText: '色々あって1年近く休職してたけど金さえあればいくらでもできるなという感想',
         imageUrl: '/cards/taisyokudaiko.png',
         tags: ['Token'],
         attackEffectType: 'SLASH',
@@ -541,6 +557,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_tenfubu_yabe_hutari', name: 'てんふぶのヤベー2人', cost: 4, type: 'SPELL',
         description: '「ユキ」1体と「ぽてち」1体を出す。',
+        flavorText: 'その二人は狂っていた。',
         imageUrl: '/cards/tenfubuyabehutari.png',
         triggers: [{
             trigger: 'FANFARE',
@@ -553,6 +570,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_samurai_tea', name: '侍茶', cost: 2, type: 'SPELL',
         description: 'カードを1枚引く。自分のフォロワーすべてを+1/+1する。',
+        flavorText: '今日件の大学内にあった"侍茶"なるものをある人からの「見間違いじゃない？」発言を受けて確認したところ実は"特茶"でああ自分は脳内幕末なんだなあってなりました。',
         imageUrl: '/cards/samuraitea.png',
         triggers: [{
             trigger: 'FANFARE',
@@ -565,6 +583,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_crazy_knucklers', name: 'クレイジー・ナックラーズ', cost: 5, type: 'SPELL',
         description: '「白ツバキ」1体と「しゑこ」1体を出す。',
+        flavorText: '白ツバキ「さぁ！行きますよ、しゑこさん！」\nしゑこ「ちょwww おまwww」',
         imageUrl: '/cards/crazy_knucklers.png',
         triggers: [{
             trigger: 'FANFARE',
@@ -577,6 +596,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_amandava', name: 'amandava', cost: 5, attack: 2, health: 3, type: 'FOLLOWER',
         description: 'ファンファーレ：ランダムな相手のフォロワー2体の体力を1にする。\n進化時：相手のフォロワーすべてに1ダメージ。',
+        flavorText: '草',
         imageUrl: '/cards/amandava.png',
         evolvedImageUrl: '/cards/amandava_2.png',
         attackEffectType: 'SHOT',
@@ -598,6 +618,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_alice', name: 'ありす', cost: 3, attack: 1, health: 1, type: 'FOLLOWER',
         description: 'ファンファーレ：ランダムな相手のフォロワー2体に2ダメージ。\n進化時：ランダムな相手のフォロワー2体に2ダメージ。',
+        flavorText: 'これは課金するべきか…？',
         imageUrl: '/cards/alice.png',
         evolvedImageUrl: '/cards/alice_2.png',
         attackEffectType: 'FIRE',
@@ -643,6 +664,7 @@ const MOCK_CARDS: Card[] = [
         id: 'TOKEN_SUIHYORYU', name: '水氷龍', cost: 5, type: 'FOLLOWER',
         attack: 4, health: 4,
         description: '[突進] [守護]\n自分のターン開始時、このフォロワーを破壊する。',
+        flavorText: '何これ知らん…こわ…',
         imageUrl: '/cards/suihyoryu.png',
         evolvedImageUrl: '/cards/suihyoryu.png',
         tags: ['Token'],
@@ -661,6 +683,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_cyoriena', name: 'cyoriena', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 2,
         description: '[守護]\n自分のターン終了時、自分のリーダーを2回復する。\n進化時：「翼」1枚を手札に加える。',
+        flavorText: 'ポテチは週7回まで',
         imageUrl: '/cards/cyoriena.png',
         evolvedImageUrl: '/cards/cyoriena_2.png',
         tags: ['Token'],
@@ -680,6 +703,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'TOKEN_TSUBASA', name: '翼', cost: 1, type: 'SPELL',
         description: '自分のフォロワー1体は[疾走]を得る。',
+        flavorText: 'いい翼をお持ちですね。',
         imageUrl: '/cards/tsubasa.png',
         tags: ['Token'],
         triggers: [{
@@ -800,6 +824,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_hayakikoto', name: '疾きこと風の如く', cost: 4, type: 'SPELL',
         description: 'カードを1枚引く。「刹那」を2体場に出す。',
+        flavorText: '速さを突き詰め続けた者の領域',
         imageUrl: '/cards/hayakikoto.png',
         triggers: [
             {
@@ -816,7 +841,8 @@ const MOCK_CARDS: Card[] = [
     {
         id: 's_keishou', name: '継承される力', cost: 9, type: 'SPELL',
         description: '相手のフォロワー1体を破壊する。破壊したフォロワーを自分の手札に加え、そのコストを-9する。',
-        imageUrl: '/cards/keishou.png',
+        flavorText: 'かつての輝きは受け継がれ\n　静かに燃え上がる',
+        imageUrl: '/cards/keisyopower.png',
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -937,6 +963,11 @@ export function getCardDefinition(cardIdOrName: string): Card | undefined {
     return MOCK_CARDS.find(c => c.name === cardIdOrName);
 }
 
+// Get all card names for log highlighting (sorted by length descending for greedy matching)
+export function getAllCardNames(): string[] {
+    return MOCK_CARDS.map(c => c.name).sort((a, b) => b.length - a.length);
+}
+
 // Build deck from template
 function buildDeckFromTemplate(template: { cardId: string, count: number }[], playerId: string): Card[] {
     const deck: Card[] = [];
@@ -1049,6 +1080,7 @@ function processSingleEffect(
     targetIds?: string[] // Pre-calculated targets
 ): GameState {
     // Deep copy state to prevent mutations (same pattern as ATTACK)
+    // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
     let newState = {
         ...state,
         players: {
@@ -1056,14 +1088,20 @@ function processSingleEffect(
                 ...state.players.p1,
                 hand: [...state.players.p1.hand],
                 deck: [...state.players.p1.deck],
-                board: state.players.p1.board.map(c => c ? { ...c } : null),
+                board: state.players.p1.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                } : null),
                 graveyard: [...state.players.p1.graveyard]
             },
             p2: {
                 ...state.players.p2,
                 hand: [...state.players.p2.hand],
                 deck: [...state.players.p2.deck],
-                board: state.players.p2.board.map(c => c ? { ...c } : null),
+                board: state.players.p2.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                } : null),
                 graveyard: [...state.players.p2.graveyard]
             }
         },
@@ -1529,19 +1567,19 @@ function processSingleEffect(
                         currentAttack: template.attack || 0,
                         attacksMade: 0,
                         turnPlayed: newState.turnCount,
-                        hasBarrier: template.passiveAbilities?.includes('BARRIER'),
-                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : undefined,
-                        hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
+                        // NOTE: undefinedではなくfalse/[]で初期化し、React再レンダリング時のプロパティ不在による問題を回避
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER') ?? false,
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false // 隠密持ちは守護無視効果を永続化
                     };
 
                     // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
-                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities?.includes('STORM')) {
-                        const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                    // NOTE: passiveAbilitiesは上で必ず[]で初期化済み
+                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
+                        // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
                         if (hasSenkaOnBoard) {
-                            if (!newCard.passiveAbilities) {
-                                newCard.passiveAbilities = [];
-                            }
-                            newCard.passiveAbilities.push('STORM');
+                            newCard.passiveAbilities!.push('STORM');
                             newCard.canAttack = true;
                             newState.logs.push(`${template.name} は せんか の効果で疾走を得た！`);
                         }
@@ -1571,14 +1609,16 @@ function processSingleEffect(
                         currentAttack: template.attack || 0,
                         attacksMade: 0,
                         turnPlayed: newState.turnCount,
-                        hasBarrier: template.passiveAbilities?.includes('BARRIER'),
+                        // NOTE: undefinedではなくfalse/[]で初期化し、React再レンダリング時のプロパティ不在による問題を回避
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER') ?? false,
                         passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
-                        hadStealth: template.passiveAbilities?.includes('STEALTH') // 隠密持ちは守護無視効果を永続化
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false // 隠密持ちは守護無視効果を永続化
                     };
                     // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与（突進より優先）
                     let grantedStormFromSenka = false;
                     if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
-                        const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                        // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
                         if (hasSenkaOnBoard) {
                             newCard.passiveAbilities!.push('STORM');
                             grantedStormFromSenka = true;
@@ -1649,9 +1689,9 @@ function processSingleEffect(
                     targetOwner.board[idx] = null;
                     newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
 
-                    // 手札に加えるカードを作成
+                    // 手札に加えるカードを作成（カード名で定義を検索）
                     const myPlayer = newState.players[sourcePlayerId];
-                    const baseCardDef = MOCK_CARDS.find(c => c.id === card.id);
+                    const baseCardDef = getCardDefinition(card.name);
                     if (baseCardDef) {
                         const generatedCard: Card = {
                             ...baseCardDef,
@@ -1975,6 +2015,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 const internalGameReducer = (state: GameState, action: GameAction): GameState => {
     console.log(`[Reducer] Action: ${action.type}, isRemote: ${(action as any).isRemote}`);
     // CRITICAL: Deep copy state to prevent mutations
+    // NOTE: passiveAbilities配列もディープコピーしてReactの変更検知を確実にする
     let newState = {
         ...state,
         players: {
@@ -1982,14 +2023,20 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 ...state.players.p1,
                 hand: [...state.players.p1.hand],
                 deck: [...state.players.p1.deck],
-                board: state.players.p1.board.map(c => c ? { ...c } : null),
+                board: state.players.p1.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                } : null),
                 graveyard: [...state.players.p1.graveyard]
             },
             p2: {
                 ...state.players.p2,
                 hand: [...state.players.p2.hand],
                 deck: [...state.players.p2.deck],
-                board: state.players.p2.board.map(c => c ? { ...c } : null),
+                board: state.players.p2.board.map(c => c ? {
+                    ...c,
+                    passiveAbilities: c.passiveAbilities ? [...c.passiveAbilities] : []
+                } : null),
                 graveyard: [...state.players.p2.graveyard]
             }
         },
@@ -2251,21 +2298,22 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     hasEvolved: false,
                     attacksMade: 0,
                     turnPlayed: newState.turnCount,
-                    hasBarrier: card.passiveAbilities?.includes('BARRIER'),
-                    hadStealth: card.passiveAbilities?.includes('STEALTH') // 隠密を持っていた場合、守護無視効果を永続化
+                    // NOTE: undefinedではなくfalse/[]で初期化し、React再レンダリング時のプロパティ不在による問題を回避
+                    hasBarrier: card.passiveAbilities?.includes('BARRIER') ?? false,
+                    passiveAbilities: card.passiveAbilities ? [...card.passiveAbilities] : [],
+                    hadStealth: card.passiveAbilities?.includes('STEALTH') ?? false // 隠密を持っていた場合、守護無視効果を永続化
                 };
                 if (card.passiveAbilities?.includes('STORM') || card.passiveAbilities?.includes('RUSH')) {
                     newFollower.canAttack = true;
                 }
 
                 // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
-                if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities?.includes('STORM')) {
-                    const hasSenkaOnBoard = player.board.some(c => c?.id === 'c_senka_knuckler');
+                // NOTE: passiveAbilitiesは上で必ず[]で初期化済み
+                if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities!.includes('STORM')) {
+                    // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
+                    const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
                     if (hasSenkaOnBoard) {
-                        if (!newFollower.passiveAbilities) {
-                            newFollower.passiveAbilities = [];
-                        }
-                        newFollower.passiveAbilities.push('STORM');
+                        newFollower.passiveAbilities!.push('STORM');
                         newFollower.canAttack = true;
                         newState.logs.push(`${newFollower.name} は せんか の効果で疾走を得た！`);
                     }
@@ -2273,6 +2321,23 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 player.board.push(newFollower);
                 sourceCard = newFollower;
+
+                // せんかがプレイされた時、既存の味方ナックラーすべてに疾走を付与（常在効果）
+                // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
+                if (newFollower.name === 'せんか') {
+                    player.board.forEach(boardCard => {
+                        if (boardCard && boardCard.tags?.includes('Knuckler') && boardCard.instanceId !== newFollower.instanceId) {
+                            if (!boardCard.passiveAbilities?.includes('STORM')) {
+                                if (!boardCard.passiveAbilities) {
+                                    boardCard.passiveAbilities = [];
+                                }
+                                boardCard.passiveAbilities.push('STORM');
+                                boardCard.canAttack = true;
+                                newState.logs.push(`${boardCard.name} は せんか の効果で疾走を得た！`);
+                            }
+                        }
+                    });
+                }
             } else {
                 player.graveyard.push({ ...card, instanceId: `spell_${newState.rngSeed}_${Math.floor(rng() * 1000)}` } as BoardCard);
             }
@@ -2712,6 +2777,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         newState.logs.push(`　${defender.name} は自分のターン中は破壊されない！必殺を無効化！`);
                     } else {
                         defender.currentHealth = 0;
+                        (defender as any).killedByBane = true; // Mark as killed by BANE for visual effect
                         newState.logs.push(`　${attacker.name} の必殺効果で ${defender.name} は即死！`);
                     }
                 }
@@ -2745,6 +2811,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         newState.logs.push(`　${attacker.name} は自分のターン中は破壊されない！必殺を無効化！`);
                     } else {
                         attacker.currentHealth = 0;
+                        (attacker as any).killedByBane = true; // Mark as killed by BANE for visual effect
                         newState.logs.push(`　${defender.name} の必殺効果で ${attacker.name} は即死！`);
                     }
                 }

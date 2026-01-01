@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { TitleScreen } from './screens/TitleScreen';
 import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
-import { ClassType, AIDifficulty } from './core/types';
+import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
@@ -15,6 +15,34 @@ const getAssetUrl = (path: string): string => {
 
 // BGM URL
 const titleBgmUrl = getAssetUrl('/bgm/tenfubu.mp3');
+
+// Default audio settings
+const defaultAudioSettings: AudioSettings = {
+    bgm: 0.3,
+    se: 0.5,
+    voice: 0.5,
+    bgmEnabled: true,
+    seEnabled: true
+};
+
+// Load audio settings from localStorage
+const loadAudioSettings = (): AudioSettings => {
+    try {
+        const saved = localStorage.getItem('audioSettings');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Migration: if 'enabled' exists, use it for both bgmEnabled and seEnabled
+            if (parsed.enabled !== undefined) {
+                const { enabled, ...rest } = parsed;
+                return { ...defaultAudioSettings, ...rest, bgmEnabled: enabled, seEnabled: enabled };
+            }
+            return { ...defaultAudioSettings, ...parsed };
+        }
+        return defaultAudioSettings;
+    } catch (e) {
+        return defaultAudioSettings;
+    }
+};
 
 type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'GAME';
 type GameMode = 'CPU' | 'HOST' | 'JOIN';
@@ -31,15 +59,30 @@ function App() {
     const networkAdapterRef = useRef<NetworkAdapter | null>(null);
     const [networkConnected, setNetworkConnected] = useState(false);
 
+    // Audio settings (shared across screens)
+    const [audioSettings, setAudioSettings] = useState<AudioSettings>(loadAudioSettings);
+
+    // Save audio settings to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+    }, [audioSettings]);
+
+    // Update audio settings callback
+    const updateAudioSettings = useCallback((newSettings: Partial<AudioSettings>) => {
+        setAudioSettings(prev => ({ ...prev, ...newSettings }));
+    }, []);
+
     // Title BGM management (plays on TITLE and CLASS_SELECT screens)
     const titleBgmRef = useRef<HTMLAudioElement | null>(null);
+    const titleBgmInitialized = useRef(false);
 
     useEffect(() => {
         // Create audio element once
         const audio = new Audio(titleBgmUrl);
         audio.loop = true;
-        audio.volume = 0.3;
+        audio.volume = audioSettings.bgmEnabled ? audioSettings.bgm : 0;
         titleBgmRef.current = audio;
+        titleBgmInitialized.current = true;
 
         return () => {
             audio.pause();
@@ -47,14 +90,28 @@ function App() {
         };
     }, []);
 
+    // Update BGM volume when audio settings change
+    useEffect(() => {
+        const audio = titleBgmRef.current;
+        if (!audio || !titleBgmInitialized.current) return;
+
+        audio.volume = audioSettings.bgmEnabled ? audioSettings.bgm : 0;
+
+        if (!audioSettings.bgmEnabled) {
+            audio.pause();
+        } else if (audio.paused && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT')) {
+            audio.play().catch(() => {});
+        }
+    }, [audioSettings.bgm, audioSettings.bgmEnabled, currentScreen]);
+
     // Control BGM based on current screen
     useEffect(() => {
         const audio = titleBgmRef.current;
         if (!audio) return;
 
         if (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT') {
-            // Play title BGM on title and class select screens
-            if (audio.paused) {
+            // Play title BGM on title and class select screens if enabled
+            if (audio.paused && audioSettings.bgmEnabled) {
                 audio.play().catch(() => {
                     // Autoplay blocked, will play on user interaction
                 });
@@ -64,19 +121,19 @@ function App() {
             audio.pause();
             audio.currentTime = 0;
         }
-    }, [currentScreen]);
+    }, [currentScreen, audioSettings.bgmEnabled]);
 
     // Handle user interaction for autoplay policy
     useEffect(() => {
         const handleClick = () => {
             const audio = titleBgmRef.current;
-            if (audio && audio.paused && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT')) {
+            if (audio && audio.paused && audioSettings.bgmEnabled && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT')) {
                 audio.play().catch(() => {});
             }
         };
         document.addEventListener('click', handleClick);
         return () => document.removeEventListener('click', handleClick);
-    }, [currentScreen]);
+    }, [currentScreen, audioSettings.bgmEnabled]);
 
     const handleTitleConfig = (mode: GameMode, id?: string) => {
         setGameMode(mode);
@@ -118,7 +175,13 @@ function App() {
 
     return (
         <div className="app-container">
-            {currentScreen === 'TITLE' && <TitleScreen onStartConfig={handleTitleConfig} />}
+            {currentScreen === 'TITLE' && (
+                <TitleScreen
+                    onStartConfig={handleTitleConfig}
+                    audioSettings={audioSettings}
+                    onAudioSettingsChange={updateAudioSettings}
+                />
+            )}
             {currentScreen === 'CLASS_SELECT' && (
                 <ClassSelectScreen
                     onSelectClass={startGame}
