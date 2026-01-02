@@ -466,6 +466,7 @@ const MOCK_CARDS: Card[] = [
         id: 'c_valkyrie', name: 'ヴァルキリー', cost: 6, type: 'FOLLOWER',
         attack: 6, health: 6,
         description: '[守護] [バリア] [オーラ]\n自分のターン終了時、[バリア]を得る。',
+        flavorText: 'ヴァルルルルル',
         imageUrl: '/cards/valkyrie.png',
         evolvedImageUrl: '/cards/valkyrie_2.png',
         passiveAbilities: ['WARD', 'BARRIER', 'AURA'],

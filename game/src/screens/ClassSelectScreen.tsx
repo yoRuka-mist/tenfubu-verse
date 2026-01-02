@@ -12,7 +12,7 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
-const yorukaSecretImg = getAssetUrl('/leaders/yoRuka_secret.png');
+const yorukaSecretImg = getAssetUrl('/leaders/yoruka_secret.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -97,7 +97,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                         <h3 style={{ fontSize: `${classNameSize}rem`, color: '#e94560', margin: 0 }}>盞華</h3>
                         <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>アグロ / ラッシュ</p>
                         <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
-                            突進フォロワーと多面展開で相手を圧倒する。
+                            突進フォロワーと多面展開で<br />相手を圧倒する。
                         </p>
                     </div>
                 </div>
@@ -129,7 +129,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                         <h3 style={{ fontSize: `${classNameSize}rem`, color: '#45a2e9', margin: 0 }}>あじゃ</h3>
                         <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>コントロール / テクニカル</p>
                         <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
-                            強力な除去と堅牢な守護で盤面を支配する。
+                            強力な除去と堅牢な守護で<br />盤面を支配する。
                         </p>
                     </div>
                 </div>
