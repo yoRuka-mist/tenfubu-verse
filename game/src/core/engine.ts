@@ -61,7 +61,7 @@ const MOCK_CARDS: Card[] = [
         }]
     },
     {
-        id: 'c_senka_knuckler', name: 'せんか', cost: 8, type: 'FOLLOWER',
+        id: 'c_senka_knuckler', name: '盞華', cost: 8, type: 'FOLLOWER',
         attack: 3, health: 5,
         description: '[疾走] [ダブル]\n手札のナックラーすべてのコストを2軽減する。\n自分のナックラーすべては[疾走]を得る。（常在効果）\n超進化時：「フリッカージャブ」「クエイクハウリング」「バックハンドスマッシュ」を1枚ずつ手札に加える。',
         imageUrl: '/cards/senka.png',
@@ -924,7 +924,7 @@ export function calculateStateHash(state: GameState): string {
 
 // --- 構築済みデッキ定義 ---
 const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
-    { cardId: 'c_senka_knuckler', count: 3 },  // せんか
+    { cardId: 'c_senka_knuckler', count: 3 },  // 盞華
     { cardId: 'c_yuki', count: 3 },             // ユキ
     { cardId: 'c_white_tsubaki', count: 3 },    // 白ツバキ
     { cardId: 'c_shieko', count: 3 },           // しゑこ
@@ -1602,15 +1602,15 @@ function processSingleEffect(
                         hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false // 隠密持ちは守護無視効果を永続化
                     };
 
-                    // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
+                    // 盞華のオーラ効果: 場に盞華がいる場合、ナックラーに疾走を付与
                     // NOTE: passiveAbilitiesは上で必ず[]で初期化済み
                     if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
                         // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
-                        const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === '盞華');
                         if (hasSenkaOnBoard) {
                             newCard.passiveAbilities!.push('STORM');
                             newCard.canAttack = true;
-                            newState.logs.push(`${template.name} は せんか の効果で疾走を得た！`);
+                            newState.logs.push(`${template.name} は 盞華 の効果で疾走を得た！`);
                         }
                     }
 
@@ -1643,15 +1643,15 @@ function processSingleEffect(
                         passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
                         hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false // 隠密持ちは守護無視効果を永続化
                     };
-                    // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与（突進より優先）
+                    // 盞華のオーラ効果: 場に盞華がいる場合、ナックラーに疾走を付与（突進より優先）
                     let grantedStormFromSenka = false;
                     if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
                         // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
-                        const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === '盞華');
                         if (hasSenkaOnBoard) {
                             newCard.passiveAbilities!.push('STORM');
                             grantedStormFromSenka = true;
-                            newState.logs.push(`${template.name} は せんか の効果で疾走を得た！`);
+                            newState.logs.push(`${template.name} は 盞華 の効果で疾走を得た！`);
                         }
                     }
 
@@ -2004,7 +2004,7 @@ const recalculateCosts = (state: GameState): GameState => {
         // Condition: "Senka" on board. 
         // Note: Checking by ID string loosely to catch evolved versions if needed, but ID usually persists.
         // Or check name? Name persists.
-        const hasSenka = player.board.some(c => c && c.name.includes('せんか'));
+        const hasSenka = player.board.some(c => c && c.name.includes('盞華'));
 
         const newHand = player.hand.map(c => {
             const base = c.baseCost !== undefined ? c.baseCost : c.cost;
@@ -2336,24 +2336,24 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     newFollower.canAttack = true;
                 }
 
-                // せんかのオーラ効果: 場にせんかがいる場合、ナックラーに疾走を付与
+                // 盞華のオーラ効果: 場に盞華がいる場合、ナックラーに疾走を付与
                 // NOTE: passiveAbilitiesは上で必ず[]で初期化済み
                 if (newFollower.tags?.includes('Knuckler') && !newFollower.passiveAbilities!.includes('STORM')) {
                     // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
-                    const hasSenkaOnBoard = player.board.some(c => c?.name === 'せんか');
+                    const hasSenkaOnBoard = player.board.some(c => c?.name === '盞華');
                     if (hasSenkaOnBoard) {
                         newFollower.passiveAbilities!.push('STORM');
                         newFollower.canAttack = true;
-                        newState.logs.push(`${newFollower.name} は せんか の効果で疾走を得た！`);
+                        newState.logs.push(`${newFollower.name} は 盞華 の効果で疾走を得た！`);
                     }
                 }
 
                 player.board.push(newFollower);
                 sourceCard = newFollower;
 
-                // せんかがプレイされた時、既存の味方ナックラーすべてに疾走を付与（常在効果）
+                // 盞華がプレイされた時、既存の味方ナックラーすべてに疾走を付与（常在効果）
                 // NOTE: カードIDはデッキ構築時に上書きされるため、カード名で比較する
-                if (newFollower.name === 'せんか') {
+                if (newFollower.name === '盞華') {
                     player.board.forEach(boardCard => {
                         if (boardCard && boardCard.tags?.includes('Knuckler') && boardCard.instanceId !== newFollower.instanceId) {
                             if (!boardCard.passiveAbilities?.includes('STORM')) {
@@ -2362,7 +2362,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                                 }
                                 boardCard.passiveAbilities.push('STORM');
                                 boardCard.canAttack = true;
-                                newState.logs.push(`${boardCard.name} は せんか の効果で疾走を得た！`);
+                                newState.logs.push(`${boardCard.name} は 盞華 の効果で疾走を得た！`);
                             }
                         }
                     });

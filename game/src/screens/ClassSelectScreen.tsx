@@ -94,10 +94,10 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                 >
                     <img src={senkaLeaderImg} alt="Senka" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
                     <div style={{ padding: `${10 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#e94560', margin: 0 }}>SENKA</h3>
+                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#e94560', margin: 0 }}>盞華</h3>
                         <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>アグロ / ラッシュ</p>
                         <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
-                            低コストフォロワーと直接攻撃で相手を圧倒する。
+                            突進フォロワーと多面展開で相手を圧倒する。
                         </p>
                     </div>
                 </div>
@@ -126,10 +126,10 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                 >
                     <img src={azyaLeaderImg} alt="Azya" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
                     <div style={{ padding: `${10 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#45a2e9', margin: 0 }}>AJA</h3>
+                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#45a2e9', margin: 0 }}>あじゃ</h3>
                         <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>コントロール / テクニカル</p>
                         <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
-                            盤面制圧とトリッキーなスペルで終盤を支配する。
+                            強力な除去と堅牢な守護で盤面を支配する。
                         </p>
                     </div>
                 </div>
