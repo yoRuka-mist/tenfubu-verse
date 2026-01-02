@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
-import { initializeGame, gameReducer, getCardDefinition, getAllCardNames } from '../core/engine';
-import { ClassType, Player, Card as CardModel } from '../core/types';
+import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_DEFINITIONS, getStampImagePath, getStampSE } from '../core/engine';
+import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
@@ -706,7 +706,7 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
                     <h3 style={{ color: '#f6e05e', borderBottom: '1px solid #4a5568', paddingBottom: 8 }}>後攻救済システム</h3>
                     <ul style={{ lineHeight: 1.8, paddingLeft: 20, color: '#e2e8f0' }}>
                         <li><span style={{ color: '#ed8936' }}>エクストラPP</span>：後攻プレイヤーのみ使用可能です</li>
-                        <li>1〜5ターン目に1回、6ターン目以降に1回、計2回まで+1 PPを獲得できます</li>
+                        <li>1〜5ターン目に1回、6ターン目以降に1回、計2回までPP +1を獲得できます</li>
                     </ul>
                 </section>
             </div>
@@ -987,6 +987,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             }
 
             case 'WHITE_FADE':
+                // Play magic charge sound during energy gathering
+                playSERef.current?.('magic_charge.mp3', 0.6);
+
                 // Create charge particles that will converge toward the card
                 // 80 particles evenly distributed in 360 degrees, various distances
                 const particles = Array(80).fill(0).map((_, i) => {
@@ -1038,8 +1041,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 return () => { if (intervalId) clearInterval(intervalId); };
 
             case 'FLIP':
-                // Play syakin sound at start of flip
+                // Play syakin and KO sounds at start of flip
                 playSERef.current?.('syakin.mp3', 0.8);
+                playSERef.current?.('KO.mp3', 0.7);
                 // Fadeout kirakira sound when flip starts
                 if (kirakiraAudioRef.current) {
                     const audio = kirakiraAudioRef.current;
@@ -1771,7 +1775,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                 }}>
                     <div style={{ textAlign: 'center', minWidth: 80 }}>
                         <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f6e05e' }}>
-                            {Math.ceil(battleStats.turnCount / 2)}
+                            {battleStats.turnCount}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>ターン</div>
                     </div>
@@ -2092,6 +2096,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [necromanceEffects, setNecromanceEffects] = React.useState<NecromanceEffect[]>([]);
     const necromanceKeyRef = React.useRef(0);
 
+    // ===== スタンプ機能 =====
+    // スタンプ選択UI表示中か
+    const [isStampSelectorOpen, setIsStampSelectorOpen] = React.useState(false);
+    // ホバー中のスタンプID
+    const [hoveredStampId, setHoveredStampId] = React.useState<StampId | null>(null);
+    // 表示中のスタンプ
+    const [displayedStamp, setDisplayedStamp] = React.useState<StampDisplay | null>(null);
+    // スタンプドラッグの起点座標
+    const stampDragStartRef = React.useRef<{ x: number, y: number } | null>(null);
+    // スタンプ表示タイマーのref（連続送信/受信時のクリーンアップ用）
+    const stampDisplayTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 進化ドラッグ中のオーラSE管理
+    const evolveAuraAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
     // Track previous logs to detect necromance activation
     const prevLogsLengthRef = React.useRef(gameState.logs.length);
 
@@ -2186,6 +2205,131 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         playerId: string;
         instanceId?: string; // Card instance ID for accurate board lookup
     } | null>(null);
+
+    // ドラッグ線先端のパーティクル
+    interface DragParticle {
+        id: number;
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        opacity: number;
+        radius: number; // 生成時に決定（render内でMath.random()を避ける）
+        createdAt: number;
+    }
+    const [dragParticles, setDragParticles] = React.useState<DragParticle[]>([]);
+    const dragParticleIdRef = React.useRef(0);
+    const dragParticleAngleRef = React.useRef(0); // 360度均等に散らばらせるための角度追跡
+
+    // ドラッグ中にパーティクルを生成
+    // dragStateを直接参照し、座標はuseRef経由で取得
+    const dragStateForParticleRef = React.useRef(dragState);
+    dragStateForParticleRef.current = dragState; // 常に最新のdragStateを保持
+
+    React.useEffect(() => {
+        const sourceType = dragState?.sourceType;
+        if (!sourceType || (sourceType !== 'BOARD' && sourceType !== 'EVOLVE')) {
+            setDragParticles([]);
+            return;
+        }
+
+        const PARTICLE_LIFETIME = 400; // 0.4秒で消える
+        const interval = setInterval(() => {
+            // Refから最新のdragStateを取得
+            const currentDrag = dragStateForParticleRef.current;
+            if (!currentDrag || (currentDrag.sourceType !== 'BOARD' && currentDrag.sourceType !== 'EVOLVE')) return;
+
+            const now = Date.now();
+            // 1個だけ生成（軽量化）、角度は前回から約137度（黄金角）ずらして均等に散らばらせる
+            const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // 約137.5度
+            dragParticleAngleRef.current += goldenAngle + (Math.random() - 0.5) * 0.3; // 少しランダム性を加える
+            const angle = dragParticleAngleRef.current;
+            const speed = 4 + Math.random() * 3; // 速度2倍（外へ飛び散る感じ）
+
+            const newParticle: DragParticle = {
+                id: dragParticleIdRef.current++,
+                x: currentDrag.currentX,
+                y: currentDrag.currentY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                opacity: 1,
+                radius: 3 + Math.random() * 2, // 生成時にサイズ決定（3-5px）
+                createdAt: now
+            };
+
+            setDragParticles(prev => {
+                // 古いパーティクルを除外し、位置とopacity更新
+                const updated = prev
+                    .filter(p => now - p.createdAt < PARTICLE_LIFETIME)
+                    .map(p => ({
+                        ...p,
+                        x: p.x + p.vx,
+                        y: p.y + p.vy,
+                        opacity: Math.max(0, 1 - (now - p.createdAt) / PARTICLE_LIFETIME)
+                    }));
+                return [...updated, newParticle];
+            });
+        }, 80); // 間隔を長く（50ms→80ms）
+
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dragState?.sourceType]);
+
+    // 進化ドラッグ中のオーラSE再生/停止
+    React.useEffect(() => {
+        const isEvolveDrag = dragState?.sourceType === 'EVOLVE';
+
+        if (isEvolveDrag && !evolveAuraAudioRef.current) {
+            // 進化ドラッグ開始 - フェードインで再生
+            const audio = new Audio(getAssetUrl('/se/aura.mp3'));
+            audio.loop = true;
+            audio.volume = 0;
+            audio.play().catch(() => { /* ignore autoplay restrictions */ });
+            evolveAuraAudioRef.current = audio;
+
+            // フェードイン（0→0.25, 300ms）音量を半分に
+            const fadeInDuration = 300;
+            const fadeInInterval = 30;
+            const fadeInSteps = fadeInDuration / fadeInInterval;
+            const volumeStep = 0.25 / fadeInSteps;
+            let currentStep = 0;
+            const fadeIn = setInterval(() => {
+                currentStep++;
+                if (evolveAuraAudioRef.current) {
+                    evolveAuraAudioRef.current.volume = Math.min(currentStep * volumeStep, 0.25);
+                }
+                if (currentStep >= fadeInSteps) {
+                    clearInterval(fadeIn);
+                }
+            }, fadeInInterval);
+        } else if (!isEvolveDrag && evolveAuraAudioRef.current) {
+            // 進化ドラッグ終了 - フェードアウトで停止
+            const audio = evolveAuraAudioRef.current;
+            const fadeOutDuration = 200;
+            const fadeOutInterval = 20;
+            const fadeOutSteps = fadeOutDuration / fadeOutInterval;
+            const volumeStep = audio.volume / fadeOutSteps;
+            let currentStep = 0;
+            const fadeOut = setInterval(() => {
+                currentStep++;
+                audio.volume = Math.max(0, audio.volume - volumeStep);
+                if (currentStep >= fadeOutSteps) {
+                    clearInterval(fadeOut);
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            }, fadeOutInterval);
+            evolveAuraAudioRef.current = null;
+        }
+
+        // クリーンアップ
+        return () => {
+            if (!dragState && evolveAuraAudioRef.current) {
+                evolveAuraAudioRef.current.pause();
+                evolveAuraAudioRef.current = null;
+            }
+        };
+    }, [dragState?.sourceType]);
 
     // Special Summon Tracking (for cards appearing not from hand)
     const [summonedCardIds, setSummonedCardIds] = React.useState<Set<string>>(new Set());
@@ -2407,6 +2551,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         audio.volume = audioSettings.se * volume;
         audio.play().catch(e => console.warn("SE Play prevented", e));
     }, [audioSettings]);
+
+    // マーカー表示時にSE再生（ドラッグ中かつ新しいターゲットにホバーした時）
+    const markerHoveredRef = React.useRef<any>(null);
+    React.useEffect(() => {
+        if (dragState && hoveredTarget && !markerHoveredRef.current) {
+            // 新しくマーカーが表示された
+            playSE('Buon.mp3', 0.25);
+        } else if (dragState && hoveredTarget && markerHoveredRef.current) {
+            // 別のターゲットにホバーした
+            const prev = markerHoveredRef.current;
+            if (prev.instanceId !== hoveredTarget.instanceId ||
+                prev.index !== hoveredTarget.index ||
+                prev.playerId !== hoveredTarget.playerId) {
+                playSE('Buon.mp3', 0.25);
+            }
+        }
+        markerHoveredRef.current = hoveredTarget;
+    }, [hoveredTarget, dragState, playSE]);
 
     const bgmRef = React.useRef<HTMLAudioElement | null>(null);
     const [showSettings, setShowSettings] = React.useState(false);
@@ -3484,6 +3646,42 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 return;
             }
 
+            // STAMP: Opponent sent a stamp
+            // ※ スタンプはゲーム状態に一切影響を与えない独立した処理
+            if (msg.type === 'STAMP') {
+                console.log('[GameScreen] Opponent sent stamp:', msg.stampId);
+
+                // 前のタイマーをクリア（連続受信対応）
+                if (stampDisplayTimerRef.current) {
+                    clearTimeout(stampDisplayTimerRef.current);
+                    stampDisplayTimerRef.current = null;
+                }
+
+                // スタンプSEを再生
+                const stampSE = getStampSE(msg.stampId);
+                if (stampSE) {
+                    playSE(stampSE, 0.6);
+                }
+
+                const stamp: StampDisplay = {
+                    stampId: msg.stampId,
+                    playerId: opponentPlayerId,
+                    playerClass: msg.playerClass || opponent?.class || 'SENKA',
+                    timestamp: Date.now()
+                };
+                // 一度nullにしてから設定（連続受信時のアニメーションリセット用）
+                setDisplayedStamp(null);
+                requestAnimationFrame(() => {
+                    setDisplayedStamp(stamp);
+                });
+                // 一定時間後に非表示
+                stampDisplayTimerRef.current = setTimeout(() => {
+                    setDisplayedStamp(prev => prev?.timestamp === stamp.timestamp ? null : prev);
+                    stampDisplayTimerRef.current = null;
+                }, 3000);
+                return;
+            }
+
             // ACTION: Individual game actions
             if (msg.type === 'ACTION') {
                 const action = msg.payload;
@@ -3787,6 +3985,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Set lock and track played card
         cardPlayLockRef.current = true;
         lastPlayedInstanceIdRef.current = card.instanceId || null;
+
+        // カードをプレイする瞬間にSE再生
+        playSE('card.mp3', 0.5);
 
         // Check if card needs a target and identify which side
         const fanfareTrigger = card.triggers?.find(t => t.trigger === 'FANFARE');
@@ -4373,7 +4574,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         finalY,
                         playerClass: opponent?.class || 'SENKA',
                         onComplete: () => {
-                            triggerShake();
+                            if (bestCard.type !== 'SPELL') {
+                                playSE('gan.mp3', 0.6); // Land sound for CPU card (Follower only)
+                                triggerShake();
+                            }
                             dispatch({
                                 type: 'PLAY_CARD',
                                 playerId: opponentPlayerId,
@@ -4817,6 +5021,117 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         dragStateRef.current = newState;
     };
 
+    // ===== スタンプ機能ハンドラー =====
+    // スタンプ送信処理
+    const sendStamp = useCallback((stampId: StampId) => {
+        // 前のタイマーをクリア（連続送信対応）
+        if (stampDisplayTimerRef.current) {
+            clearTimeout(stampDisplayTimerRef.current);
+            stampDisplayTimerRef.current = null;
+        }
+
+        const stamp: StampDisplay = {
+            stampId,
+            playerId: currentPlayerId,
+            playerClass: currentPlayerClass,
+            timestamp: Date.now()
+        };
+
+        // スタンプSEを再生
+        const stampSE = getStampSE(stampId);
+        if (stampSE) {
+            playSE(stampSE, 0.6);
+        }
+
+        // 一度nullにしてから設定（アニメーションリセット用）
+        setDisplayedStamp(null);
+        // 次のフレームで新しいスタンプを設定（Reactの再レンダリングを確実に発火させる）
+        requestAnimationFrame(() => {
+            setDisplayedStamp(stamp);
+        });
+
+        // オンライン時は相手にも送信
+        if (opponentType === 'ONLINE' && adapter) {
+            adapter.send({ type: 'STAMP', stampId, playerClass: currentPlayerClass });
+        }
+
+        // 一定時間後に非表示
+        stampDisplayTimerRef.current = setTimeout(() => {
+            setDisplayedStamp(prev => prev?.timestamp === stamp.timestamp ? null : prev);
+            stampDisplayTimerRef.current = null;
+        }, 3000);
+    }, [currentPlayerId, currentPlayerClass, opponentType, adapter]);
+
+    // リーダードラッグ開始（スタンプ選択UI表示）
+    const handleLeaderMouseDown = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        // リーダーの中心座標を取得
+        if (playerLeaderRef.current) {
+            const rect = playerLeaderRef.current.getBoundingClientRect();
+            stampDragStartRef.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        } else {
+            stampDragStartRef.current = { x: e.clientX, y: e.clientY };
+        }
+        setIsStampSelectorOpen(true);
+        setHoveredStampId(null);
+    }, []);
+
+    // スタンプ選択中のホバーIDをrefで追跡（イベントリスナー内で最新値を参照するため）
+    const hoveredStampIdRef = React.useRef<StampId | null>(null);
+    React.useEffect(() => {
+        hoveredStampIdRef.current = hoveredStampId;
+    }, [hoveredStampId]);
+
+    // スタンプ選択のグローバルイベントリスナー
+    useEffect(() => {
+        if (!isStampSelectorOpen) return;
+
+        const handleStampMouseMove = (e: MouseEvent) => {
+            if (!stampDragStartRef.current) return;
+
+            const dx = e.clientX - stampDragStartRef.current.x;
+            const dy = e.clientY - stampDragStartRef.current.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+            // 距離が一定以上（80px = innerRadius）離れ、かつ上半円内（-180度〜0度、つまりdy < 0）
+            if (distance > 60 && dy < 0) {
+                // 角度からスタンプIDを計算（上半円を8等分）
+                // Math.atan2で上方向: -180度（左上）〜 -90度（真上）〜 0度（右上）
+                // SVG描画では: 180度（左）〜 90度（真上）〜 0度（右）
+                // したがって、-angle を使って変換する
+                const svgAngle = -angle; // 0度（右）〜 90度（真上）〜 180度（左）
+                // 左（180度）からスタンプ1、右（0度）でスタンプ8
+                // normalizedAngle: 180度=0, 0度=180となるように反転
+                const normalizedAngle = 180 - svgAngle; // 左(180度)→0, 右(0度)→180
+                const stampIndex = Math.floor(normalizedAngle / 22.5);
+                const clampedIndex = Math.max(0, Math.min(7, stampIndex));
+                const stampId = (clampedIndex + 1) as StampId;
+                setHoveredStampId(stampId);
+            } else {
+                setHoveredStampId(null);
+            }
+        };
+
+        const handleStampMouseUp = () => {
+            const currentHoveredId = hoveredStampIdRef.current;
+            if (currentHoveredId) {
+                sendStamp(currentHoveredId);
+            }
+            setIsStampSelectorOpen(false);
+            setHoveredStampId(null);
+            stampDragStartRef.current = null;
+        };
+
+        window.addEventListener('mousemove', handleStampMouseMove);
+        window.addEventListener('mouseup', handleStampMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleStampMouseMove);
+            window.removeEventListener('mouseup', handleStampMouseUp);
+        };
+    }, [isStampSelectorOpen, sendStamp]);
+
     // Global Drag Listeners (Window Level) - OPTIMIZED w/ REF
     useEffect(() => {
         const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -4849,8 +5164,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Ref for Hovered Target to access in stable event listener
     const hoveredTargetRef = React.useRef<any>(null);
+    const prevHoveredTargetRef = React.useRef<any>(null);
     useEffect(() => {
         hoveredTargetRef.current = hoveredTarget;
+        prevHoveredTargetRef.current = hoveredTarget;
     }, [hoveredTarget]);
 
     // Separate Effect for MouseUp to ensure we have fresh closures OR use the Ref strategy fully.
@@ -5253,6 +5570,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const cx = midX + horizontalCurve;
         const cy = midY + verticalCurve;
 
+        // 線を先端まで伸ばす（endOffsetは不要になった）
         return `M${dragState.startX},${dragState.startY} Q${cx},${cy} ${dragState.currentX},${dragState.currentY}`;
     };
 
@@ -5540,7 +5858,88 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- End Turn Handler with Wait ---
     const [isEndingTurn, setIsEndingTurn] = React.useState(false);
+    const [isEndTurnPressed, setIsEndTurnPressed] = React.useState(false); // ターン終了ボタン押下中
     // Note: isEndingTurnRef is defined earlier (near cardPlayLockRef) for access in handleMessage
+
+    // ターン終了ボタンのクリックエフェクト
+    interface EndTurnParticle {
+        id: number;
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        opacity: number;
+        createdAt: number;
+    }
+    const [endTurnEffect, setEndTurnEffect] = React.useState<{
+        active: boolean;
+        x: number;
+        y: number;
+        ringRadius: number;
+        particles: EndTurnParticle[];
+    } | null>(null);
+    const endTurnParticleIdRef = React.useRef(0);
+
+    // ターン終了エフェクトのアニメーション
+    React.useEffect(() => {
+        if (!endTurnEffect?.active) return;
+
+        const startTime = Date.now();
+        const duration = 800; // 800ms
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= duration) {
+                setEndTurnEffect(null);
+                return;
+            }
+
+            const progress = elapsed / duration;
+            setEndTurnEffect(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    ringRadius: 20 + progress * 100, // 20 -> 120
+                    particles: prev.particles.map(p => ({
+                        ...p,
+                        x: p.x + p.vx,
+                        y: p.y + p.vy,
+                        opacity: 1 - progress
+                    }))
+                };
+            });
+
+            requestAnimationFrame(animate);
+        };
+
+        requestAnimationFrame(animate);
+    }, [endTurnEffect?.active]);
+
+    const triggerEndTurnEffect = (buttonX: number, buttonY: number) => {
+        // パーティクルを生成
+        const particles: EndTurnParticle[] = [];
+        for (let i = 0; i < 20; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 3;
+            particles.push({
+                id: endTurnParticleIdRef.current++,
+                x: buttonX,
+                y: buttonY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                opacity: 1,
+                createdAt: Date.now()
+            });
+        }
+
+        setEndTurnEffect({
+            active: true,
+            x: buttonX,
+            y: buttonY,
+            ringRadius: 20,
+            particles
+        });
+    };
 
     const handleEndTurn = async () => {
         // CRITICAL: Check using ref for accurate async state
@@ -6568,7 +6967,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* End Turn Button */}
                         <button
                             disabled={gameState.activePlayerId !== currentPlayerId || isEndingTurn}
-                            onClick={(e) => { e.stopPropagation(); handleEndTurn(); }}
+                            onMouseDown={(e) => {
+                                e.stopPropagation();
+                                if (gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
+                                    setIsEndTurnPressed(true);
+                                }
+                            }}
+                            onMouseUp={(e) => {
+                                e.stopPropagation();
+                                if (isEndTurnPressed && gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
+                                    setIsEndTurnPressed(false);
+                                    // SE再生
+                                    playSE('sisiodosi.mp3', 0.6);
+                                    // ボタン中央の座標を取得してエフェクト発火
+                                    const rect = (e.target as HTMLElement).closest('button')?.getBoundingClientRect();
+                                    if (rect) {
+                                        triggerEndTurnEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                                    }
+                                    handleEndTurn();
+                                }
+                            }}
+                            onMouseLeave={() => {
+                                // マウスがボタン外に出たら押下状態をリセット
+                                setIsEndTurnPressed(false);
+                            }}
                             style={{
                                 width: 160 * scale,
                                 height: 160 * scale,
@@ -6576,16 +6998,48 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 border: '4px solid rgba(255,255,255,0.2)',
                                 background: isEndingTurn
                                     ? 'linear-gradient(135deg, #805ad5, #6b46c1)'
-                                    : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
+                                    : isEndTurnPressed
+                                        ? 'linear-gradient(135deg, #5a9bd5, #4a7fb0)' // 押下中は明るめに
+                                        : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
                                 color: 'white',
                                 fontWeight: 900,
-                                fontSize: '1.6rem',
-                                boxShadow: gameState.activePlayerId === currentPlayerId ? '0 0 40px rgba(66, 153, 225, 0.8)' : 'none',
+                                fontSize: '2rem',
+                                boxShadow: gameState.activePlayerId === currentPlayerId
+                                    ? (isEndTurnPressed ? '0 0 20px rgba(66, 153, 225, 0.5)' : '0 0 40px rgba(66, 153, 225, 0.8)')
+                                    : 'none',
+                                opacity: isEndTurnPressed ? 0.8 : 1, // 押下中は少し薄く
                                 cursor: (gameState.activePlayerId === currentPlayerId && !isEndingTurn) ? 'pointer' : 'default',
-                                transition: 'all 0.3s'
+                                transition: 'all 0.1s', // 押下反応を早くする
+                                position: 'relative',
+                                overflow: 'hidden',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                lineHeight: 1.2
                             }}
                         >
-                            {isEndingTurn ? '処理中...' : 'ターン\n終了'}
+                            {/* 紋章背景 */}
+                            <img
+                                src={getAssetUrl('/assets/tenfubu_mark.png')}
+                                alt=""
+                                style={{
+                                    position: 'absolute',
+                                    width: '80%',
+                                    height: '80%',
+                                    objectFit: 'contain',
+                                    opacity: 0.25, // 0.15 → 0.25 くっきり表示
+                                    pointerEvents: 'none'
+                                }}
+                            />
+                            {isEndingTurn ? (
+                                <span style={{ position: 'relative', zIndex: 1 }}>処理中...</span>
+                            ) : (
+                                <>
+                                    <span style={{ position: 'relative', zIndex: 1 }}>ターン</span>
+                                    <span style={{ position: 'relative', zIndex: 1 }}>終了</span>
+                                </>
+                            )}
                         </button>
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
@@ -6673,8 +7127,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         opacity: isFullyUsed && !isActive ? 0.5 : 1
                                     }}
                                 >
-                                    <span style={{ fontSize: '1.3rem' }}>+1</span>
                                     <span>PP</span>
+                                    <span style={{ fontSize: '1.3rem' }}>+1</span>
                                     {isActive && <span style={{ fontSize: '0.8rem' }}>ON</span>}
                                     {isFullyUsed && !isActive && <span style={{ fontSize: '0.7rem', marginLeft: 2 }}>済</span>}
                                 </button>
@@ -6830,11 +7284,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
                         zIndex: 200
                     }}>
-                        <div style={{
-                            width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                            border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c'
-                        }}>
-                            <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div
+                            onMouseDown={handleLeaderMouseDown}
+                            style={{
+                                width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                                border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c',
+                                cursor: 'grab'
+                            }}
+                        >
+                            <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                         </div>
 
                         {/* Player HP - Top Left (Center - 140px) */}
@@ -7207,34 +7665,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* CLOSE RIGHT MAIN AREA HERE - Overlays follow outside to avoid Shake offset */}
                 </div>
 
-                {/* Evolve Drag Light Orb - Optimized */}
-                {
-                    dragState?.sourceType === 'EVOLVE' && (
-                        <>
-                            {/* Main orb with integrated glow */}
-                            <div style={{
-                                position: 'fixed', left: dragState.currentX, top: dragState.currentY,
-                                transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1000,
-                                width: 40, height: 40, borderRadius: '50%',
-                                background: (dragState as any).useSep
-                                    ? 'radial-gradient(circle at 30% 30%, #fff 0%, #d6bcfa 30%, #9f7aea 100%)'
-                                    : 'radial-gradient(circle at 30% 30%, #fff 0%, #faf089 30%, #ecc94b 100%)',
-                                boxShadow: (dragState as any).useSep
-                                    ? '0 0 20px #b794f4, 0 0 40px rgba(159, 122, 234, 0.5)'
-                                    : '0 0 20px #f6e05e, 0 0 40px rgba(236, 201, 75, 0.5)',
-                                border: '2px solid rgba(255,255,255,0.7)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                {/* Inner core */}
-                                <div style={{
-                                    width: 14, height: 14, borderRadius: '50%',
-                                    background: 'radial-gradient(circle at 40% 40%, #fff 0%, rgba(255,255,255,0.6) 100%)',
-                                    boxShadow: '0 0 10px white'
-                                }} />
-                            </div>
-                        </>
-                    )
-                }
+                {/* Evolve Drag Light Orb - REMOVED: 先端の光はSVGの白い光で統一（BOARDと同様） */}
 
                 {/* FLOATING DAMAGE TEXT */}
                 {
@@ -7243,56 +7674,270 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     ))
                 }
 
+                {/* ===== スタンプ選択UI（上半円・扇型）===== */}
+                {isStampSelectorOpen && stampDragStartRef.current && (() => {
+                    const centerX = stampDragStartRef.current.x;
+                    const centerY = stampDragStartRef.current.y;
+                    const innerRadius = 200; // リーダー枠の外側（内側をさらに外へ）
+                    const outerRadius = 320; // 外側の半径
+                    const stampCount = 8;
+                    const anglePerStamp = 180 / stampCount; // 22.5度
+
+                    // 扇型のSVGパスを生成する関数（角度は通常の数学座標系：右が0度、反時計回り）
+                    // 上半円なので、180度（左）から0度（右）へ描画
+                    const createArcPath = (startAngleDeg: number, endAngleDeg: number, inner: number, outer: number) => {
+                        // 度をラジアンに変換
+                        const startRad = startAngleDeg * Math.PI / 180;
+                        const endRad = endAngleDeg * Math.PI / 180;
+
+                        const x1 = Math.cos(startRad) * outer;
+                        const y1 = -Math.sin(startRad) * outer; // Y軸反転（画面座標系）
+                        const x2 = Math.cos(endRad) * outer;
+                        const y2 = -Math.sin(endRad) * outer;
+                        const x3 = Math.cos(endRad) * inner;
+                        const y3 = -Math.sin(endRad) * inner;
+                        const x4 = Math.cos(startRad) * inner;
+                        const y4 = -Math.sin(startRad) * inner;
+
+                        // 時計回りに描画するためsweep-flagを0に
+                        return `M ${x1} ${y1} A ${outer} ${outer} 0 0 0 ${x2} ${y2} L ${x3} ${y3} A ${inner} ${inner} 0 0 1 ${x4} ${y4} Z`;
+                    };
+
+                    return (
+                        <div style={{
+                            position: 'fixed',
+                            left: centerX,
+                            top: centerY,
+                            zIndex: 2000,
+                            pointerEvents: 'none',
+                            animation: 'stampUIFadeIn 0.15s ease-out'
+                        }}>
+                            <svg
+                                width={outerRadius * 2 + 20}
+                                height={outerRadius + 20}
+                                style={{
+                                    position: 'absolute',
+                                    left: -(outerRadius + 10),
+                                    top: -(outerRadius + 10), // 上方向に配置（半円が上に表示される）
+                                    overflow: 'visible'
+                                }}
+                            >
+                                {/* 原点をSVGの下辺中央に配置（上半円を描画するため） */}
+                                <g transform={`translate(${outerRadius + 10}, ${outerRadius + 10})`}>
+                                    {/* 8つの扇型スタンプエリア（左から右へ：180度→0度）*/}
+                                    {STAMP_DEFINITIONS.map((stamp, index) => {
+                                        // 左端（180度）から右端（0度）へ配置
+                                        const startAngle = 180 - index * anglePerStamp;
+                                        const endAngle = startAngle - anglePerStamp;
+                                        const isHovered = hoveredStampId === stamp.id;
+                                        const midAngle = (startAngle + endAngle) / 2;
+                                        const midRad = midAngle * Math.PI / 180;
+                                        const imgRadius = (innerRadius + outerRadius) / 2;
+                                        const imgX = Math.cos(midRad) * imgRadius;
+                                        const imgY = -Math.sin(midRad) * imgRadius; // Y軸反転
+                                        const imgSize = 85; // スタンプ画像サイズ（スペースに合わせて大きく）
+
+                                        return (
+                                            <g key={stamp.id}>
+                                                {/* 扇型の背景 */}
+                                                <path
+                                                    d={createArcPath(startAngle, endAngle, innerRadius, outerRadius)}
+                                                    fill={isHovered ? 'rgba(255, 215, 0, 0.4)' : 'rgba(0, 0, 0, 0.7)'}
+                                                    stroke={isHovered ? '#ffd700' : 'rgba(255, 255, 255, 0.3)'}
+                                                    strokeWidth={isHovered ? 3 : 1}
+                                                    style={{ transition: 'all 0.1s ease-out' }}
+                                                />
+                                                {/* スタンプ画像（clipPathで円形にクリップ） */}
+                                                <defs>
+                                                    <clipPath id={`stampClip-${stamp.id}`}>
+                                                        <circle cx={imgX} cy={imgY} r={imgSize / 2} />
+                                                    </clipPath>
+                                                </defs>
+                                                <image
+                                                    href={getAssetUrl(getStampImagePath(stamp.id, currentPlayerClass))}
+                                                    x={imgX - imgSize / 2}
+                                                    y={imgY - imgSize / 2}
+                                                    width={imgSize}
+                                                    height={imgSize}
+                                                    clipPath={`url(#stampClip-${stamp.id})`}
+                                                    style={{
+                                                        transform: isHovered ? `scale(1.15)` : 'scale(1)',
+                                                        transformOrigin: `${imgX}px ${imgY}px`,
+                                                        transition: 'transform 0.1s ease-out'
+                                                    }}
+                                                />
+                                                {/* 円形の枠線 */}
+                                                <circle
+                                                    cx={imgX}
+                                                    cy={imgY}
+                                                    r={imgSize / 2}
+                                                    fill="none"
+                                                    stroke={isHovered ? '#ffd700' : 'rgba(255, 255, 255, 0.5)'}
+                                                    strokeWidth={isHovered ? 2 : 1}
+                                                />
+                                            </g>
+                                        );
+                                    })}
+                                </g>
+                            </svg>
+
+                            <style>{`
+                                @keyframes stampUIFadeIn {
+                                    from { opacity: 0; transform: scale(0.8); }
+                                    to { opacity: 1; transform: scale(1); }
+                                }
+                            `}</style>
+                        </div>
+                    );
+                })()}
+
+                {/* ===== スタンプ表示 ===== */}
+                {displayedStamp && (
+                    <div key={displayedStamp.timestamp} style={{
+                        position: 'fixed',
+                        left: '50%',
+                        top: '40%',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 2500,
+                        pointerEvents: 'none',
+                        animation: 'stampDisplay 3s ease-out forwards'
+                    }}>
+                        <div style={{
+                            width: 250,
+                            height: 250,
+                            borderRadius: 20,
+                            overflow: 'hidden',
+                            boxShadow: '0 0 40px rgba(0,0,0,0.5), 0 0 60px rgba(255,255,255,0.2)',
+                            border: '4px solid rgba(255,255,255,0.3)'
+                        }}>
+                            <img
+                                src={getAssetUrl(getStampImagePath(displayedStamp.stampId, displayedStamp.playerClass))}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        </div>
+
+                        {/* 送信者表示（相手のスタンプの場合） */}
+                        {displayedStamp.playerId !== currentPlayerId && (
+                            <div style={{
+                                position: 'absolute',
+                                bottom: -30,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'rgba(0,0,0,0.7)',
+                                padding: '5px 15px',
+                                borderRadius: 15,
+                                color: '#fff',
+                                fontSize: '0.9rem',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                相手
+                            </div>
+                        )}
+
+                        <style>{`
+                            @keyframes stampDisplay {
+                                0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+                                10% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+                                20% { transform: translate(-50%, -50%) scale(1); }
+                                80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                                100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                            }
+                        `}</style>
+                    </div>
+                )}
+
                 {/* SVG Overlay for Dragging Arrow - Now uses game coordinates */}
                 <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1000 }}>
                     {dragState && (dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
                         <>
                             <defs>
-                                {/* Cyan glow filter for attack line */}
+                                {/* Cyan glow filter for attack line - SourceGraphic removed to avoid sharp edge */}
                                 <filter id="cyanGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                    <feGaussianBlur stdDeviation="8" result="blur1" />
-                                    <feFlood floodColor="rgba(100, 200, 255, 0.9)" result="color1" />
+                                    <feGaussianBlur stdDeviation="10" result="blur1" />
+                                    <feFlood floodColor="rgba(100, 200, 255, 0.7)" result="color1" />
                                     <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
-                                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
-                                    <feFlood floodColor="rgba(150, 220, 255, 0.7)" result="color2" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2" />
+                                    <feFlood floodColor="rgba(150, 220, 255, 0.5)" result="color2" />
                                     <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
                                     <feMerge>
                                         <feMergeNode in="glow1" />
                                         <feMergeNode in="glow2" />
-                                        <feMergeNode in="SourceGraphic" />
                                     </feMerge>
                                 </filter>
-                                {/* Yellow glow filter for evolution */}
+                                {/* Yellow glow filter for evolution - stronger blur to hide endpoint */}
                                 <filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                    <feGaussianBlur stdDeviation="6" result="blur" />
-                                    <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
+                                    <feGaussianBlur stdDeviation="10" result="blur1" />
+                                    <feFlood floodColor="rgba(255, 255, 50, 0.7)" result="color1" />
+                                    <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2" />
+                                    <feFlood floodColor="rgba(255, 240, 100, 0.5)" result="color2" />
+                                    <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
+                                    <feMerge>
+                                        <feMergeNode in="glow1" />
+                                        <feMergeNode in="glow2" />
+                                    </feMerge>
+                                </filter>
+                                {/* Soft white glow filter for drag endpoint - stronger blur and opacity */}
+                                <filter id="softWhiteGlow" x="-300%" y="-300%" width="700%" height="700%">
+                                    <feGaussianBlur stdDeviation="20" result="blur" />
+                                    <feFlood floodColor="rgba(255, 255, 255, 0.9)" result="color" />
                                     <feComposite in="color" in2="blur" operator="in" result="glow" />
                                     <feMerge>
                                         <feMergeNode in="glow" />
+                                        <feMergeNode in="glow" />
+                                        <feMergeNode in="glow" />
+                                    </feMerge>
+                                </filter>
+                                {/* Inner core glow - weaker blur for center */}
+                                <filter id="innerCoreGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur stdDeviation="4" result="blur" />
+                                    <feFlood floodColor="rgba(255, 255, 255, 0.8)" result="color" />
+                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feMerge>
+                                        <feMergeNode in="glow" />
+                                    </feMerge>
+                                </filter>
+                                {/* Colored glow filter for endpoint ball - preserves source color with blur */}
+                                <filter id="coloredBallGlow" x="-150%" y="-150%" width="400%" height="400%">
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+                                    <feMerge>
+                                        <feMergeNode in="blur" />
+                                        <feMergeNode in="blur" />
+                                    </feMerge>
+                                </filter>
+                                {/* Light particle glow - weaker blur */}
+                                <filter id="particleGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+                                    <feMerge>
+                                        <feMergeNode in="blur" />
                                         <feMergeNode in="SourceGraphic" />
                                     </feMerge>
                                 </filter>
-                                {/* Purple glow filter for super evolution */}
+                                {/* Purple glow filter for super evolution - stronger blur to hide endpoint */}
                                 <filter id="purpleGlow" x="-100%" y="-100%" width="300%" height="300%">
-                                    <feGaussianBlur stdDeviation="8" result="blur" />
-                                    <feFlood floodColor="rgba(183, 148, 244, 0.8)" result="color" />
-                                    <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                    <feGaussianBlur stdDeviation="10" result="blur1" />
+                                    <feFlood floodColor="rgba(183, 148, 244, 0.7)" result="color1" />
+                                    <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur2" />
+                                    <feFlood floodColor="rgba(200, 170, 255, 0.5)" result="color2" />
+                                    <feComposite in="color2" in2="blur2" operator="in" result="glow2" />
                                     <feMerge>
-                                        <feMergeNode in="glow" />
-                                        <feMergeNode in="SourceGraphic" />
+                                        <feMergeNode in="glow1" />
+                                        <feMergeNode in="glow2" />
                                     </feMerge>
                                 </filter>
                             </defs>
                             {/* Attack/Board drag: Cyan glowing line (no arrow) */}
                             {dragState.sourceType === 'BOARD' && (
                                 <>
-                                    {/* Outer glow layer */}
+                                    {/* Outer glow layer - strokeLinecap="butt" to avoid ball at endpoint */}
                                     <path
                                         d={getArrowPath()}
                                         fill="none"
                                         stroke="rgba(100, 200, 255, 0.3)"
                                         strokeWidth="20"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                         filter="url(#cyanGlow)"
                                     />
                                     {/* Middle glow layer */}
@@ -7301,7 +7946,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         fill="none"
                                         stroke="rgba(150, 220, 255, 0.5)"
                                         strokeWidth="10"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
                                     {/* Core bright line */}
                                     <path
@@ -7309,7 +7954,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         fill="none"
                                         stroke="rgba(200, 240, 255, 0.9)"
                                         strokeWidth="4"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
                                     {/* Innermost white core */}
                                     <path
@@ -7317,37 +7962,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         fill="none"
                                         stroke="rgba(255, 255, 255, 1)"
                                         strokeWidth="2"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
                                 </>
                             )}
                             {/* Evolve drag: Glowing light line (yellow for EP, purple for SEP) */}
                             {dragState.sourceType === 'EVOLVE' && (
                                 <>
-                                    {/* Outer glow layer */}
+                                    {/* Outer glow layer - same opacity as BOARD (0.3) */}
                                     <path
                                         d={getArrowPath()}
                                         fill="none"
                                         stroke={(dragState as any).useSep ? 'rgba(159, 122, 234, 0.3)' : 'rgba(236, 201, 75, 0.3)'}
                                         strokeWidth="20"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                         filter={(dragState as any).useSep ? 'url(#purpleGlow)' : 'url(#yellowGlow)'}
                                     />
-                                    {/* Middle glow layer */}
+                                    {/* Middle glow layer - no filter, same as BOARD */}
                                     <path
                                         d={getArrowPath()}
                                         fill="none"
                                         stroke={(dragState as any).useSep ? 'rgba(183, 148, 244, 0.5)' : 'rgba(246, 224, 94, 0.5)'}
                                         strokeWidth="10"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
-                                    {/* Core bright line */}
+                                    {/* Core bright line - no filter, same as BOARD */}
                                     <path
                                         d={getArrowPath()}
                                         fill="none"
                                         stroke={(dragState as any).useSep ? 'rgba(214, 188, 250, 0.9)' : 'rgba(250, 240, 137, 0.9)'}
                                         strokeWidth="4"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
                                     {/* Innermost white core */}
                                     <path
@@ -7355,13 +8000,141 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         fill="none"
                                         stroke="rgba(255, 255, 255, 1)"
                                         strokeWidth="2"
-                                        strokeLinecap="round"
+                                        strokeLinecap="butt"
                                     />
                                 </>
                             )}
+                            {/* 根本の光 - より目立つように */}
+                            {(dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
+                                <>
+                                    <circle
+                                        cx={dragState.startX}
+                                        cy={dragState.startY}
+                                        r="15"
+                                        fill="rgba(255, 255, 255, 0.3)"
+                                        filter="url(#softWhiteGlow)"
+                                    />
+                                    <circle
+                                        cx={dragState.startX}
+                                        cy={dragState.startY}
+                                        r="8"
+                                        fill="rgba(255, 255, 255, 0.4)"
+                                        filter="url(#softWhiteGlow)"
+                                    />
+                                </>
+                            )}
+                            {/* 先端の白い光 - 線の太さに合わせたサイズ */}
+                            {(dragState.sourceType === 'BOARD' || dragState.sourceType === 'EVOLVE') && (
+                                <>
+                                    {/* 外側の拡散光 */}
+                                    <circle
+                                        cx={dragState.currentX}
+                                        cy={dragState.currentY}
+                                        r="18"
+                                        fill="rgba(255, 255, 255, 0.25)"
+                                        filter="url(#softWhiteGlow)"
+                                    />
+                                    {/* 中間の光 */}
+                                    <circle
+                                        cx={dragState.currentX}
+                                        cy={dragState.currentY}
+                                        r="8"
+                                        fill="rgba(255, 255, 255, 0.35)"
+                                        filter="url(#softWhiteGlow)"
+                                    />
+                                    {/* 中心の明るい光 - より小さく内側に、ぼかし弱め */}
+                                    <circle
+                                        cx={dragState.currentX}
+                                        cy={dragState.currentY}
+                                        r="3"
+                                        fill="rgba(255, 255, 255, 0.7)"
+                                        filter="url(#innerCoreGlow)"
+                                    />
+                                </>
+                            )}
+                            {/* パーティクル（軽いグロー付き） */}
+                            {dragParticles.map(p => {
+                                const particleColor = dragState.sourceType === 'EVOLVE'
+                                    ? (dragState.useSep
+                                        ? `rgba(230, 220, 255, ${p.opacity})` // 薄紫系
+                                        : `rgba(255, 255, 230, ${p.opacity})`) // 薄黄色系
+                                    : `rgba(220, 245, 255, ${p.opacity})`; // 薄水色系
+                                return (
+                                    <circle
+                                        key={p.id}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={p.radius}
+                                        fill={particleColor}
+                                        filter="url(#particleGlow)"
+                                    />
+                                );
+                            })}
                         </>
                     )}
                 </svg>
+
+                {/* ターン終了ボタンのクリックエフェクト */}
+                {endTurnEffect && (
+                    <svg
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            width: '100vw',
+                            height: '100vh',
+                            pointerEvents: 'none',
+                            zIndex: 99999
+                        }}
+                    >
+                        <defs>
+                            <filter id="endTurnGlow" x="-100%" y="-100%" width="300%" height="300%">
+                                <feGaussianBlur stdDeviation="6" result="blur" />
+                                <feFlood floodColor="rgba(100, 200, 255, 0.8)" result="color" />
+                                <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                <feMerge>
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        {/* 拡散する光の輪 */}
+                        <circle
+                            cx={endTurnEffect.x}
+                            cy={endTurnEffect.y}
+                            r={endTurnEffect.ringRadius}
+                            fill="none"
+                            stroke={`rgba(100, 200, 255, ${Math.max(0, 1 - endTurnEffect.ringRadius / 120) * 0.8})`}
+                            strokeWidth="4"
+                            filter="url(#endTurnGlow)"
+                        />
+                        <circle
+                            cx={endTurnEffect.x}
+                            cy={endTurnEffect.y}
+                            r={endTurnEffect.ringRadius * 0.8}
+                            fill="none"
+                            stroke={`rgba(255, 255, 255, ${Math.max(0, 1 - endTurnEffect.ringRadius / 120) * 0.6})`}
+                            strokeWidth="2"
+                        />
+                        {/* 中央の光 */}
+                        <circle
+                            cx={endTurnEffect.x}
+                            cy={endTurnEffect.y}
+                            r={20}
+                            fill={`rgba(255, 255, 255, ${Math.max(0, 1 - endTurnEffect.ringRadius / 120) * 0.9})`}
+                        />
+                        {/* パーティクル */}
+                        {endTurnEffect.particles.map(p => (
+                            <circle
+                                key={p.id}
+                                cx={p.x}
+                                cy={p.y}
+                                r={4}
+                                fill={`rgba(255, 255, 255, ${p.opacity * 0.8})`}
+                            />
+                        ))}
+                    </svg>
+                )}
 
                 {/* Play Card Animation Overlay - Now uses game coordinates */}
                 {

@@ -144,3 +144,24 @@ export type GameAction =
     | { type: 'SYNC_STATE'; payload: GameState }
     | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } }
     | { type: 'TOGGLE_EXTRA_PP'; playerId: string }; // エクストラPPの有効化/無効化
+
+// ===== スタンプ機能 =====
+
+// スタンプID (1-8)
+export type StampId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+// スタンプ定義
+export interface StampDefinition {
+    id: StampId;
+    filename: string;
+    label: string;
+    se: string; // SEファイル名
+}
+
+// スタンプ表示状態
+export interface StampDisplay {
+    stampId: StampId;
+    playerId: string;
+    playerClass: ClassType;
+    timestamp: number;
+}

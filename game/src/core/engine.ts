@@ -1,8 +1,36 @@
-import { GameState, Player, Card, ClassType, BoardCard, GameAction, AbilityEffect } from './types';
+import { GameState, Player, Card, ClassType, BoardCard, GameAction, AbilityEffect, StampDefinition, StampId } from './types';
 // Unused imports from abilities removed to clear lints
 
 export const INITIAL_HP = 20;
 export const MAX_BOARD_SIZE = 5;
+
+// ===== スタンプ定義 =====
+export const STAMP_DEFINITIONS: StampDefinition[] = [
+    { id: 1, filename: '1_yoroshiku.png', label: 'よろしく', se: 'pa.mp3' },
+    { id: 2, filename: '2_nandato.png', label: 'なん…だと…！？', se: 'shock.mp3' },
+    { id: 3, filename: '3_thank.png', label: 'ありがとう！', se: 'thanks.mp3' },
+    { id: 4, filename: '4_willwin.png', label: '勝ったな。', se: 'nt.mp3' },
+    { id: 5, filename: '5_dontmind.png', label: 'ドンマイ！', se: 'boyon.mp3' },
+    { id: 6, filename: '6_thinking.png', label: '考え中…', se: 'thinking.mp3' },
+    { id: 7, filename: '7_gg.png', label: 'GG！', se: 'kiri.mp3' },
+    { id: 8, filename: '8_sorry.png', label: 'ごめん', se: 'gomen.mp3' },
+];
+
+// スタンプ画像パス取得ヘルパー
+// ClassType 'AJA' のフォルダ名は 'azya' なので明示的にマッピング
+export const getStampImagePath = (stampId: StampId, playerClass: ClassType): string => {
+    const stamp = STAMP_DEFINITIONS.find(s => s.id === stampId);
+    if (!stamp) return '';
+    // AJA -> azya, SENKA -> senka, YORUKA -> yoruka
+    const classFolder = playerClass === 'AJA' ? 'azya' : playerClass.toLowerCase();
+    return `/stamps/${classFolder}/${stamp.filename}`;
+};
+
+// スタンプSEファイル名取得ヘルパー
+export const getStampSE = (stampId: StampId): string | null => {
+    const stamp = STAMP_DEFINITIONS.find(s => s.id === stampId);
+    return stamp?.se || null;
+};
 
 // Mock cards for MVP
 const MOCK_CARDS: Card[] = [
@@ -541,7 +569,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 's_resignation_proxy', name: '退職代行', cost: 0, type: 'SPELL',
-        description: '相手のフォロワー1体を破壊する。ランダムな自分のフォロワー1体を破壊する。',
+        description: '自分のフォロワー1体を破壊する。相手のランダムなフォロワー1体を破壊する。1枚ドローする。',
         flavorText: '色々あって1年近く休職してたけど金さえあればいくらでもできるなという感想',
         imageUrl: '/cards/taisyokudaiko.png',
         tags: ['Token'],
@@ -549,8 +577,9 @@ const MOCK_CARDS: Card[] = [
         triggers: [{
             trigger: 'FANFARE',
             effects: [
-                { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
-                { type: 'RANDOM_DESTROY', targetType: 'SELF', value: 1 }
+                { type: 'DESTROY', targetType: 'SELECT_ALLY_FOLLOWER' },
+                { type: 'RANDOM_DESTROY', targetType: 'OPPONENT', value: 1 },
+                { type: 'DRAW', value: 1 }
             ]
         }]
     },

@@ -140,6 +140,10 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
         );
     }
 
+    // スペルカードは手札表示時に上側の角を丸くする
+    const isSpellInHand = card.type === 'SPELL' && !isOnBoard;
+    const spellTopRadius = isSpellInHand ? 20 : 8;
+
     // --- Normal Variant (On Board / Hand) ---
     return (
         <div
@@ -162,7 +166,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 // 3D flip animation support - ALWAYS hide backface to prevent mirror image during rotation
                 // This is critical for proper 3D flip behavior when parent uses transform-style: preserve-3d
                 backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden'
+                WebkitBackfaceVisibility: 'hidden',
+                borderRadius: isSpellInHand ? `${spellTopRadius}px ${spellTopRadius}px 8px 8px` : '8px'
             }}
             onClick={onClick}
         >
@@ -179,6 +184,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                     borderBottom: '1px solid rgba(255,255,255,0.2)',
                     zIndex: 2,
                     transform: card.name.length > 15 ? 'scaleX(0.9)' : 'none',
+                    borderRadius: isSpellInHand ? `${spellTopRadius}px ${spellTopRadius}px 0 0` : '8px 8px 0 0',
                 }}>
                     {card.name}
                 </div>

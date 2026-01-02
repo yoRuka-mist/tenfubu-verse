@@ -1,0 +1,60 @@
+以下のSVG光線描画コードについてレビューしてください。
+
+## 問題
+ドラッグ操作時に曲線の光の線を描画していますが、線の先端が「玉」のようにくっきり見えてしまい、光っぽく見えません。光のように柔らかくぼやけた感じにしたいです。
+
+## 現在のコード構造
+
+### getArrowPath関数（線の終点を15px手前にしている）
+```javascript
+const endOffset = 15; // 終点を15px手前に
+const angle = Math.atan2(dragState.currentY - cy, dragState.currentX - cx);
+const endX = dragState.currentX - Math.cos(angle) * endOffset;
+const endY = dragState.currentY - Math.sin(angle) * endOffset;
+return `M${startX},${startY} Q${cx},${cy} ${endX},${endY}`;
+```
+
+### SVGフィルター定義
+```jsx
+<filter id="yellowGlow" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="6" result="blur" />
+    <feFlood floodColor="rgba(255, 255, 50, 0.8)" result="color" />
+    <feComposite in="color" in2="blur" operator="in" result="glow" />
+    <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
+    </feMerge>
+</filter>
+```
+
+### 線の描画（4層）
+```jsx
+{/* Outer glow layer - フィルター適用 */}
+<path d={getArrowPath()} stroke="rgba(236, 201, 75, 0.3)" strokeWidth="20" strokeLinecap="round" filter="url(#yellowGlow)" />
+
+{/* Middle glow layer */}
+<path d={getArrowPath()} stroke="rgba(246, 224, 94, 0.5)" strokeWidth="10" strokeLinecap="butt" />
+
+{/* Core bright line */}
+<path d={getArrowPath()} stroke="rgba(250, 240, 137, 0.9)" strokeWidth="4" strokeLinecap="butt" />
+
+{/* Innermost white core */}
+<path d={getArrowPath()} stroke="rgba(255, 255, 255, 1)" strokeWidth="2" strokeLinecap="butt" />
+```
+
+### 先端の白い光（別途描画）
+```jsx
+<circle cx={currentX} cy={currentY} r="30" fill="rgba(255, 255, 255, 0.15)" filter="url(#softWhiteGlow)" />
+<circle cx={currentX} cy={currentY} r="18" fill="rgba(255, 255, 255, 0.2)" filter="url(#softWhiteGlow)" />
+```
+
+## 現状の問題点
+- Outer glow layer (strokeLinecap="round") が線の先端で丸い玉のようにくっきり見える
+- フィルターは適用しているが、ソースグラフィックを含めているので元の形がそのまま残る
+- 先端を15px手前にしても、まだ玉が見える
+
+## 求めていること
+線の先端を「光」のように柔らかく拡散させたい。玉のようにくっきりした形ではなく、ふわっと消えていくような表現。
+
+解決策を提案してください。JSON形式で回答。
+{"solutions": [{"approach": "...", "code_changes": "...", "pros": "...", "cons": "..."}], "recommended": "..."}

@@ -3176,3 +3176,93 @@ if (cachedCoords && (cachedCoords.x !== 0 || cachedCoords.y !== 0)) {
   - 3622-3655行目: 座標キャッシュ更新useEffect
   - 7005行目: 選択時の持ち上げ量（-8 * scale）
   - 7028行目: ドラッグ・ホバー時のtransform
+
+---
+
+## 修正日
+2026年1月3日
+
+## 修正内容
+
+### スタンプ機能の実装
+
+#### 1. 概要
+シャドウバース ワールズビヨンドを参考に、リーダーをドラッグしてスタンプを送信する機能を実装。
+
+#### 2. スタンプデータ
+| ID | ファイル名 | ラベル |
+|----|-----------|-------|
+| 1 | 1_yoroshiku.png | よろしく |
+| 2 | 2_nandato.png | なん…だと…！？ |
+| 3 | 3_thank.png | ありがとう！ |
+| 4 | 4_willwin.png | 勝ったな。 |
+| 5 | 5_dontmind.png | ドンマイ！ |
+| 6 | 6_thinking.png | 考え中… |
+| 7 | 7_gg.png | GG！ |
+| 8 | 8_sorry.png | ごめん |
+
+#### 3. 画像格納場所
+```
+game/public/stamps/
+├── senka/   (8種)
+├── azya/    (8種)
+└── yoruka/  (8種)
+```
+
+#### 4. 修正ファイル
+
+##### types.ts
+- StampId型追加（1-8）
+- StampDefinition interface追加
+- StampDisplay interface追加
+
+##### engine.ts
+- STAMP_DEFINITIONS配列追加（8種のスタンプ定義）
+- getStampImagePath関数追加
+
+##### GameScreen.tsx
+- **状態変数追加**（2095-2103行目）
+  - isStampSelectorOpen: スタンプ選択UI表示状態
+  - hoveredStampId: ホバー中のスタンプID
+  - displayedStamp: 表示中のスタンプ
+  - stampDragStartRef: ドラッグ起点座標
+
+- **ハンドラー追加**（4830-4905行目）
+  - sendStamp: スタンプ送信処理
+  - handleLeaderMouseDown: リーダードラッグ開始
+  - handleStampMouseMove: スタンプ選択中のマウス移動
+  - handleStampMouseUp: スタンプ選択終了
+
+- **WebSocket対応**（3497-3512行目）
+  - STAMPメッセージの受信処理
+
+- **UI追加**（7337-7480行目）
+  - スタンプ選択UI（円形配置、8方向）
+  - スタンプ表示アニメーション
+
+- **リーダー要素変更**（6920-6928行目）
+  - onMouseDown={handleLeaderMouseDown}追加
+  - cursor: 'grab'追加
+
+#### 5. 操作方法
+1. 自分のリーダー（画面下中央の円形アイコン）をドラッグ開始
+2. 8つのスタンプが円形に表示される
+3. 送りたいスタンプの方向へドラッグしてマウスを離す
+4. スタンプが画面中央に大きく表示される
+5. オンライン対戦時は相手にも同期表示
+
+#### 6. アニメーション仕様
+- スタンプ選択UI: 200ms ease-out（中心から外側へ展開）
+- スタンプ表示: 3秒間表示（フェードイン→維持→フェードアウト）
+
+## 構造の記録（更新）
+- `game/src/core/types.ts`
+  - 148-166行目: スタンプ関連型定義
+- `game/src/core/engine.ts`
+  - 7-25行目: STAMP_DEFINITIONS, getStampImagePath
+- `game/src/screens/GameScreen.tsx`
+  - 2095-2103行目: スタンプ状態変数
+  - 3497-3512行目: STAMP WebSocket受信処理
+  - 4830-4905行目: スタンプハンドラー
+  - 6920-6928行目: リーダーonMouseDown
+  - 7337-7480行目: スタンプUI
