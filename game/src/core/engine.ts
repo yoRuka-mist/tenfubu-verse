@@ -83,7 +83,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_ruiyu', name: 'ルイ・ユー', cost: 7, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：自分のリーダーを4回復する。「cyoriena」1体を出す。\n進化時：自分のリーダーを4回復する。',
+        description: 'ファンファーレ：自分のリーダーを4回復。「cyoriena」を場に出す。\n進化時：相手のフォロワー1体を破壊。自分のリーダーを4回復。',
         flavorText: '働きて　声なき功を　積みし尾に\n　花の香落ちて　盃あたたか',
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
@@ -99,6 +99,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'EVOLVE',
                 effects: [
+                    { type: 'DESTROY', targetType: 'SELECT_FOLLOWER' },
                     { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' }
                 ]
             }
@@ -132,13 +133,19 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_tsubumaru', name: 'つぶまる', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 3,
-        description: '[守護]\n進化時：「退職代行」1枚を手札に加える。',
+        description: '[守護]\nファンファーレ：1枚ドローする。\n進化時：「退職代行」1枚を手札に加える。',
         flavorText: 'ﾊﾑﾁｭﾜｧｰﾝ……ｵｩｲｪ……\nｳｫｳｳｫｳﾊﾑﾁｬｧﾝ……ｼｬﾌﾞｯ……\nﾊﾑﾊﾑﾊﾑﾁｬﾝ……ﾍﾞｲﾍﾞﾍﾞｲﾍﾞ……',
         imageUrl: '/cards/tsubumaru.png',
         evolvedImageUrl: '/cards/tsubumaru_2.png',
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH',
         triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'DRAW', value: 1 }
+                ]
+            },
             {
                 trigger: 'EVOLVE',
                 effects: [
@@ -248,7 +255,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。ランダムな相手のフォロワー1体を破壊する。ランダムな相手のフォロワー1体を手札に戻す。\n超進化時：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出し、それらは+2/+2されて[守護][突進]を得る。',
+        description: 'ファンファーレ：相手のリーダーに3ダメージ。自分のリーダーを2回復。相手のランダムなフォロワーを1体破壊する。相手のランダムなフォロワーを1体手札に戻す。\n超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+2/+2されて[守護][突進][オーラ]を得る。',
         flavorText: 'あじゃ「お前たち、俺を守れ」\nつぶまる&ゆうなぎ&なゆた「ｳｽ」',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
@@ -258,6 +265,7 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'DAMAGE', value: 3, targetType: 'OPPONENT' },
+                    { type: 'HEAL_LEADER', value: 2, targetType: 'SELF' },
                     { type: 'RANDOM_DESTROY', value: 1 },
                     { type: 'RANDOM_BOUNCE', value: 1 }
                 ]
@@ -269,7 +277,8 @@ const MOCK_CARDS: Card[] = [
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
                     { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
-                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
+                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
+                    { type: 'GRANT_PASSIVE', targetPassive: 'AURA', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             }
         ]
@@ -333,13 +342,19 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] [バリア]\n進化時：相手のフォロワー1体に2ダメージ。',
+        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。\n進化時：相手のフォロワー1体に2ダメージ。',
         flavorText: '体の傷はアルコールで消毒\n心の傷もアルコールで治る',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
         passiveAbilities: ['WARD', 'BARRIER'],
         attackEffectType: 'WATER',
         triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'DRAW', value: 1 }
+                ]
+            },
             {
                 trigger: 'EVOLVE',
                 effects: [
@@ -711,12 +726,12 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_cyoriena', name: 'cyoriena', cost: 2, type: 'FOLLOWER',
         attack: 1, health: 2,
-        description: '[守護]\n自分のターン終了時、自分のリーダーを2回復する。\n進化時：「翼」1枚を手札に加える。',
+        description: '[守護] [バリア]\nターン終了時、リーダーのHPを2回復。\n進化時：「翼」を手札に加える。',
         flavorText: 'ポテチは週7回まで',
         imageUrl: '/cards/cyoriena.png',
         evolvedImageUrl: '/cards/cyoriena_2.png',
         tags: ['Token'],
-        passiveAbilities: ['WARD'],
+        passiveAbilities: ['WARD', 'BARRIER'],
         attackEffectType: 'RAY',
         triggers: [
             {
@@ -827,7 +842,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuka', name: '悠霞', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 6,
-        description: '[守護] [オーラ]\nファンファーレ：「刹那」を1体場に出す。カードを1枚引く。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
+        description: '[守護] [オーラ]\nファンファーレ：「刹那」を1体場に出す。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
         imageUrl: '/cards/yuka.png',
         evolvedImageUrl: '/cards/yuka_2.png',
         passiveAbilities: ['WARD', 'AURA'],
@@ -836,8 +851,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
-                    { type: 'DRAW', value: 1 }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' }
                 ]
             },
             {
@@ -1757,14 +1771,14 @@ function processSingleEffect(
                 const opponent = newState.players[opponentId];
                 // Convert back to Card (strip board props AND reset evolution state)
                 // CRITICAL FIX: Reset hasEvolved, evolvedImageUrl display, and restore base stats
-                const originalDef = getCardDefinition(card.id.split('_')[0]) || MOCK_CARDS.find(c => card.name === c.name);
-                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, ...baseCard } = card;
+                const originalDef = getCardDefinition(card.id) || getCardDefinition(card.name);
+                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, attack, health, ...baseCard } = card;
 
                 // Reset to base state - remove evolution status and restore original stats
                 const resetCard = {
                     ...baseCard,
-                    attack: originalDef?.attack ?? baseCard.attack,
-                    health: originalDef?.health ?? baseCard.health,
+                    attack: originalDef?.attack ?? attack,
+                    health: originalDef?.health ?? health,
                     // hasEvolved is stripped out, so it returns to false (undefined)
                 } as Card;
 
@@ -1797,14 +1811,14 @@ function processSingleEffect(
                 // Add to opponent's hand if space
                 const opponent = newState.players[opponentId];
                 // CRITICAL FIX: Reset hasEvolved, evolvedImageUrl display, and restore base stats
-                const originalDef = getCardDefinition(card.id.split('_')[0]) || MOCK_CARDS.find(c => card.name === c.name);
-                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, ...baseCard } = card;
+                const originalDef = getCardDefinition(card.id) || getCardDefinition(card.name);
+                const { currentHealth, maxHealth, canAttack, attacksMade, hasEvolved, baseAttack, baseHealth, turnPlayed, hasBarrier, attack, health, ...baseCard } = card;
 
                 // Reset to base state - remove evolution status and restore original stats
                 const resetCard = {
                     ...baseCard,
-                    attack: originalDef?.attack ?? baseCard.attack,
-                    health: originalDef?.health ?? baseCard.health,
+                    attack: originalDef?.attack ?? attack,
+                    health: originalDef?.health ?? health,
                 } as Card;
 
                 if (opponent.hand.length < 9) {
