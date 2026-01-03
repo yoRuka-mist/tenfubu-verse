@@ -2135,7 +2135,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
 
-    // Detect necromance activation from logs and trigger visual effect
+    // Detect necromance activation and damage immunity from logs and trigger visual effects
     useEffect(() => {
         const currentLength = gameState.logs.length;
         if (currentLength > prevLogsLengthRef.current) {
@@ -2162,10 +2162,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         setNecromanceEffects(prev => prev.filter(e => e.key !== effectKey));
                     }, 1500);
                 }
+
+                // Detect damage immunity: "XXX はダメージを無効化しました！" or "XXX は反撃ダメージを無効化しました！"
+                const immuneMatch = log.match(/　(.+?) は(?:反撃)?ダメージを無効化しました/);
+                if (immuneMatch) {
+                    const cardName = immuneMatch[1];
+                    // Find the card on either board
+                    const playerCard = gameState.players[currentPlayerId]?.board.find(c => c?.name === cardName);
+                    const opponentCard = gameState.players[opponentPlayerId]?.board.find(c => c?.name === cardName);
+                    const targetCard = playerCard || opponentCard;
+                    const targetPlayerId = playerCard ? currentPlayerId : opponentPlayerId;
+
+                    if (targetCard) {
+                        const boardIdx = gameState.players[targetPlayerId].board.findIndex(c => c?.instanceId === targetCard.instanceId);
+                        const refs = targetPlayerId === currentPlayerId ? playerBoardRefs.current : opponentBoardRefs.current;
+                        const el = refs[boardIdx];
+                        if (el) {
+                            const rect = el.getBoundingClientRect();
+                            const x = rect.left + rect.width / 2;
+                            const y = rect.top + rect.height / 2;
+                            setDamageNumbers(prev => [...prev, { id: Date.now() + Math.random(), value: 0, x, y, color: '#e53e3e' }]);
+                        }
+                    }
+                }
             }
         }
         prevLogsLengthRef.current = currentLength;
-    }, [gameState.logs.length, currentPlayerId, opponentPlayerId, player?.name]);
+    }, [gameState.logs.length, currentPlayerId, opponentPlayerId, player?.name, gameState.players]);
 
     const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || []);
     const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || []);
@@ -3140,6 +3163,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             if (!isEvolution && !isBuff) {
                                 const heal = currCard.currentHealth - prevCard.currentHealth;
                                 newDamages.push({ id: Date.now() + Math.random(), value: '+' + heal, x: coords.x, y: coords.y, color: '#48bb78' });
+                            }
+                        } else if (currCard.currentHealth === prevCard.currentHealth) {
+                            // HP unchanged - check if barrier was consumed or if card has damage immunity
+                            const barrierConsumed = prevCard.hasBarrier && !currCard.hasBarrier;
+                            // Note: IMMUNE_TO_FOLLOWER_DAMAGE doesn't consume anything, so we can't detect it here
+                            // But barrier consumption can be detected
+                            if (barrierConsumed) {
+                                newDamages.push({ id: Date.now() + Math.random(), value: 0, x: coords.x, y: coords.y, color: '#e53e3e' });
                             }
                         }
                     }

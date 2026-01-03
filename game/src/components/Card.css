@@ -35,6 +35,14 @@
     z-index: inherit;
 }
 
+/* Disable hover effect for art-only variant (left panel card info) */
+.card.art-only:hover {
+    transform: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    border-color: inherit;
+    z-index: inherit;
+}
+
 /* Card Cost */
 .card-cost {
     position: absolute;

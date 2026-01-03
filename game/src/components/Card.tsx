@@ -119,7 +119,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     if (variant === 'art-only') {
         return (
             <div
-                className="card"
+                className="card art-only"
                 style={{
                     width: 140, height: 200, // Default size
                     ...style,
