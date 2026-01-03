@@ -3600,15 +3600,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // This ensures JOIN sees the same effects that HOST plays during pendingEffects processing
             if (msg.type === 'EFFECT') {
                 const { effectType, targetPlayerId, targetIndex, targetInstanceId, isBuff, atkBuff, hpBuff } = msg.payload;
-                console.log('[GameScreen] JOIN: Received EFFECT from HOST:', effectType, targetPlayerId, targetIndex);
+                console.log('[GameScreen] JOIN: Received EFFECT from HOST:', effectType, targetPlayerId, targetIndex, targetInstanceId);
 
-                if (isBuff && atkBuff !== undefined && hpBuff !== undefined) {
-                    // Buff effect
-                    playBuffEffect(targetPlayerId, targetIndex, atkBuff, hpBuff, targetInstanceId);
-                } else {
-                    // Regular effect (damage, destroy, heal, etc.)
-                    playEffect(effectType, targetPlayerId, targetIndex, targetInstanceId);
-                }
+                // Add a small delay to ensure board refs are updated before playing effect
+                // This prevents timing issues where the effect tries to position before DOM is ready
+                setTimeout(() => {
+                    if (isBuff && atkBuff !== undefined && hpBuff !== undefined) {
+                        // Buff effect
+                        playBuffEffect(targetPlayerId, targetIndex, atkBuff, hpBuff, targetInstanceId);
+                    } else {
+                        // Regular effect (damage, destroy, heal, etc.)
+                        playEffect(effectType, targetPlayerId, targetIndex, targetInstanceId);
+                    }
+                }, 50);
                 return;
             }
 
@@ -7275,7 +7279,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         style={{
                             position: 'absolute',
                             left: 15,
-                            top: 'calc(50% - 175px)', // バトルログの上端（50% - 125px）よりさらに50px上
+                            top: 'calc(45% - 130px)', // バトルログ上端（45% - maxHeight/2 ≈ 45% - 100px）より30px上
                             width: 36,
                             height: 36,
                             borderRadius: '50%',

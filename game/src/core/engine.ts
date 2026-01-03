@@ -159,16 +159,22 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_barura', name: 'バルラ', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 4,
-        description: '進化時：カードを2枚引く。相手のフォロワー1体に3ダメージ。',
+        description: 'ファンファーレ：1枚ドローする。\n進化時：1枚ドローする。相手のフォロワー1体に3ダメージ。',
         flavorText: 'ーダークファルス・エイジスー\nあじゃとの運命の邂逅はここにあった。\nあじゃ「なんか座ってたらいきなり跪いてきた」',
         imageUrl: '/cards/barura.png',
         evolvedImageUrl: '/cards/barura_2.png',
         attackEffectType: 'FIRE',
         triggers: [
             {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'DRAW', value: 1 }
+                ]
+            },
+            {
                 trigger: 'EVOLVE',
                 effects: [
-                    { type: 'DRAW', value: 2, targetType: 'SELF' },
+                    { type: 'DRAW', value: 1, targetType: 'SELF' },
                     { type: 'DAMAGE', value: 3, targetType: 'SELECT_FOLLOWER' }
                 ]
             }
@@ -347,7 +353,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。',
+        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。\n進化時：自分のリーダーを2回復。',
         flavorText: '体の傷はアルコールで消毒\n心の傷もアルコールで治る',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
@@ -358,6 +364,12 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'DRAW', value: 1 }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'HEAL_LEADER', value: 2 }
                 ]
             }
         ]
