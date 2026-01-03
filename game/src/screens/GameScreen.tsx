@@ -6094,6 +6094,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const isOpponentEvolveUnlocked = opponentOwnTurnCount >= opponentEvolveThreshold;
     const isOpponentSuperEvolveUnlocked = opponentOwnTurnCount >= opponentSuperEvolveThreshold;
 
+    // Check if LEADER_DAMAGE_CAP (あじゃ effect) is active
+    const playerHasLeaderDamageCap = player?.board?.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP')) ?? false;
+    const opponentHasLeaderDamageCap = opponent?.board?.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP')) ?? false;
+
     // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
         // Initial scroll reset
@@ -6237,6 +6241,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     @keyframes necroPulse {
                         0%, 100% { box-shadow: 0 0 10px #d946ef, 0 0 20px #a855f7, inset 0 0 15px rgba(217, 70, 239, 0.3); }
                         50% { box-shadow: 0 0 25px #d946ef, 0 0 40px #a855f7, 0 0 60px #7c3aed, inset 0 0 25px rgba(217, 70, 239, 0.5); }
+                    }
+                    @keyframes leaderDamageCapPulse {
+                        0%, 100% {
+                            box-shadow: 0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3);
+                            border-color: #67e8f9;
+                        }
+                        50% {
+                            box-shadow: 0 0 35px rgba(103, 232, 249, 0.9), 0 0 60px rgba(103, 232, 249, 0.6), 0 0 80px rgba(103, 232, 249, 0.3), inset 0 0 40px rgba(103, 232, 249, 0.5);
+                            border-color: #a5f3fc;
+                        }
                     }
                 `}</style>
 
@@ -6440,10 +6454,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                             width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
                             background: `url(${getLeaderImg(opponent.class)}) center/cover`,
-                            border: (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
-                            boxShadow: '0 0 20px rgba(0,0,0,0.5)', zIndex: 100,
+                            border: opponentHasLeaderDamageCap
+                                ? '4px solid #67e8f9'
+                                : (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
+                            boxShadow: opponentHasLeaderDamageCap
+                                ? '0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3)'
+                                : '0 0 20px rgba(0,0,0,0.5)',
+                            zIndex: 100,
                             cursor: 'default',
-                            transition: 'all 0.3s'
+                            transition: 'all 0.3s',
+                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 1.5s ease-in-out infinite' : 'none'
                         }}>
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
                         <div style={{
@@ -6977,7 +6997,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{ position: 'absolute', right: 30 * scale, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30 * scale, zIndex: 50 }}>
                         {/* Opponent PP */}
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f6e05e' }}>{opponent.pp}/{opponent.maxPp}</div>
+                            <div style={{ fontSize: `${1.8 * scale}rem`, fontWeight: 900, color: '#f6e05e', fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif' }}>{opponent.pp}/{opponent.maxPp}</div>
                             <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10 * scale, height: 10 * scale, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
                         </div>
                         {/* End Turn Button */}
@@ -7306,8 +7326,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             onMouseDown={handleLeaderMouseDown}
                             style={{
                                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                                border: '4px solid #3182ce', boxShadow: '0 0 20px rgba(49, 130, 206, 0.4)', background: '#1a202c',
-                                cursor: 'grab'
+                                border: playerHasLeaderDamageCap ? '4px solid #67e8f9' : '4px solid #3182ce',
+                                boxShadow: playerHasLeaderDamageCap
+                                    ? '0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3)'
+                                    : '0 0 20px rgba(49, 130, 206, 0.4)',
+                                background: '#1a202c',
+                                cursor: 'grab',
+                                animation: playerHasLeaderDamageCap ? 'leaderDamageCapPulse 1.5s ease-in-out infinite' : 'none'
                             }}
                         >
                             <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />

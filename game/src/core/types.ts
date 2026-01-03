@@ -14,7 +14,7 @@ export interface AudioSettings {
 export type CardType = 'FOLLOWER' | 'SPELL';
 
 // Card Abilities
-export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK' | 'COST_REDUCTION' | 'STEALTH' | 'IMMUNE_TO_FOLLOWER_DAMAGE' | 'IMMUNE_TO_DAMAGE_MY_TURN' | 'BARRIER' | 'AURA'; // 守護, 疾走, 突進, 必殺, ダブル, 節約, 隠密, 交戦ダメ無効, 自ターン無敵, バリア, オーラ
+export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK' | 'COST_REDUCTION' | 'STEALTH' | 'IMMUNE_TO_FOLLOWER_DAMAGE' | 'IMMUNE_TO_DAMAGE_MY_TURN' | 'BARRIER' | 'AURA' | 'LEADER_DAMAGE_CAP'; // 守護, 疾走, 突進, 必殺, ダブル, 節約, 隠密, 交戦ダメ無効, 自ターン無敵, バリア, オーラ, リーダーダメージ上限
 export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'EVOLVE' | 'SUPER_EVOLVE' | 'END_OF_TURN' | 'START_OF_TURN'; // ファンファーレ, ラストワード, 進化時, 超進化時, ターン終了時, ターン開始時
 
 export type EffectType =

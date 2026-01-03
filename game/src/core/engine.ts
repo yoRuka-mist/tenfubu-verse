@@ -255,11 +255,12 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。自分のリーダーを2回復。相手のランダムなフォロワーを1体破壊する。相手のランダムなフォロワーを1体手札に戻す。\n超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+2/+2されて[守護][突進][オーラ]を得る。',
+        description: 'ファンファーレ：相手のリーダーに3ダメージ。自分のリーダーを2回復。相手のランダムなフォロワーを1体破壊する。相手のランダムなフォロワーを1体手札に戻す。\n「あじゃ」が場にいる間、自分のリーダーがダメージを受ける時、そのダメージは1になる。\n超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+2/+2されて[守護][突進]を得る。',
         flavorText: 'あじゃ「お前たち、俺を守れ」\nつぶまる&ゆうなぎ&なゆた「ｳｽ」',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
+        passiveAbilities: ['LEADER_DAMAGE_CAP'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -277,8 +278,7 @@ const MOCK_CARDS: Card[] = [
                     { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
                     { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
                     { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
-                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
-                    { type: 'GRANT_PASSIVE', targetPassive: 'AURA', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
+                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             }
         ]
@@ -1234,8 +1234,15 @@ function processSingleEffect(
                 }
             } else if (effect.targetType === 'OPPONENT') {
                 const opponent = newState.players[opponentId];
-                opponent.hp -= damage;
-                newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えました`);
+                // Check if opponent has a follower with LEADER_DAMAGE_CAP on board
+                const hasLeaderDamageCap = opponent.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
+                const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
+                opponent.hp -= actualDamage;
+                if (hasLeaderDamageCap && damage > 1) {
+                    newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えようとしたが、1ダメージに軽減された`);
+                } else {
+                    newState.logs.push(`${sourceCard.name} は相手リーダーに ${actualDamage} ダメージを与えました`);
+                }
 
                 // CRITICAL FIX: Check for win condition after leader damage from card effects
                 if (opponent.hp <= 0) {
@@ -2799,8 +2806,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (targetIsLeader) {
                 const targetName = "相手リーダー";
                 newState.logs.push(`　${attacker.name} は ${targetName} を攻撃！`);
-                defPlayer.hp -= damage;
-                newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えました！`);
+                // Check if defender has a follower with LEADER_DAMAGE_CAP on board
+                const hasLeaderDamageCap = defPlayer.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
+                const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
+                defPlayer.hp -= actualDamage;
+                if (hasLeaderDamageCap && damage > 1) {
+                    newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えようとしたが、1ダメージに軽減された！`);
+                } else {
+                    newState.logs.push(`　${attacker.name} は ${targetName} に ${actualDamage} ダメージを与えました！`);
+                }
                 if (defPlayer.hp <= 0) newState.winnerId = action.playerId;
             } else {
                 const defender = defPlayer.board[targetIndex];
