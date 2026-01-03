@@ -718,9 +718,10 @@ const HelpModal = ({ onClose }: { onClose: () => void }) => {
 interface BattleLogProps {
     logs: string[];
     onCardNameClick?: (cardName: string) => void;
+    scale?: number;
 }
 
-const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
+const BattleLog = ({ logs, onCardNameClick, scale = 1 }: BattleLogProps) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         // Scroll to bottom of container without affecting parent elements
@@ -839,21 +840,25 @@ const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
         return <>{parts}</>;
     };
 
+    // 画面サイズに応じた最大高さ（小さい画面では短く）
+    const logMaxHeight = Math.max(150, 200 * scale);
+    const logWidth = Math.max(180, 220 * scale);
+
     return (
         <div
             ref={containerRef}
             style={{
                 position: 'absolute',
                 left: 0,
-                top: '50%',
+                top: '45%',
                 transform: 'translateY(-50%)',
-                width: 250,
-                maxHeight: 250,
+                width: logWidth,
+                maxHeight: logMaxHeight,
                 overflowY: 'auto',
                 background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                 color: '#fff',
-                fontSize: '0.8rem',
-                padding: '10px 10px 10px 15px',
+                fontSize: `${Math.max(0.65, 0.75 * scale)}rem`,
+                padding: `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
                 borderLeft: '3px solid #63b3ed',
                 zIndex: 15, // Under menus, over board default
                 pointerEvents: 'auto', // Allow scroll
@@ -864,13 +869,13 @@ const BattleLog = ({ logs, onCardNameClick }: BattleLogProps) => {
             onClick={e => e.stopPropagation()} // Prevent hand collapse
         >
             <div style={{
-                fontWeight: 'bold', marginBottom: 5, color: '#a0aec0',
+                fontWeight: 'bold', marginBottom: 4 * scale, color: '#a0aec0',
                 borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 2,
-                fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 1
+                fontSize: `${Math.max(0.55, 0.65 * scale)}rem`, textTransform: 'uppercase', letterSpacing: 1
             }}>
                 BATTLE LOG
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 * scale }}>
                 {logs.map((log, i) => (
                     <div key={i} style={{
                         opacity: 0.9,
@@ -2054,10 +2059,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [gameState, dispatch] = useReducer(gameReducer, null, () => {
         if (gameMode === 'JOIN') {
             // JOIN: Create empty placeholder state, will be replaced by SYNC_STATE
-            return initializeGame('Opponent', opponentClass, 'You', playerClass);
+            return initializeGame('ENEMY', opponentClass, 'You', playerClass);
         }
         // HOST or CPU: Initialize normally (HOST is p1)
-        return initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', opponentClass);
+        return initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', opponentClass);
     });
 
     // Track if game has been synced (for JOIN)
@@ -3299,7 +3304,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         // 5. Suppress immediate diff detection by clearing and then resetting the Ref
-        const freshState = initializeGame('You', deckToUse, opponentType === 'ONLINE' ? 'Opponent' : 'CPU', newOpponentClass);
+        const freshState = initializeGame('You', deckToUse, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', newOpponentClass);
         prevPlayersRef.current = freshState.players;
         prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
 
@@ -4015,13 +4020,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             ));
 
         // Check valid targets on the appropriate board
-        // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
-        // Only STEALTH prevents targeting from opponent effects/spells
+        // AURA: 相手のカード効果で選べない
+        // STEALTH: 相手から攻撃対象に選べない＆相手のカード効果で選べない
         const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
         const hasValidTargets = targetBoard.some(c =>
             c && (
                 allowedTargetPlayerId === currentPlayerId || // Own units are usually always valid
-                !c.passiveAbilities?.includes('STEALTH') // Only STEALTH prevents targeting
+                (!c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA')) // STEALTH and AURA prevent targeting
             )
         );
 
@@ -5212,14 +5217,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 const allowedTargetPlayerId = (needsAllyTarget || needsOtherAllyTarget) ? currentPlayerId : opponentPlayerId;
 
                                 // Check if there are valid targets on the target board
-                                // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
-                                // Only STEALTH prevents targeting from opponent effects/spells
+                                // AURA: 相手のカード効果で選べない
+                                // STEALTH: 相手から攻撃対象に選べない＆相手のカード効果で選べない
                                 const targetBoard = gameStateRef.current.players[allowedTargetPlayerId].board;
                                 const hasValidTargets = targetBoard.some(c => {
                                     if (!c) return false;
-                                    // For enemy targets, check STEALTH only
+                                    // For enemy targets, check STEALTH and AURA
                                     if (allowedTargetPlayerId !== currentPlayerId) {
                                         if ((c as any).passiveAbilities?.includes('STEALTH')) {
+                                            return false;
+                                        }
+                                        if ((c as any).passiveAbilities?.includes('AURA')) {
                                             return false;
                                         }
                                     }
@@ -5449,17 +5457,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const excludeSelf = targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
 
                     // Check valid targets based on target type
-                    // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
-                    // Only STEALTH prevents targeting from opponent effects/spells
+                    // AURA: 相手のカード効果で選べない
+                    // STEALTH: 相手から攻撃対象に選べない＆相手のカード効果で選べない
                     const targetPlayerIdForValidation = needsAllyTarget ? currentPlayerId : opponentPlayerId;
                     const targetBoardForValidation = gameStateRef.current.players[targetPlayerIdForValidation].board;
                     const hasValidTargets = targetBoardForValidation.some(c => {
                         if (!c) return false;
                         // For ally targets, exclude self if SELECT_OTHER_ALLY_FOLLOWER
                         if (needsAllyTarget && excludeSelf && (c as any).instanceId === followerInstanceId) return false;
-                        // For enemy targets, check STEALTH only
+                        // For enemy targets, check STEALTH and AURA
                         if (!needsAllyTarget) {
                             if (c.passiveAbilities?.includes('STEALTH')) return false;
+                            if (c.passiveAbilities?.includes('AURA')) return false;
                         }
                         return true;
                     });
@@ -5609,13 +5618,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (!targetValues) return;
             targetId = targetValues.instanceId;
 
-            // Check STEALTH (Cannot target opponent followers with Stealth)
-            // NOTE: AURA is a "permanent effect" indicator, NOT a "cannot be targeted" effect
-            // Only STEALTH prevents targeting from opponent effects/spells
+            // Check STEALTH and AURA (Cannot target opponent followers with Stealth or Aura)
+            // AURA: 相手のカード効果で選べない
+            // STEALTH: 相手から攻撃対象に選べない＆相手のカード効果で選べない
             if (targetPlayerId !== currentPlayerId) {
                 const abilities = (targetValues as any).passiveAbilities || [];
                 if (abilities.includes('STEALTH')) {
                     console.log("Cannot target unit with STEALTH");
+                    playSE('cancel');
+                    triggerShake();
+                    return;
+                }
+                if (abilities.includes('AURA')) {
+                    console.log("Cannot target unit with AURA");
+                    playSE('cancel');
                     triggerShake();
                     return;
                 }
@@ -7003,7 +7019,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
                                 color: 'white',
                                 fontWeight: 900,
-                                fontSize: '2rem',
+                                fontSize: `${2 * scale}rem`,
+                                fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif',
                                 boxShadow: gameState.activePlayerId === currentPlayerId
                                     ? (isEndTurnPressed ? '0 0 20px rgba(66, 153, 225, 0.5)' : '0 0 40px rgba(66, 153, 225, 0.8)')
                                     : 'none',
@@ -7044,7 +7061,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
                             {/* PP数値表示 - エクストラPP有効時は「PP + 1」表示 */}
-                            <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#f6e05e' }}>
+                            <div style={{ fontSize: `${2.4 * scale}rem`, fontWeight: 900, color: '#f6e05e', fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif' }}>
                                 {player.extraPpActive ? (
                                     <span>{Math.max(0, player.pp - 1)}/{player.maxPp} <span style={{ color: '#ed8936' }}>+1</span></span>
                                 ) : (
@@ -7173,7 +7190,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     >
                         ?
                     </button>
-                    <BattleLog logs={gameState.logs || []} onCardNameClick={handleCardNameClickFromLog} />
+                    <BattleLog logs={gameState.logs || []} onCardNameClick={handleCardNameClickFromLog} scale={scale} />
 
                     {/* Coin Toss Overlay */}
                     {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (
@@ -7255,6 +7272,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         }}>
                             <div style={{
                                 fontSize: '5rem', fontWeight: 900,
+                                fontFamily: 'Tamanegi, sans-serif',
                                 background: 'linear-gradient(135deg, #ffd700, #ff6b6b, #ffd700)',
                                 WebkitBackgroundClip: 'text',
                                 WebkitTextFillColor: 'transparent',
@@ -7263,7 +7281,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 animation: 'gameStartPop 0.8s ease-out',
                                 letterSpacing: '0.2em'
                             }}>
-                                GAME START
+                                決闘 開始！
                             </div>
 
                             <style>{`
@@ -7551,33 +7569,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     )}
 
                     {/* Hand Count Badge & Graveyard Count - Far Left near boundary */}
-                    <div style={{ position: 'absolute', bottom: 220 * scale, left: 15, display: 'flex', alignItems: 'center', gap: 10, zIndex: 601, pointerEvents: 'none' }}>
+                    <div style={{ position: 'absolute', bottom: Math.max(180, 220 * scale), left: 15 * scale, display: 'flex', alignItems: 'center', gap: 8 * scale, zIndex: 601, pointerEvents: 'none' }}>
                         {/* Hand Icon - Stacked Cards */}
-                        <div style={{ position: 'relative', width: 40, height: 50 }}>
-                            <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
+                        <div style={{ position: 'relative', width: 32 * scale, height: 40 * scale }}>
+                            <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4 * scale, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4 * scale, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4 * scale, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
                         </div>
-                        <div style={{ background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
+                        <div style={{ background: 'rgba(0,0,0,0.7)', padding: `${4 * scale}px ${10 * scale}px`, borderRadius: 6 * scale, color: '#e2e8f0', fontSize: `${0.85 * scale}rem`, fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
                             手札 {player.hand.length}
                         </div>
                         {/* Graveyard Count - 墓地枚数表示 (手札の右に配置) */}
                         <div style={{
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            marginLeft: 10
+                            display: 'flex', alignItems: 'center', gap: 4 * scale,
+                            marginLeft: 6 * scale
                         }}>
                             <div style={{
-                                fontSize: '1.5rem',
+                                fontSize: `${1.2 * scale}rem`,
                                 filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
                             }}>
                                 💀
                             </div>
                             <div style={{
                                 background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
-                                padding: '5px 12px',
-                                borderRadius: 8,
+                                padding: `${4 * scale}px ${10 * scale}px`,
+                                borderRadius: 6 * scale,
                                 color: '#e2e8f0',
-                                fontSize: '1rem',
+                                fontSize: `${0.85 * scale}rem`,
                                 fontWeight: 'bold',
                                 boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
                                 border: '1px solid rgba(167, 139, 250, 0.5)',

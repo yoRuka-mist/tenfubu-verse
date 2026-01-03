@@ -342,7 +342,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。\n進化時：相手のフォロワー1体に2ダメージ。',
+        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。',
         flavorText: '体の傷はアルコールで消毒\n心の傷もアルコールで治る',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
@@ -353,12 +353,6 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'DRAW', value: 1 }
-                ]
-            },
-            {
-                trigger: 'EVOLVE',
-                effects: [
-                    { type: 'DAMAGE', value: 2, targetType: 'SELECT_FOLLOWER' }
                 ]
             }
         ]
@@ -1010,6 +1004,22 @@ export function getCardDefinition(cardIdOrName: string): Card | undefined {
 // Get all card names for log highlighting (sorted by length descending for greedy matching)
 export function getAllCardNames(): string[] {
     return MOCK_CARDS.map(c => c.name).sort((a, b) => b.length - a.length);
+}
+
+// パッシブ能力を日本語に変換
+function getPassiveJapaneseName(passive: string): string {
+    const passiveNames: Record<string, string> = {
+        'STORM': '疾走',
+        'RUSH': '突進',
+        'WARD': '守護',
+        'BARRIER': 'バリア',
+        'AURA': 'オーラ',
+        'STEALTH': '隠密',
+        'BANE': '必殺',
+        'DOUBLE_ATTACK': 'ダブル',
+        'IMMUNE_TO_FOLLOWER_DAMAGE': '耐性',
+    };
+    return passiveNames[passive] || passive;
 }
 
 // Build deck from template
@@ -1849,7 +1859,7 @@ function processSingleEffect(
                             if (!boardCard.passiveAbilities) boardCard.passiveAbilities = [];
                             if (!boardCard.passiveAbilities.includes(passive)) {
                                 boardCard.passiveAbilities.push(passive);
-                                newState.logs.push(`${boardCard.name} は ${passive} を得た`);
+                                newState.logs.push(`${boardCard.name} は ${getPassiveJapaneseName(passive)} を得た`);
                             }
                             if (passive === 'STORM' || passive === 'RUSH') {
                                 boardCard.canAttack = true;
@@ -1869,7 +1879,7 @@ function processSingleEffect(
                         if (!boardCard.passiveAbilities) boardCard.passiveAbilities = [];
                         if (!boardCard.passiveAbilities.includes(passive)) {
                             boardCard.passiveAbilities.push(passive);
-                            newState.logs.push(`${boardCard.name} は ${passive} を得た`);
+                            newState.logs.push(`${boardCard.name} は ${getPassiveJapaneseName(passive)} を得た`);
                         }
                         if (passive === 'STORM' || passive === 'RUSH') {
                             boardCard.canAttack = true;
@@ -1886,6 +1896,11 @@ function processSingleEffect(
                         // Check conditions (e.g. tag: 'Knuckler')
                         if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) {
                             console.log(`[GRANT_PASSIVE] Skipped ${c.name}: no matching tag`);
+                            return;
+                        }
+                        // Check conditions (e.g. nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'])
+                        if (effect.conditions?.nameIn && !effect.conditions.nameIn.includes(c.name)) {
+                            console.log(`[GRANT_PASSIVE] Skipped ${c.name}: no matching nameIn`);
                             return;
                         }
 
@@ -1907,7 +1922,7 @@ function processSingleEffect(
                     }
                 });
                 if (count > 0) {
-                    newState.logs.push(`味方のフォロワー${count}体に ${passive} を付与した`);
+                    newState.logs.push(`味方のフォロワー${count}体に ${getPassiveJapaneseName(passive)} を付与した`);
                 }
                 console.log(`[GRANT_PASSIVE] Total granted: ${count}`);
             }
@@ -2326,6 +2341,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         player.pp = 0;
                     }
                     console.log('[Engine] PLAY_CARD: Extra PP consumed, marked as used');
+                    // エクストラPPを実際に消費した時にログを表示
+                    newState.logs.push(`${player.name} がエクストラPPを使用！`);
                 }
             }
             player.hand.splice(actualCardIndex, 1);
@@ -2964,7 +2981,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             player.extraPpActive = true;
             player.pp += 1; // PP+1
             console.log('[Engine] TOGGLE_EXTRA_PP: Activated, PP now', player.pp);
-            newState.logs.push(`${player.name} がエクストラPPを使用！ PP+1`);
+            // ログはカードをプレイして実際に消費した時に表示する
             return newState;
         }
 

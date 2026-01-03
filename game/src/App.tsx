@@ -109,8 +109,8 @@ function App() {
         const audio = titleBgmRef.current;
         if (!audio) return;
 
-        if (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT') {
-            // Play title BGM on title and class select screens if enabled
+        if (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'LOBBY') {
+            // Play title BGM on title, class select, and lobby screens if enabled
             if (audio.paused && audioSettings.bgmEnabled) {
                 audio.play().catch(() => {
                     // Autoplay blocked, will play on user interaction
@@ -127,7 +127,7 @@ function App() {
     useEffect(() => {
         const handleClick = () => {
             const audio = titleBgmRef.current;
-            if (audio && audio.paused && audioSettings.bgmEnabled && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT')) {
+            if (audio && audio.paused && audioSettings.bgmEnabled && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'LOBBY')) {
                 audio.play().catch(() => {});
             }
         };
