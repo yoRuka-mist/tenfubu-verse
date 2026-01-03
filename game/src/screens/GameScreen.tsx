@@ -2501,6 +2501,45 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }]);
     };
 
+    // --- Network-synced effect functions for online play ---
+    // These wrappers send effect info to JOIN when called on HOST
+    const playEffectWithSync = (effectType: any, targetPlayerId?: string, targetIndex?: number, targetInstanceId?: string) => {
+        playEffect(effectType, targetPlayerId, targetIndex, targetInstanceId);
+
+        // Send effect to JOIN in online play
+        if (gameMode === 'HOST' && connected && adapter) {
+            adapter.send({
+                type: 'EFFECT',
+                payload: {
+                    effectType: effectType,
+                    targetPlayerId: targetPlayerId || '',
+                    targetIndex: targetIndex ?? -1,
+                    targetInstanceId: targetInstanceId
+                }
+            });
+        }
+    };
+
+    const playBuffEffectWithSync = (targetPlayerId: string, targetIndex: number, atkBuff: number, hpBuff: number, targetInstanceId?: string) => {
+        playBuffEffect(targetPlayerId, targetIndex, atkBuff, hpBuff, targetInstanceId);
+
+        // Send buff effect to JOIN in online play
+        if (gameMode === 'HOST' && connected && adapter) {
+            adapter.send({
+                type: 'EFFECT',
+                payload: {
+                    effectType: 'BUFF',
+                    targetPlayerId: targetPlayerId,
+                    targetIndex: targetIndex,
+                    targetInstanceId: targetInstanceId,
+                    isBuff: true,
+                    atkBuff: atkBuff,
+                    hpBuff: hpBuff
+                }
+            });
+        }
+    };
+
     // --- BANE Death Effect Detection ---
     // Track previous board states to detect BANE deaths
     const prevPlayerBoardRef = React.useRef<any[]>([]);
@@ -2725,7 +2764,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     React.useEffect(() => {
         // Debug: Log pending effects state
-        console.log(`[PendingEffects] useEffect fired. isProcessingEffect=${isProcessingEffect}, pendingEffects.length=${gameState.pendingEffects?.length || 0}`);
+        console.log(`[PendingEffects] useEffect fired. isProcessingEffect=${isProcessingEffect}, pendingEffects.length=${gameState.pendingEffects?.length || 0}, gameMode=${gameMode}`);
+
+        // JOIN mode: Don't process pendingEffects locally - wait for EFFECT messages from HOST
+        // This ensures visual effects are synchronized via the EFFECT network message
+        if (gameMode === 'JOIN') {
+            console.log('[PendingEffects] Early return: JOIN mode waits for EFFECT messages from HOST');
+            return;
+        }
 
         // If we're already busy with an animation, wait for the timeout/callback to clear it
         if (isProcessingEffect) {
@@ -2845,21 +2891,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     oppBoard.forEach((c) => {
                         if (c) {
                             const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
-                            if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                            if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, c.instanceId);
                         }
                     });
                 } else if ((current as any).targetIds) {
                     (current as any).targetIds.forEach((tid: string) => {
                         const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
-                        if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                        if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
                     });
                 } else if (current.effect.targetType === 'OPPONENT') {
                     // OPPONENT targets the enemy leader - play effect on leader
-                    playEffect(effectType, targetPid, -1); // -1 indicates leader
+                    playEffectWithSync(effectType, targetPid, -1); // -1 indicates leader
                     triggerShake();
                 } else if (current.targetId) {
                     const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
-                    if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                    if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, current.targetId);
                 }
             } else if (isDestroyEffect) {
                 // Default effect type from card's attackEffectType
@@ -2878,7 +2924,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // Board clear visual
                     vBoard.forEach((v, vIdx) => {
                         if (v && v.instanceId !== (current.sourceCard as any).instanceId) {
-                            playEffect(effectType, targetPid, vIdx);
+                            playEffectWithSync(effectType, targetPid, vIdx, v.instanceId);
                         }
                     });
                     // Also play effect on own board (かすが destroys ALL followers)
@@ -2886,27 +2932,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const selfBoard = selfPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
                     selfBoard.forEach((v, vIdx) => {
                         if (v && v.instanceId !== (current.sourceCard as any).instanceId) {
-                            playEffect(effectType, selfPid, vIdx);
+                            playEffectWithSync(effectType, selfPid, vIdx, v.instanceId);
                         }
                     });
                     triggerShake();
                 } else if ((current as any).targetIds) {
                     (current as any).targetIds.forEach((tid: string) => {
                         const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
-                        if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                        if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
                     });
                 } else if (current.targetId) {
                     const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
-                    if (vIdx !== -1) playEffect(effectType, targetPid, vIdx);
+                    if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, current.targetId);
                 }
             } else if (isHealEffect) {
                 // Trigger HEAL visual effect for leader recovery
                 const targetPid = current.sourcePlayerId; // HEAL_LEADER heals source
-                playEffect('HEAL', targetPid);
+                playEffectWithSync('HEAL', targetPid);
             } else if (isSetMaxHpEffect) {
                 // 天下布舞・ファイナルキャノン: RAY effect on opponent leader
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
-                playEffect('RAY', targetPid, -1); // -1 indicates leader
+                playEffectWithSync('RAY', targetPid, -1); // -1 indicates leader
                 triggerShake();
             }
 
@@ -2923,7 +2969,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
                     const vIdx = vBoard.findIndex(v => v?.instanceId === (current.sourceCard as any).instanceId);
                     if (vIdx !== -1) {
-                        playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, (current.sourceCard as any).instanceId);
+                        playBuffEffectWithSync(targetPid, vIdx, atkBuff, hpBuff, (current.sourceCard as any).instanceId);
                     }
                 } else if (current.effect.targetType === 'ALL_FOLLOWERS') {
                     // Buff all own followers (with optional conditions like nameIn)
@@ -2938,7 +2984,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
                             if (vIdx !== -1) {
-                                playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
+                                playBuffEffectWithSync(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
                             }
                         }
                     });
@@ -2955,7 +3001,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             const vIdx = vBoard.findIndex(v => v?.instanceId === c.instanceId);
                             if (vIdx !== -1) {
-                                playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
+                                playBuffEffectWithSync(targetPid, vIdx, atkBuff, hpBuff, c.instanceId);
                             }
                         }
                     });
@@ -2964,7 +3010,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
                     const vIdx = vBoard.findIndex(v => v?.instanceId === current.targetId);
                     if (vIdx !== -1) {
-                        playBuffEffect(targetPid, vIdx, atkBuff, hpBuff, current.targetId);
+                        playBuffEffectWithSync(targetPid, vIdx, atkBuff, hpBuff, current.targetId);
                     }
                 }
             }
@@ -3546,6 +3592,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Only reset if there's no ongoing animation to prevent interrupting card play
                 if (!playingCardAnimRef.current && !evolveAnimationRef.current) {
                     cardPlayLockRef.current = false;
+                }
+                return;
+            }
+
+            // EFFECT: Visual effect sync from HOST to JOIN
+            // This ensures JOIN sees the same effects that HOST plays during pendingEffects processing
+            if (msg.type === 'EFFECT') {
+                const { effectType, targetPlayerId, targetIndex, targetInstanceId, isBuff, atkBuff, hpBuff } = msg.payload;
+                console.log('[GameScreen] JOIN: Received EFFECT from HOST:', effectType, targetPlayerId, targetIndex);
+
+                if (isBuff && atkBuff !== undefined && hpBuff !== undefined) {
+                    // Buff effect
+                    playBuffEffect(targetPlayerId, targetIndex, atkBuff, hpBuff, targetInstanceId);
+                } else {
+                    // Regular effect (damage, destroy, heal, etc.)
+                    playEffect(effectType, targetPlayerId, targetIndex, targetInstanceId);
                 }
                 return;
             }
