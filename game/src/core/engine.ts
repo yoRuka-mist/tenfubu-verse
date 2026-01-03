@@ -199,7 +199,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yunagi', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: 'ファンファーレ：「米」1枚を手札に加える。\n進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」1枚を手札に加える。',
+        description: 'ファンファーレ：1枚ドローする。\n進化時：相手のフォロワー1体に1ダメージ。「大盛りごはん」を手札に加える。',
         flavorText: '先日、｢私が将来農家やってる未来が想像できない｣と言われ\n彼女にフラれました。\n\n今年の白菜も美味しそうですね',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
@@ -207,7 +207,7 @@ const MOCK_CARDS: Card[] = [
         triggers: [
             {
                 trigger: 'FANFARE',
-                effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }]
+                effects: [{ type: 'DRAW', value: 1 }]
             },
             {
                 trigger: 'EVOLVE',
@@ -1773,11 +1773,13 @@ function processSingleEffect(
                     const myPlayer = newState.players[sourcePlayerId];
                     const baseCardDef = getCardDefinition(card.name);
                     if (baseCardDef) {
+                        // コスト減少を永続化するため、baseCostも減少後の値に設定
+                        const reducedCost = Math.max(0, baseCardDef.cost + (effect.value || 0));
                         const generatedCard: Card = {
                             ...baseCardDef,
                             instanceId: `generated_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
-                            baseCost: baseCardDef.cost,
-                            cost: Math.max(0, baseCardDef.cost + (effect.value || 0))
+                            baseCost: reducedCost,
+                            cost: reducedCost
                         };
                         myPlayer.hand.push(generatedCard);
                         const costChange = effect.value || 0;
