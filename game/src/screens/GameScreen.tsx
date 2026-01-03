@@ -3669,11 +3669,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // PLAY_CARD_ANIM: Remote card play animation start
             if (msg.type === 'PLAY_CARD_ANIM') {
-                const { playerId, card } = msg.payload;
+                const { playerId, card, targetBoardIndex } = msg.payload;
                 if (card) {
                     // Get opponent's board for final position calculation
+                    // Use targetBoardIndex from HOST if available (accurate), otherwise calculate from local state (may be outdated)
                     const opponentBoard = gameState.players[playerId]?.board || [];
-                    const boardIndex = opponentBoard.filter((c: any) => c !== null).length;
+                    const boardIndex = typeof targetBoardIndex === 'number'
+                        ? targetBoardIndex
+                        : opponentBoard.filter((c: any) => c !== null).length;
 
                     // Use screen coordinates with scale
                     const currentScale = scaleInfoRef.current.scale;
@@ -4179,10 +4182,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         };
 
         // Send PLAY_CARD_ANIM to opponent for synchronized animation
+        // Calculate target board index for accurate landing position on remote client
+        const targetBoardIndex = card.type === 'FOLLOWER'
+            ? gameStateRef.current.players[currentPlayerId].board.filter(c => c !== null).length
+            : undefined;
         if (gameMode !== 'CPU' && connected && adapter) {
             adapter.send({
                 type: 'PLAY_CARD_ANIM',
-                payload: { playerId: currentPlayerId, cardIndex: index, card }
+                payload: { playerId: currentPlayerId, cardIndex: index, card, targetBoardIndex }
             });
         }
 
@@ -5905,10 +5912,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // Send PLAY_CARD_ANIM to opponent for synchronized animation
+            // Calculate target board index for accurate landing position on remote client
+            const targetBoardIndex = animCard.type === 'FOLLOWER'
+                ? gameStateRef.current.players[currentPlayerId].board.filter(c => c !== null).length
+                : undefined;
             if (gameMode !== 'CPU' && connected && adapter) {
                 adapter.send({
                     type: 'PLAY_CARD_ANIM',
-                    payload: { playerId: currentPlayerId, cardIndex: index, card: animCard }
+                    payload: { playerId: currentPlayerId, cardIndex: index, card: animCard, targetBoardIndex }
                 });
             }
 
@@ -6341,13 +6352,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
                     @keyframes leaderDamageCapPulse {
                         0%, 100% {
-                            box-shadow: 0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3);
+                            box-shadow: 0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2);
                             border-color: #67e8f9;
                         }
                         50% {
-                            box-shadow: 0 0 35px rgba(103, 232, 249, 0.9), 0 0 60px rgba(103, 232, 249, 0.6), 0 0 80px rgba(103, 232, 249, 0.3), inset 0 0 40px rgba(103, 232, 249, 0.5);
+                            box-shadow: 0 0 35px rgba(103, 232, 249, 0.7), 0 0 55px rgba(103, 232, 249, 0.4);
                             border-color: #a5f3fc;
                         }
+                    }
+                    @keyframes leaderDamageCapOverlay {
+                        0%, 100% { opacity: 0.15; }
+                        50% { opacity: 0.45; }
                     }
                 `}</style>
 
@@ -6555,13 +6570,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ? '4px solid #67e8f9'
                                 : (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: opponentHasLeaderDamageCap
-                                ? '0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3)'
+                                ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
                                 : '0 0 20px rgba(0,0,0,0.5)',
                             zIndex: 100,
                             cursor: 'default',
-                            transition: 'all 0.3s',
-                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 1.5s ease-in-out infinite' : 'none'
+                            transition: 'border-color 0.3s, box-shadow 0.3s',
+                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                            overflow: 'hidden'
                         }}>
+                        {/* Cyan overlay for LEADER_DAMAGE_CAP effect */}
+                        {opponentHasLeaderDamageCap && (
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
+                                pointerEvents: 'none',
+                                animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                zIndex: 1
+                            }} />
+                        )}
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
                         <div style={{
                             position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
@@ -7279,7 +7306,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         style={{
                             position: 'absolute',
                             left: 15,
-                            top: 'calc(45% - 130px)', // バトルログ上端（45% - maxHeight/2 ≈ 45% - 100px）より30px上
+                            top: 'calc(45% - 160px)', // バトルログ上端（45% - maxHeight/2 ≈ 45% - 100px）より60px上
                             width: 36,
                             height: 36,
                             borderRadius: '50%',
@@ -7425,14 +7452,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
                                 border: playerHasLeaderDamageCap ? '4px solid #67e8f9' : '4px solid #3182ce',
                                 boxShadow: playerHasLeaderDamageCap
-                                    ? '0 0 20px rgba(103, 232, 249, 0.6), 0 0 40px rgba(103, 232, 249, 0.4), inset 0 0 30px rgba(103, 232, 249, 0.3)'
+                                    ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
                                     : '0 0 20px rgba(49, 130, 206, 0.4)',
                                 background: '#1a202c',
                                 cursor: 'grab',
-                                animation: playerHasLeaderDamageCap ? 'leaderDamageCapPulse 1.5s ease-in-out infinite' : 'none'
+                                transition: 'border-color 0.3s, box-shadow 0.3s',
+                                animation: playerHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                                position: 'relative'
                             }}
                         >
                             <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                            {/* Cyan overlay for LEADER_DAMAGE_CAP effect */}
+                            {playerHasLeaderDamageCap && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
                         </div>
 
                         {/* Player HP - Top Left (Center - 140px) */}

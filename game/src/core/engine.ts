@@ -353,19 +353,13 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_urara', name: 'ウララ', cost: 3, type: 'FOLLOWER',
         attack: 2, health: 2,
-        description: '[守護] [バリア]\nファンファーレ：1枚ドローする。\n進化時：自分のリーダーを2回復。',
+        description: '[守護] [バリア]\n進化時：自分のリーダーを2回復。',
         flavorText: '体の傷はアルコールで消毒\n心の傷もアルコールで治る',
         imageUrl: '/cards/urara.png',
         evolvedImageUrl: '/cards/urara_2.png',
         passiveAbilities: ['WARD', 'BARRIER'],
         attackEffectType: 'WATER',
         triggers: [
-            {
-                trigger: 'FANFARE',
-                effects: [
-                    { type: 'DRAW', value: 1 }
-                ]
-            },
             {
                 trigger: 'EVOLVE',
                 effects: [
@@ -991,9 +985,10 @@ const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_kasuga', count: 1 },           // かすが
     { cardId: 'c_barura', count: 3 },           // バルラ
     { cardId: 'c_valkyrie', count: 3 },         // ヴァルキリー
-    { cardId: 's_3cats', count: 3 },            // 茶トラ
+    { cardId: 's_3cats', count: 2 },            // 茶トラ
     { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
-    { cardId: 'c_amandava', count: 3 },         // amandava
+    { cardId: 'c_amandava', count: 2 },         // amandava
+    { cardId: 'c_mono', count: 2 },             // Mono
 ];
 
 const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
