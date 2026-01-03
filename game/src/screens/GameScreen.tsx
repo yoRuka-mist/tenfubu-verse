@@ -6575,14 +6575,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             zIndex: 100,
                             cursor: 'default',
                             transition: 'border-color 0.3s, box-shadow 0.3s',
-                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
-                            overflow: 'hidden'
+                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none'
                         }}>
                         {/* Cyan overlay for LEADER_DAMAGE_CAP effect */}
                         {opponentHasLeaderDamageCap && (
                             <div style={{
                                 position: 'absolute',
                                 inset: 0,
+                                borderRadius: '50%',
                                 background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                 pointerEvents: 'none',
                                 animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
@@ -7467,6 +7467,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 <div style={{
                                     position: 'absolute',
                                     inset: 0,
+                                    borderRadius: '50%',
                                     background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                     pointerEvents: 'none',
                                     animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
