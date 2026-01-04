@@ -14,19 +14,20 @@ export interface AudioSettings {
 export type CardType = 'FOLLOWER' | 'SPELL';
 
 // Card Abilities
-export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK' | 'COST_REDUCTION' | 'STEALTH' | 'IMMUNE_TO_FOLLOWER_DAMAGE' | 'IMMUNE_TO_DAMAGE_MY_TURN' | 'BARRIER' | 'AURA' | 'LEADER_DAMAGE_CAP'; // 守護, 疾走, 突進, 必殺, ダブル, 節約, 隠密, 交戦ダメ無効, 自ターン無敵, バリア, オーラ, リーダーダメージ上限
-export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'EVOLVE' | 'SUPER_EVOLVE' | 'END_OF_TURN' | 'START_OF_TURN'; // ファンファーレ, ラストワード, 進化時, 超進化時, ターン終了時, ターン開始時
+export type PassiveAbility = 'WARD' | 'STORM' | 'RUSH' | 'BANE' | 'DOUBLE_ATTACK' | 'COST_REDUCTION' | 'STEALTH' | 'IMMUNE_TO_FOLLOWER_DAMAGE' | 'IMMUNE_TO_DAMAGE_MY_TURN' | 'BARRIER' | 'AURA' | 'LEADER_DAMAGE_CAP' | 'GUTS_MY_TURN'; // 守護, 疾走, 突進, 必殺, ダブル, 節約, 隠密, 交戦ダメ無効, 自ターン無敵, バリア, オーラ, リーダーダメージ上限, 根性(自ターン)
+export type TriggerType = 'FANFARE' | 'LAST_WORD' | 'LASTWORD' | 'EVOLVE' | 'SUPER_EVOLVE' | 'END_OF_TURN' | 'START_OF_TURN'; // ファンファーレ, ラストワード, 進化時, 超進化時, ターン終了時, ターン開始時
 
 export type EffectType =
     | 'DESTROY' | 'RANDOM_DESTROY' | 'DESTROY_SELF' | 'DESTROY_AND_STEAL' | 'DESTROY_AND_GENERATE'
     | 'BOUNCE' | 'RANDOM_BOUNCE'
     | 'RETURN_TO_HAND'
     | 'DRAW' | 'ADD_GRAVEYARD'
-    | 'SUMMON' | 'SUMMON_CARD' | 'SUMMON_CARD_RUSH'
+    | 'SUMMON' | 'SUMMON_CARD' | 'SUMMON_CARD_RUSH' | 'SUMMON_CARD_BUFFED'
     | 'GRANT_PASSIVE'
-    | 'DAMAGE' | 'SELECT_DAMAGE' | 'RANDOM_DAMAGE' | 'AOE_DAMAGE' | 'SELECT_DAMAGE_ALL' | 'DAMAGE_LEADER'
+    | 'DAMAGE' | 'SELECT_DAMAGE' | 'RANDOM_DAMAGE' | 'AOE_DAMAGE' | 'SELECT_DAMAGE_ALL' | 'DAMAGE_LEADER' | 'RANDOM_DAMAGE_BY_TURN'
     | 'SET_MAX_HP'
-    | 'HEAL_LEADER' | 'HEAL_FOLLOWER' | 'BUFF_STATS' | 'GENERATE_CARD' | 'COST_REDUCTION' | 'CUSTOM' | 'RANDOM_SET_HP'; // Keep legacy for compatibility for now
+    | 'HEAL_LEADER' | 'HEAL_FOLLOWER' | 'BUFF_STATS' | 'GENERATE_CARD' | 'COST_REDUCTION' | 'CUSTOM' | 'RANDOM_SET_HP'
+    | 'REDUCE_HAND_COST' | 'GRANT_LEADER_DAMAGE_SHIELD' | 'VISUAL_BUFF_ONLY'; // 追加: 手札コスト減少, リーダーダメージシールド付与, 視覚エフェクトのみ
 
 export interface AbilityEffect {
     type: EffectType;
