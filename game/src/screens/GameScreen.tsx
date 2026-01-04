@@ -6609,18 +6609,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         {selectedCard.card.name}
                                     </div>
 
-                                    {/* Cost Display - Green Circle */}
-                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                                    {/* Stats Row: Cost + Attack/Health */}
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 15, marginBottom: 10 }}>
+                                        {/* Cost - Green Circle */}
                                         <div style={{
-                                            width: 36,
-                                            height: 36,
+                                            width: 32,
+                                            height: 32,
                                             borderRadius: '50%',
                                             background: 'radial-gradient(circle at 30% 30%, #68d391, #276749)',
                                             border: '2px solid #fff',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            fontSize: '1.2rem',
+                                            fontSize: '1.1rem',
                                             fontWeight: 900,
                                             color: 'white',
                                             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
@@ -6628,12 +6629,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         }}>
                                             {selectedCard.card.cost}
                                         </div>
-                                    </div>
-
-                                    {/* Stats with Icons */}
-                                    {selectedCard.card.type === 'FOLLOWER' && (
-                                        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
-                                            {/* Attack Spade */}
+                                        {/* Attack - only for followers */}
+                                        {selectedCard.card.type === 'FOLLOWER' && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                                                     <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
@@ -6642,7 +6639,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
                                                 </span>
                                             </div>
-                                            {/* Health Heart */}
+                                        )}
+                                        {/* Health - only for followers */}
+                                        {selectedCard.card.type === 'FOLLOWER' && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="#f56565">
                                                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
@@ -6651,8 +6650,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
                                                 </span>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
 
                                     {/* Description - dynamic font size based on length */}
                                     <div style={{
