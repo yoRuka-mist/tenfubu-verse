@@ -6609,6 +6609,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         {selectedCard.card.name}
                                     </div>
 
+                                    {/* Cost Display - Green Circle */}
+                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                                        <div style={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: '50%',
+                                            background: 'radial-gradient(circle at 30% 30%, #68d391, #276749)',
+                                            border: '2px solid #fff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '1.2rem',
+                                            fontWeight: 900,
+                                            color: 'white',
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                                        }}>
+                                            {selectedCard.card.cost}
+                                        </div>
+                                    </div>
+
                                     {/* Stats with Icons */}
                                     {selectedCard.card.type === 'FOLLOWER' && (
                                         <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
