@@ -159,7 +159,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_barura', name: 'バルラ', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 4,
-        description: 'ファンファーレ：1枚ドローする。\n進化時：1枚ドローする。相手のフォロワー1体に3ダメージ。',
+        description: 'ファンファーレ：1枚ドローする。\n進化時：相手のフォロワー1体に3ダメージ。',
         flavorText: 'ーダークファルス・エイジスー\nあじゃとの運命の邂逅はここにあった。\nあじゃ「なんか座ってたらいきなり跪いてきた」',
         imageUrl: '/cards/barura.png',
         evolvedImageUrl: '/cards/barura_2.png',
@@ -174,7 +174,6 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'EVOLVE',
                 effects: [
-                    { type: 'DRAW', value: 1, targetType: 'SELF' },
                     { type: 'DAMAGE', value: 3, targetType: 'SELECT_FOLLOWER' }
                 ]
             }
@@ -264,13 +263,13 @@ const MOCK_CARDS: Card[] = [
 
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
-        attack: 5, health: 5,
-        description: 'ファンファーレ：相手のリーダーに3ダメージ。自分のリーダーを2回復。相手のランダムなフォロワーを1体破壊する。相手のランダムなフォロワーを1体手札に戻す。\n「あじゃ」が場にいる間、自分のリーダーがダメージを受ける時、そのダメージは1になる。\n超進化時：つぶまる、ゆうなぎ、なゆたを1体ずつ場に出す。それらは+2/+2されて[守護][突進]を得る。',
+        attack: 4, health: 4,
+        description: '[オーラ]\nファンファーレ：相手リーダーに3ダメージ。自分リーダーを2回復する。相手フォロワーをランダムに1体破壊し、1体を手札に戻す。自分の手札の「つぶまる」「ゆうなぎ」「なゆた」のコストを-2する。\n超進化：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出す。自分の他のフォロワーすべてを+1/+2し[守護]と[突進]を付与する。「悠長・オブ・ジ・アビス」「それ俺のやぞ！」を手札に加える。次に自分のリーダーがダメージを受けるとき、そのダメージは0になる。',
         flavorText: 'あじゃ「お前たち、俺を守れ」\nつぶまる&ゆうなぎ&なゆた「ｳｽ」',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
-        passiveAbilities: ['LEADER_DAMAGE_CAP'],
+        passiveAbilities: ['AURA'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -278,17 +277,22 @@ const MOCK_CARDS: Card[] = [
                     { type: 'DAMAGE', value: 3, targetType: 'OPPONENT' },
                     { type: 'HEAL_LEADER', value: 2, targetType: 'SELF' },
                     { type: 'RANDOM_DESTROY', value: 1 },
-                    { type: 'RANDOM_BOUNCE', value: 1 }
+                    { type: 'RANDOM_BOUNCE', value: 1 },
+                    { type: 'REDUCE_HAND_COST', value: 2, conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
                 ]
             },
             {
                 trigger: 'SUPER_EVOLVE',
                 effects: [
                     { type: 'SUMMON_CARD', targetCardId: 'c_tsubumaru' },
-                    { type: 'SUMMON_CARD', targetCardId: 'c_yunagi_ward' },
-                    { type: 'SUMMON_CARD', targetCardId: 'c_nayuta_ward' },
-                    { type: 'BUFF_STATS', value: 2, value2: 2, targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } },
-                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_FOLLOWERS', conditions: { nameIn: ['つぶまる', 'ゆうなぎ', 'なゆた'] } }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_yunagi' },
+                    { type: 'SUMMON_CARD', targetCardId: 'c_nayuta' },
+                    { type: 'BUFF_STATS', value: 1, value2: 2, targetType: 'ALL_OTHER_FOLLOWERS' },
+                    { type: 'GRANT_PASSIVE', targetPassive: 'WARD', targetType: 'ALL_OTHER_FOLLOWERS' },
+                    { type: 'GRANT_PASSIVE', targetPassive: 'RUSH', targetType: 'ALL_OTHER_FOLLOWERS' },
+                    { type: 'GENERATE_CARD', targetCardId: 's_yucho_of_the_abyss' },
+                    { type: 'GENERATE_CARD', targetCardId: 's_thats_mine' },
+                    { type: 'GRANT_LEADER_DAMAGE_SHIELD' }
                 ]
             }
         ]
@@ -315,12 +319,12 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_white_tsubaki', name: '白ツバキ', cost: 4, type: 'FOLLOWER',
         attack: 4, health: 3,
-        description: '[突進]\n相手のターン中、このフォロワーはフォロワーからのダメージを受けない。\n進化時：「しゑこ」1体を出す。',
+        description: '[突進]\n相手のターン中、相手のフォロワーからダメージを受けない。\n自分のターン中、ダメージを受けて体力が0になるとき、1残る。\n進化時：「しゑこ」1体を出す。',
         flavorText: '何を言われようとも、認めなければ敗北にはならない\nゆえに　ー「無敵」ー',
         imageUrl: '/cards/white_tsubaki.png',
         evolvedImageUrl: '/cards/white_tsubaki_2.png',
         tags: ['Knuckler'],
-        passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE'],
+        passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE', 'GUTS_MY_TURN'],
         attackEffectType: 'ICE',
         triggers: [
             {
@@ -561,6 +565,7 @@ const MOCK_CARDS: Card[] = [
         flavorText: '"それ"が聞こえたら、終わり。',
         imageUrl: '/cards/sorryTheEnd.png',
         tags: ['Token'],
+        attackEffectType: 'SHOT',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
@@ -592,7 +597,7 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 's_resignation_proxy', name: '退職代行', cost: 0, type: 'SPELL',
-        description: '自分のフォロワー1体を破壊する。相手のランダムなフォロワー1体を破壊する。1枚ドローする。',
+        description: '相手のランダムなフォロワー1体を破壊する。1枚ドローする。',
         flavorText: '色々あって1年近く休職してたけど金さえあればいくらでもできるなという感想',
         imageUrl: '/cards/taisyokudaiko.png',
         tags: ['Token'],
@@ -600,9 +605,36 @@ const MOCK_CARDS: Card[] = [
         triggers: [{
             trigger: 'FANFARE',
             effects: [
-                { type: 'DESTROY', targetType: 'SELECT_ALLY_FOLLOWER' },
                 { type: 'RANDOM_DESTROY', targetType: 'OPPONENT', value: 1 },
                 { type: 'DRAW', value: 1 }
+            ]
+        }]
+    },
+    {
+        id: 's_yucho_of_the_abyss', name: '悠長・オブ・ジ・アビス', cost: 0, type: 'SPELL',
+        description: '相手のランダムなフォロワー1体に1ダメージ。これを現在のターン数分行う。',
+        flavorText: 'お前それはさすがに悠長・オブ・ジ・アビスやぞ',
+        imageUrl: '/cards/yuchooftheabyss.png',
+        tags: ['Token'],
+        attackEffectType: 'THUNDER',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'RANDOM_DAMAGE_BY_TURN', value: 1, targetType: 'OPPONENT' }
+            ]
+        }]
+    },
+    {
+        id: 's_thats_mine', name: 'それ俺のやぞ！', cost: 2, type: 'SPELL',
+        description: '相手のフォロワーを1体破壊する。破壊したフォロワーを自分の手札に加える。',
+        flavorText: 'あじゃには言ってはいけないことがある。それは…',
+        imageUrl: '/cards/thatsmine.png',
+        tags: ['Token'],
+        attackEffectType: 'ICE',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'DESTROY_AND_GENERATE', value: 0, targetType: 'SELECT_FOLLOWER' }
             ]
         }]
     },
@@ -634,14 +666,30 @@ const MOCK_CARDS: Card[] = [
     },
     {
         id: 's_crazy_knucklers', name: 'クレイジー・ナックラーズ', cost: 5, type: 'SPELL',
-        description: '「白ツバキ」1体と「しゑこ」1体を出す。',
+        description: '「白ツバキ」と「しゑこ」を場に出す。それらは+1/+1される。1枚ドローする。',
         flavorText: '白ツバキ「さぁ！行きますよ、しゑこさん！」\nしゑこ「ちょwww おまwww」',
         imageUrl: '/cards/crazy_knucklers.png',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
-                { type: 'SUMMON_CARD', targetCardId: 'c_white_tsubaki' },
-                { type: 'SUMMON_CARD', targetCardId: 'c_shieko' }
+                { type: 'SUMMON_CARD_BUFFED', targetCardId: 'c_white_tsubaki', value: 1, value2: 1 },
+                { type: 'SUMMON_CARD_BUFFED', targetCardId: 'c_shieko', value: 1, value2: 1 },
+                { type: 'DRAW', value: 1 }
+            ]
+        }]
+    },
+    {
+        id: 's_knuckle_four', name: 'ナックル・フォー', cost: 10, type: 'SPELL',
+        description: '相手のフォロワーをランダムに4体破壊する。4枚ドローする。自分のリーダーを4回復。',
+        flavorText: '集まれ！ナックル・フォー！',
+        imageUrl: '/cards/knucklefour.png',
+        attackEffectType: 'IMPACT',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'RANDOM_DESTROY', value: 4, targetType: 'OPPONENT' },
+                { type: 'DRAW', value: 4 },
+                { type: 'HEAL_LEADER', value: 4, targetType: 'SELF' }
             ]
         }]
     },
@@ -777,7 +825,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yoruka', name: 'yoRuka', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 6：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
+        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 5：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
         flavorText: 'Yは滅びぬ。何度でも蘇るさ。',
         imageUrl: '/cards/yoRuka.png',
         evolvedImageUrl: '/cards/yoRuka_2.png',
@@ -792,7 +840,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'LAST_WORD',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 6 }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 5 }
                 ]
             },
             {
@@ -807,7 +855,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 6：自分の他のフォロワーすべては+2/+0する。',
+        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 5：自分の他のフォロワーすべては+2/+0する。',
         flavorText: 'ファントムこそ完璧！',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
@@ -825,7 +873,7 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'SUPER_EVOLVE',
                 effects: [
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
-                    { type: 'BUFF_STATS', value: 2, value2: 0, targetType: 'ALL_OTHER_FOLLOWERS', necromance: 6 }
+                    { type: 'BUFF_STATS', value: 2, value2: 0, targetType: 'ALL_OTHER_FOLLOWERS', necromance: 5 }
                 ]
             }
         ]
@@ -967,7 +1015,7 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_kasuga', count: 1 },           // かすが
     { cardId: 'c_y', count: 2 },                // Y
     { cardId: 'c_sara', count: 1 },             // sara
-    { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
+    { cardId: 's_knuckle_four', count: 1 },     // ナックル・フォー
     { cardId: 'c_blue_tsubaki', count: 3 },     // 青ツバキ
 ];
 
@@ -999,7 +1047,6 @@ const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_setsuna', count: 3 },          // 刹那
     { cardId: 's_hayakikoto', count: 3 },       // 疾きこと風の如く
     { cardId: 's_keishou', count: 1 },          // 継承される力
-    { cardId: 's_final_cannon', count: 1 },     // 天下布舞・ファイナルキャノン
     { cardId: 'c_kasuga', count: 1 },           // かすが
     { cardId: 'c_yunagi', count: 3 },           // ゆうなぎ
     { cardId: 'c_tsubumaru', count: 3 },        // つぶまる
@@ -1007,8 +1054,9 @@ const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_mono', count: 3 },             // Mono
     { cardId: 'c_ruiyu', count: 1 },            // ルイ・ユー
     { cardId: 'c_sara', count: 1 },             // sara
-    { cardId: 's_3cats', count: 3 },            // 茶トラ
+    { cardId: 's_3cats', count: 2 },            // 茶トラ
     { cardId: 'c_yuri', count: 2 },             // ユウリ
+    { cardId: 'c_sia', count: 2 },              // しあ
 ];
 
 // Helper to get card definition by ID or Name
@@ -1037,6 +1085,7 @@ function getPassiveJapaneseName(passive: string): string {
         'BANE': '必殺',
         'DOUBLE_ATTACK': 'ダブル',
         'IMMUNE_TO_FOLLOWER_DAMAGE': '耐性',
+        'GUTS_MY_TURN': '根性',
     };
     return passiveNames[passive] || passive;
 }
@@ -1253,20 +1302,27 @@ function processSingleEffect(
                 }
             } else if (effect.targetType === 'OPPONENT') {
                 const opponent = newState.players[opponentId];
-                // Check if opponent has a follower with LEADER_DAMAGE_CAP on board
-                const hasLeaderDamageCap = opponent.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
-                const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
-                opponent.hp -= actualDamage;
-                if (hasLeaderDamageCap && damage > 1) {
-                    newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えようとしたが、1ダメージに軽減された`);
-                } else {
-                    newState.logs.push(`${sourceCard.name} は相手リーダーに ${actualDamage} ダメージを与えました`);
-                }
 
-                // CRITICAL FIX: Check for win condition after leader damage from card effects
-                if (opponent.hp <= 0) {
-                    newState.winnerId = sourcePlayerId;
-                    newState.logs.push(`${opponent.name} のリーダーが倒れた！`);
+                // Check for one-time leader damage shield first
+                if (opponent.leaderDamageShield) {
+                    opponent.leaderDamageShield = false;
+                    newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えようとしたが、シールドにより無効化された！`);
+                } else {
+                    // Check if opponent has a follower with LEADER_DAMAGE_CAP on board
+                    const hasLeaderDamageCap = opponent.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
+                    const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
+                    opponent.hp -= actualDamage;
+                    if (hasLeaderDamageCap && damage > 1) {
+                        newState.logs.push(`${sourceCard.name} は相手リーダーに ${damage} ダメージを与えようとしたが、1ダメージに軽減された`);
+                    } else {
+                        newState.logs.push(`${sourceCard.name} は相手リーダーに ${actualDamage} ダメージを与えました`);
+                    }
+
+                    // CRITICAL FIX: Check for win condition after leader damage from card effects
+                    if (opponent.hp <= 0) {
+                        newState.winnerId = sourcePlayerId;
+                        newState.logs.push(`${opponent.name} のリーダーが倒れた！`);
+                    }
                 }
             }
             break;
@@ -1411,7 +1467,7 @@ function processSingleEffect(
                 newState.players[sourcePlayerId].board = newSelfBoard;
                 newState.logs.push(`${sourceCard.name} は他の全てのフォロワーを破壊した！`);
 
-            } else if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
+            } else if ((effect.targetType === 'SELECT_FOLLOWER' || effect.targetType === 'SELECT_ALLY_FOLLOWER') && targetId) {
                 const targetInfo = getBoardCardById(targetId);
                 if (targetInfo) {
                     const { card, player: targetOwner, index: idx } = targetInfo;
@@ -1457,6 +1513,37 @@ function processSingleEffect(
                     newState.logs.push(`${player.name}の手札が上限に達したため、${template.name}は墓地へ送られました`);
                 }
             }
+            break;
+        }
+        case 'REDUCE_HAND_COST': {
+            // 手札の特定カード名のコストを減少させる
+            const reduction = effect.value || 0;
+            const targetNames = effect.conditions?.nameIn || [];
+            const player = newState.players[sourcePlayerId];
+
+            let reducedCount = 0;
+            player.hand.forEach((card: any) => {
+                if (targetNames.includes(card.name)) {
+                    const currentCost = card.cost;
+                    const newCost = Math.max(0, currentCost - reduction);
+                    if (newCost !== currentCost) {
+                        card.cost = newCost;
+                        // baseCostも更新して、recalculateHandCostsで戻らないようにする
+                        card.baseCost = newCost;
+                        reducedCount++;
+                    }
+                }
+            });
+            if (reducedCount > 0) {
+                newState.logs.push(`${sourceCard.name} の効果で手札のカードのコストを-${reduction}しました`);
+            }
+            break;
+        }
+        case 'GRANT_LEADER_DAMAGE_SHIELD': {
+            // 次にリーダーがダメージを受ける時、そのダメージを0にする（1回限り）
+            const player = newState.players[sourcePlayerId];
+            player.leaderDamageShield = true;
+            newState.logs.push(`${player.name} は次にダメージを受ける時、そのダメージは0になります`);
             break;
         }
         case 'RANDOM_DESTROY': {
@@ -1619,6 +1706,75 @@ function processSingleEffect(
             }
             break;
         }
+        case 'RANDOM_DAMAGE_BY_TURN': {
+            // 現在のターン数分、ランダムなフォロワー1体に1ダメージを与える
+            const damage = effect.value || 1;
+            const turnCount = newState.turnCount;
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
+
+            // Helper function to apply damage to a target
+            const applyDamageByTurn = (idx: number) => {
+                const target = targetBoard[idx];
+                if (!target) return false;
+                if (target.hasBarrier) {
+                    target.hasBarrier = false;
+                    newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
+                    return true; // バリアは消費されたが、対象は生存
+                } else {
+                    target.currentHealth -= damage;
+                    newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
+                }
+                if (target.currentHealth <= 0) {
+                    target.currentHealth = 0;
+                    const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === newState.players[targetPid]) || targetPid;
+                    // ラストワード発動
+                    const lastWordTrigger = target.triggers?.find(t => t.trigger === 'LASTWORD');
+                    if (lastWordTrigger) {
+                        lastWordTrigger.effects.forEach(e => {
+                            newState.pendingEffects.push({
+                                sourceCard: target,
+                                effect: e,
+                                sourcePlayerId: ownerId
+                            });
+                        });
+                    }
+                    newState.players[targetPid].graveyard.push(target);
+                    targetBoard[idx] = null;
+                    newState.logs.push(`${target.name} は破壊されました`);
+                    return false; // 対象は破壊された
+                }
+                return true; // 対象は生存
+            };
+
+            // targetIdsが事前計算されている場合（オンライン対戦用）
+            if (targetIds && targetIds.length > 0) {
+                // 各ターン分のダメージを順番に適用
+                for (let i = 0; i < targetIds.length; i++) {
+                    const tid = targetIds[i];
+                    const idx = targetBoard.findIndex(c => c?.instanceId === tid);
+                    if (idx !== -1 && targetBoard[idx]) {
+                        applyDamageByTurn(idx);
+                    } else {
+                        // 対象が既に破壊されている場合、新しいランダムターゲットを選択
+                        const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+                        if (validIndices.length > 0) {
+                            const randomIdx = Math.floor(rng() * validIndices.length);
+                            applyDamageByTurn(validIndices[randomIdx]);
+                        }
+                    }
+                }
+            } else {
+                // オフライン時：ターン数分のダメージを順番に適用
+                for (let i = 0; i < turnCount; i++) {
+                    const validIndices = targetBoard.map((c, idx) => c ? idx : -1).filter(idx => idx !== -1);
+                    if (validIndices.length === 0) break; // ターゲットがいなくなったら終了
+                    const randomIdx = Math.floor(rng() * validIndices.length);
+                    applyDamageByTurn(validIndices[randomIdx]);
+                }
+            }
+            break;
+        }
         case 'SET_MAX_HP': {
             const value = effect.value || 20;
             if (effect.targetType === 'OPPONENT') {
@@ -1716,6 +1872,64 @@ function processSingleEffect(
             }
             break;
         }
+        case 'SUMMON_CARD_BUFFED': {
+            // 召喚してバフを付与
+            const targetCardId = effect.targetCardId;
+            const template = MOCK_CARDS.find(c => c.id === targetCardId);
+            const attackBuff = effect.value || 0;
+            const healthBuff = effect.value2 || 0;
+            if (template) {
+                const player = newState.players[sourcePlayerId];
+                const actualBoardCount = player.board.filter(c => c !== null).length;
+                if (actualBoardCount < 5) {
+                    const originalAttack = template.attack || 0;
+                    const originalHealth = template.health || 1;
+                    const buffedAttack = originalAttack + attackBuff;
+                    const buffedHealth = originalHealth + healthBuff;
+                    const newCard: BoardCard = {
+                        ...template,
+                        instanceId: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
+                        canAttack: false,
+                        currentHealth: buffedHealth,
+                        maxHealth: buffedHealth,
+                        health: buffedHealth,
+                        attack: buffedAttack,
+                        currentAttack: buffedAttack,
+                        // baseAttack/baseHealthを元の値に設定することで黄色表示になる
+                        baseAttack: originalAttack,
+                        baseHealth: originalHealth,
+                        attacksMade: 0,
+                        turnPlayed: newState.turnCount,
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER') ?? false,
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false
+                    };
+                    // 盞華のオーラ効果: 場に盞華がいる場合、ナックラーに疾走を付与
+                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === '盞華');
+                        if (hasSenkaOnBoard) {
+                            newCard.passiveAbilities!.push('STORM');
+                            newCard.canAttack = true;
+                            newState.logs.push(`${template.name} は 盞華 の効果で疾走を得た！`);
+                        }
+                    }
+                    // 突進持ちの場合は攻撃可能に
+                    if (newCard.passiveAbilities?.includes('RUSH') || newCard.passiveAbilities?.includes('STORM')) {
+                        newCard.canAttack = true;
+                    }
+                    player.board.push(newCard);
+                    newState.logs.push(`${player.name} は ${template.name} を場に出した（+${attackBuff}/+${healthBuff}）`);
+
+                    // バフエフェクト表示用にpendingEffectsに追加（VISUAL_BUFF_ONLYは表示のみで処理なし）
+                    newState.pendingEffects = [...(newState.pendingEffects || []), {
+                        sourceCard: newCard,
+                        effect: { type: 'VISUAL_BUFF_ONLY', value: attackBuff, value2: healthBuff },
+                        sourcePlayerId
+                    }];
+                }
+            }
+            break;
+        }
         case 'DESTROY_AND_STEAL': {
             // 相手フォロワーを破壊して自分の場に出す（「継承される力」用）
             if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
@@ -1779,7 +1993,9 @@ function processSingleEffect(
                             ...baseCardDef,
                             instanceId: `generated_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
                             baseCost: reducedCost,
-                            cost: reducedCost
+                            cost: reducedCost,
+                            // NOTE: attackEffectTypeを明示的にコピー（元カード定義から継承）
+                            attackEffectType: baseCardDef.attackEffectType
                         };
                         myPlayer.hand.push(generatedCard);
                         const costChange = effect.value || 0;
@@ -1953,6 +2169,34 @@ function processSingleEffect(
                     newState.logs.push(`味方のフォロワー${count}体に ${getPassiveJapaneseName(passive)} を付与した`);
                 }
                 console.log(`[GRANT_PASSIVE] Total granted: ${count}`);
+            } else if (effect.targetType === 'ALL_OTHER_FOLLOWERS') {
+                // 自分以外の味方フォロワー全体にパッシブ付与
+                const p = newState.players[sourcePlayerId];
+                let count = 0;
+                p.board.forEach(c => {
+                    if (c && c.instanceId !== sourceCard.instanceId) {
+                        // Check conditions
+                        if (effect.conditions?.tag && !c.tags?.includes(effect.conditions.tag)) return;
+                        if (effect.conditions?.nameIn && !effect.conditions.nameIn.includes(c.name)) return;
+
+                        if (passive === 'BARRIER') {
+                            c.hasBarrier = true;
+                            count++;
+                        } else {
+                            if (!c.passiveAbilities) c.passiveAbilities = [];
+                            if (!c.passiveAbilities.includes(passive)) {
+                                c.passiveAbilities.push(passive);
+                                count++;
+                                if (passive === 'STORM' || passive === 'RUSH') {
+                                    c.canAttack = true;
+                                }
+                            }
+                        }
+                    }
+                });
+                if (count > 0) {
+                    newState.logs.push(`他の味方フォロワー${count}体に ${getPassiveJapaneseName(passive)} を付与した`);
+                }
             }
             break;
         }
@@ -2448,13 +2692,26 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 // Resolution of RANDOM targets for visualization
                 let resolvedTargetIds: string[] | undefined = undefined;
 
-                if (e.targetType === 'OPPONENT' || e.targetType === 'SELF' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE') {
+                if (e.targetType === 'OPPONENT' || e.targetType === 'SELF' || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_OTHER_FOLLOWERS' || e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'AOE_DAMAGE' || e.type === 'RANDOM_DAMAGE' || e.type === 'RANDOM_DAMAGE_BY_TURN') {
                     // Pre-calculate targets for visualization and to snapshot the board state at effect queue time
                     // This ensures effects hit the targets that existed when the effect was triggered, not when resolved
                     const opponentPid = action.playerId === 'p1' ? 'p2' : 'p1';
                     const selfPid = action.playerId;
 
-                    if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
+                    if (e.type === 'RANDOM_DAMAGE_BY_TURN') {
+                        // ターン数分のランダムターゲットを事前計算
+                        const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
+                        const targetBoard = newState.players[targetPid].board;
+                        const count = newState.turnCount; // ターン数分
+
+                        resolvedTargetIds = [];
+                        for (let i = 0; i < count; i++) {
+                            const validIndices = targetBoard.map((c, idx) => c ? idx : -1).filter(idx => idx !== -1);
+                            if (validIndices.length === 0) break;
+                            const randomIdx = Math.floor(rng() * validIndices.length);
+                            resolvedTargetIds.push(targetBoard[validIndices[randomIdx]]!.instanceId);
+                        }
+                    } else if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
                         // Pre-calculate random targets for visualization
                         // RANDOM_DAMAGE needs pre-calculation for correct effect display in online play
                         const targetPid = e.targetType === 'SELF' ? selfPid : opponentPid;
@@ -2827,16 +3084,23 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             if (targetIsLeader) {
                 const targetName = "相手リーダー";
                 newState.logs.push(`　${attacker.name} は ${targetName} を攻撃！`);
-                // Check if defender has a follower with LEADER_DAMAGE_CAP on board
-                const hasLeaderDamageCap = defPlayer.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
-                const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
-                defPlayer.hp -= actualDamage;
-                if (hasLeaderDamageCap && damage > 1) {
-                    newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えようとしたが、1ダメージに軽減された！`);
+
+                // Check for one-time leader damage shield first
+                if (defPlayer.leaderDamageShield) {
+                    defPlayer.leaderDamageShield = false;
+                    newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えようとしたが、シールドにより無効化された！`);
                 } else {
-                    newState.logs.push(`　${attacker.name} は ${targetName} に ${actualDamage} ダメージを与えました！`);
+                    // Check if defender has a follower with LEADER_DAMAGE_CAP on board
+                    const hasLeaderDamageCap = defPlayer.board.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
+                    const actualDamage = hasLeaderDamageCap ? Math.min(damage, 1) : damage;
+                    defPlayer.hp -= actualDamage;
+                    if (hasLeaderDamageCap && damage > 1) {
+                        newState.logs.push(`　${attacker.name} は ${targetName} に ${damage} ダメージを与えようとしたが、1ダメージに軽減された！`);
+                    } else {
+                        newState.logs.push(`　${attacker.name} は ${targetName} に ${actualDamage} ダメージを与えました！`);
+                    }
+                    if (defPlayer.hp <= 0) newState.winnerId = action.playerId;
                 }
-                if (defPlayer.hp <= 0) newState.winnerId = action.playerId;
             } else {
                 const defender = defPlayer.board[targetIndex];
                 if (!defender) {
@@ -2896,10 +3160,17 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
                 attacker.currentHealth -= counterDamage;
 
+                // GUTS_MY_TURN: 自分のターン中、致死ダメージを受けた時に1で耐える（毎回発動）
+                const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
+                if (attacker.currentHealth <= 0 && attacker.passiveAbilities?.includes('GUTS_MY_TURN') &&
+                    newState.activePlayerId === attOwnerId) {
+                    attacker.currentHealth = 1;
+                    newState.logs.push(`　${attacker.name} は根性で耐えた！（体力1）`);
+                }
+
                 // 必殺(BANE)チェック: 防御者が必殺を持っている場合、即死（効果による破壊扱い）
                 // バリアを貫通する（ダメージが0でも発動）
                 // ただし、超進化フォロワーの「自分のターン中に破壊されない」効果は貫通できない
-                const attOwnerId = isAttackerP1 ? 'p1' : 'p2';
                 const attackerIsImmune = attacker.passiveAbilities?.includes('IMMUNE_TO_DAMAGE_MY_TURN') &&
                                          newState.activePlayerId === attOwnerId;
                 if (defender.passiveAbilities?.includes('BANE') && attacker.currentHealth > 0) {

@@ -975,7 +975,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 const kirakiraTimer = setTimeout(() => {
                     // Create audio directly instead of using playSE to enable fadeout control
                     const audio = new Audio(getAssetUrl('/se/kirakira.mp3'));
-                    audio.volume = 0.7;
+                    audio.volume = 0.35; // 0.7 → 0.35 (半分)
                     audio.play().catch(() => { /* ignore autoplay restrictions */ });
                     kirakiraAudioRef.current = audio;
                 }, 600);
@@ -993,7 +993,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
 
             case 'WHITE_FADE':
                 // Play magic charge sound during energy gathering
-                playSERef.current?.('magic_charge.mp3', 0.6);
+                playSERef.current?.('magic_charge.mp3', 0.3); // 0.6 → 0.3 (半分)
 
                 // Create charge particles that will converge toward the card
                 // 80 particles evenly distributed in 360 degrees, various distances
@@ -1967,10 +1967,11 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
                 if (!v) return;
                 const real = realMap.get((v as any).instanceId);
                 if (real) {
-                    // Deep copy passiveAbilities to ensure React detects changes
+                    // Deep copy passiveAbilities and explicitly copy hasBarrier to ensure React detects changes
                     next.push({
                         ...real,
                         passiveAbilities: real.passiveAbilities ? [...real.passiveAbilities] : [],
+                        hasBarrier: real.hasBarrier ?? (real.passiveAbilities?.includes('BARRIER') ?? false),
                         isDying: false
                     });
                     realMap.delete((v as any).instanceId);
@@ -1983,10 +1984,11 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
 
             // 2. Add new cards (Appended)
             realMap.forEach(real => {
-                // Deep copy passiveAbilities for new cards too
+                // Deep copy passiveAbilities and explicitly copy hasBarrier for new cards too
                 next.push({
                     ...real,
                     passiveAbilities: real.passiveAbilities ? [...real.passiveAbilities] : [],
+                    hasBarrier: real.hasBarrier ?? (real.passiveAbilities?.includes('BARRIER') ?? false),
                     isDying: false
                 });
             });
@@ -2388,6 +2390,71 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         }
     }, [gameState.winnerId]);
+
+    // カード説明文内の「」で囲まれたカード名をクリック可能にする
+    const renderDescriptionWithCardLinks = React.useCallback((description: string): React.ReactNode => {
+        // 「」で囲まれたテキストを検索
+        const regex = /「([^」]+)」/g;
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        let match;
+        let key = 0;
+
+        const allCardNames = getAllCardNames();
+
+        while ((match = regex.exec(description)) !== null) {
+            // マッチ前のテキスト
+            if (match.index > lastIndex) {
+                parts.push(<span key={key++}>{description.slice(lastIndex, match.index)}</span>);
+            }
+
+            const quotedText = match[1];
+            // カード名かどうかチェック
+            const isCardName = allCardNames.includes(quotedText);
+
+            if (isCardName) {
+                // カード名の場合はクリック可能にする
+                parts.push(
+                    <span
+                        key={key++}
+                        style={{
+                            color: '#ffd700',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            textUnderlineOffset: '2px',
+                            fontWeight: 'bold',
+                        }}
+                        onMouseEnter={(e) => {
+                            (e.target as HTMLElement).style.color = '#ffec8b';
+                            (e.target as HTMLElement).style.textShadow = '0 0 8px rgba(255, 215, 0, 0.8)';
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.target as HTMLElement).style.color = '#ffd700';
+                            (e.target as HTMLElement).style.textShadow = 'none';
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardNameClickFromLog(quotedText);
+                        }}
+                    >
+                        「{quotedText}」
+                    </span>
+                );
+            } else {
+                // カード名でない場合はそのまま表示
+                parts.push(<span key={key++}>「{quotedText}」</span>);
+            }
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // 残りのテキスト
+        if (lastIndex < description.length) {
+            parts.push(<span key={key++}>{description.slice(lastIndex)}</span>);
+        }
+
+        return parts.length > 0 ? <>{parts}</> : description;
+    }, [handleCardNameClickFromLog]);
 
     interface ActiveEffectState {
         type: 'SLASH' | 'FIREBALL' | 'LIGHTNING' | 'IMPACT' | 'SHOT' | 'SUMI' | 'HEAL' | 'RAY' | 'ICE' | 'WATER' | 'FIRE' | 'THUNDER' | 'BLUE_FIRE' | 'BUFF' | 'BANE';
@@ -2862,16 +2929,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
 
             // case B: Visual Effects (Damage, Destroy, Heal, Buff)
-            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE';
+            const isDamageEffect = current.effect.type === 'DAMAGE' || current.effect.type === 'AOE_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE_BY_TURN';
             const isDestroyEffect = current.effect.type === 'DESTROY' || current.effect.type === 'RANDOM_DESTROY';
             const isHealEffect = current.effect.type === 'HEAL_LEADER';
             const isSetHpEffect = current.effect.type === 'RANDOM_SET_HP';
             const isSetMaxHpEffect = current.effect.type === 'SET_MAX_HP';
             const isBounceEffect = current.effect.type === 'RETURN_TO_HAND';
             const isSummonEffect = current.effect.type === 'SUMMON_CARD' || current.effect.type === 'SUMMON_CARD_RUSH';
+            const isSummonBuffedEffect = current.effect.type === 'VISUAL_BUFF_ONLY';
             const isBuffEffectType = current.effect.type === 'BUFF_STATS';
 
-            const delay = (isHealEffect || isBounceEffect || isSummonEffect || isBuffEffectType) ? 600 : 50;
+            const delay = (isHealEffect || isBounceEffect || isSummonEffect || isSummonBuffedEffect || isBuffEffectType) ? 600 : 50;
 
             if (isDamageEffect) {
                 // Default effect type from card's attackEffectType
@@ -2895,10 +2963,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         }
                     });
                 } else if ((current as any).targetIds) {
-                    (current as any).targetIds.forEach((tid: string) => {
-                        const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
-                        if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
-                    });
+                    // RANDOM_DAMAGE_BY_TURN: 高速エフェクト再生（300ms間隔）
+                    if (current.effect.type === 'RANDOM_DAMAGE_BY_TURN') {
+                        const targetIds = (current as any).targetIds as string[];
+                        targetIds.forEach((tid: string, i: number) => {
+                            setTimeout(() => {
+                                const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                                if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
+                            }, i * 300); // 300ms間隔で連続再生
+                        });
+                    } else {
+                        (current as any).targetIds.forEach((tid: string) => {
+                            const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                            if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
+                        });
+                    }
                 } else if (current.effect.targetType === 'OPPONENT') {
                     // OPPONENT targets the enemy leader - play effect on leader
                     playEffectWithSync(effectType, targetPid, -1); // -1 indicates leader
@@ -2910,12 +2989,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             } else if (isDestroyEffect) {
                 // Default effect type from card's attackEffectType
                 let effectType = current.sourceCard.attackEffectType || 'IMPACT';
-
-                // Card-specific effect overrides
-                // かすが (c_kasuga): 全体破壊エフェクトはRAY
-                if ((current.sourceCard as any).id === 'c_kasuga') {
-                    effectType = 'RAY';
-                }
 
                 const targetPid = current.sourcePlayerId === currentPlayerId ? opponentPlayerId : currentPlayerId;
                 const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
@@ -3015,15 +3088,39 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
             }
 
+            // case D: VISUAL_BUFF_ONLY - 召喚後にバフエフェクト表示（視覚エフェクトのみ、実際のバフは召喚時に適用済み）
+            if (isSummonBuffedEffect) {
+                const atkBuff = current.effect.value ?? 0;
+                const hpBuff = current.effect.value2 ?? 0;
+                const targetPid = current.sourcePlayerId;
+                const summonedCard = current.sourceCard as any;
+
+                // 少し遅延させて、カードが画面に表示されてからバフエフェクトを表示
+                setTimeout(() => {
+                    const vBoard = targetPid === currentPlayerId ? visualPlayerBoard : visualOpponentBoard;
+                    if (summonedCard?.instanceId) {
+                        const vIdx = vBoard.findIndex(v => v?.instanceId === summonedCard.instanceId);
+                        if (vIdx !== -1) {
+                            playBuffEffectWithSync(targetPid, vIdx, atkBuff, hpBuff, summonedCard.instanceId);
+                        }
+                    }
+                }, 300); // カードが表示されてからバフエフェクトを表示
+            }
+
             if (effectTimeoutRef.current) clearTimeout(effectTimeoutRef.current);
 
             // Timeline:
             // 0ms: Animation Starts
-            // 1000ms: Impact / Damage Applied (Gap is zero relative to impact)
-            // 2000ms: Done / Next Effect (1s pause after damage)
+            // 700ms: Impact / Damage Applied (Gap is zero relative to impact)
+            // 1400ms: Done / Next Effect (700ms pause after damage)
+            // RANDOM_DAMAGE_BY_TURN: ターン数分のダメージを高速処理（300ms間隔）
             const isDamageOrDestroy = isDamageEffect || isDestroyEffect || isSetHpEffect || isSetMaxHpEffect;
-            const stateUpdateDelay = isDamageOrDestroy ? 1000 : delay;
-            const postActionDelay = isDamageOrDestroy ? 1000 : 0;
+            const isRapidDamage = current.effect.type === 'RANDOM_DAMAGE_BY_TURN';
+            const targetCount = isRapidDamage ? ((current as any).targetIds?.length || gameState.turnCount) : 1;
+            // RANDOM_DAMAGE_BY_TURN: エフェクト完了まで待機（300ms * ターン数 + 余裕300ms）
+            const rapidDamageDelay = isRapidDamage ? (targetCount * 300 + 300) : 0;
+            const stateUpdateDelay = isRapidDamage ? rapidDamageDelay : (isDamageOrDestroy ? 700 : delay);
+            const postActionDelay = isRapidDamage ? 200 : (isDamageOrDestroy ? 700 : 0);
 
             effectTimeoutRef.current = setTimeout(() => {
                 // Online mode synchronization:
@@ -6202,9 +6299,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const isOpponentEvolveUnlocked = opponentOwnTurnCount >= opponentEvolveThreshold;
     const isOpponentSuperEvolveUnlocked = opponentOwnTurnCount >= opponentSuperEvolveThreshold;
 
-    // Check if LEADER_DAMAGE_CAP (あじゃ effect) is active
+    // Check if LEADER_DAMAGE_CAP (あじゃ effect) or leaderDamageShield is active
     const playerHasLeaderDamageCap = player?.board?.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP')) ?? false;
     const opponentHasLeaderDamageCap = opponent?.board?.some(c => c?.passiveAbilities?.includes('LEADER_DAMAGE_CAP')) ?? false;
+    const playerHasLeaderShield = player?.leaderDamageShield ?? false;
+    const opponentHasLeaderShield = opponent?.leaderDamageShield ?? false;
+    // Combined condition for cyan effect (either LEADER_DAMAGE_CAP or leaderDamageShield)
+    const playerHasCyanEffect = playerHasLeaderDamageCap || playerHasLeaderShield;
+    const opponentHasCyanEffect = opponentHasLeaderDamageCap || opponentHasLeaderShield;
 
     // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
@@ -6522,7 +6624,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 )}
 
                                 <div style={{ fontSize: '0.95rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 8 }}>
-                                    {selectedCard.card.description}
+                                    {renderDescriptionWithCardLinks(selectedCard.card.description)}
                                 </div>
                             </div>
 
@@ -6575,10 +6677,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             zIndex: 100,
                             cursor: 'default',
                             transition: 'border-color 0.3s, box-shadow 0.3s',
-                            animation: opponentHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none'
+                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none'
                         }}>
-                        {/* Cyan overlay for LEADER_DAMAGE_CAP effect */}
-                        {opponentHasLeaderDamageCap && (
+                        {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
+                        {opponentHasCyanEffect && (
                             <div style={{
                                 position: 'absolute',
                                 inset: 0,
@@ -6986,7 +7088,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             left: '50%',
                                             top: 0,
                                             '--offsetX': `calc(-50% + ${offsetX}px)`,
-                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'translateY(-20px) scale(1.1)' : ''}`,
+                                            // NOTE: Use instanceId comparison instead of index to fix visual/actual board index mismatch
+                                            transform: `translateX(calc(-50% + ${offsetX}px)) ${dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? 'translateY(-20px) scale(1.1)' : ''}`,
                                             transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.4s ease',
                                             cursor: 'pointer',
                                             pointerEvents: 'auto',
@@ -6995,7 +7098,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             border: (targetingState && c && targetingState.allowedTargetPlayerId === currentPlayerId) ? '2px solid #48bb78' : 'none',
                                             boxShadow: (targetingState && c && targetingState.allowedTargetPlayerId === currentPlayerId) ? '0 0 15px #48bb78' : 'none',
                                             borderRadius: 8,
-                                            zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 10 : 1,
+                                            zIndex: dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? 10 : 1,
                                             opacity: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 0 : (c as any)?.isDying ? 0.8 : 1,
                                             transitionProperty: (evolveAnimation && evolveAnimation.sourcePlayerId === currentPlayerId && evolveAnimation.followerIndex === i) ? 'none' : 'transform, left, opacity'
                                         } as React.CSSProperties}
@@ -7019,7 +7122,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     backfaceVisibility: 'hidden',
                                                     WebkitBackfaceVisibility: 'hidden'
                                                 }}>
-                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceIndex === i ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                                 </div>
                                                 {/* Back - Sleeve (only for player's cards) */}
                                                 {c && (
@@ -7119,6 +7222,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* RIGHT SIDE CONTROLS - Centered vertically (UPSIZED 2X) */}
                     {/* ========================================== */}
                     <div style={{ position: 'absolute', right: 30 * scale, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30 * scale, zIndex: 50 }}>
+                        {/* Current Turn Display */}
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{
+                                fontSize: `${1.2 * scale}rem`,
+                                fontWeight: 700,
+                                color: '#a0aec0',
+                                fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif'
+                            }}>
+                                Turn {gameState.turnCount}
+                            </div>
+                        </div>
                         {/* Opponent PP */}
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: `${1.8 * scale}rem`, fontWeight: 900, color: '#f6e05e', fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif' }}>{opponent.pp}/{opponent.maxPp}</div>
@@ -7457,13 +7571,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 background: '#1a202c',
                                 cursor: 'grab',
                                 transition: 'border-color 0.3s, box-shadow 0.3s',
-                                animation: playerHasLeaderDamageCap ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                                animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
                                 position: 'relative'
                             }}
                         >
                             <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                            {/* Cyan overlay for LEADER_DAMAGE_CAP effect */}
-                            {playerHasLeaderDamageCap && (
+                            {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
+                            {playerHasCyanEffect && (
                                 <div style={{
                                     position: 'absolute',
                                     inset: 0,

@@ -40,7 +40,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
     React.useEffect(() => {
         if (isSpecialSummoning && isOnBoard) {
             setPlaySummonAnim(true);
-            const timer = setTimeout(() => setPlaySummonAnim(false), 1000);
+            // 800ms後にアニメーション終了（1000msより短くして、バリア等のエフェクトが早く表示されるように）
+            const timer = setTimeout(() => setPlaySummonAnim(false), 800);
             return () => clearTimeout(timer);
         }
     }, [isSpecialSummoning, isOnBoard]);

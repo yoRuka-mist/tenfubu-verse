@@ -185,7 +185,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                         </div>
                     )}
 
-                    <p style={{ marginTop: `${1.5 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 0.2.0 P2P Alpha</p>
+                    <p style={{ marginTop: `${1.5 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 1.02 Beta</p>
                 </div>
             </div>
 

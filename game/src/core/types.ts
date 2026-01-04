@@ -110,6 +110,9 @@ export interface Player {
     extraPpUsedEarly: boolean;  // 1~5ターン目で使用済みか
     extraPpUsedLate: boolean;   // 6ターン目以降で使用済みか
     extraPpActive: boolean;     // 現在のターンでエクストラPPを有効化しているか
+
+    // Leader damage shield (次にリーダーが受けるダメージを0にする)
+    leaderDamageShield?: boolean;
 }
 
 export type GamePhase = 'INIT' | 'MULLIGAN' | 'TURN_START' | 'MAIN' | 'COMBAT' | 'TURN_END' | 'GAME_OVER';
