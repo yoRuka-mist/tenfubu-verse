@@ -6583,70 +6583,90 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         </button>
                     </div>
 
-                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 8, marginTop: 0, marginBottom: 0 }}>カード情報</h3>
+                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 8, marginTop: 0, marginBottom: 0, flexShrink: 0 }}>カード情報</h3>
                     {selectedCard ? (
-                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                            {/* Main Card Info */}
-                            <div>
-                                {/* Art Only */}
-                                <div style={{
-                                    width: '100%', aspectRatio: '1/1', marginBottom: 12,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}>
-                                    <Card card={selectedCard.card} style={{ width: '100%', height: '100%' }} variant="art-only" />
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                            {/* Scrollable content area */}
+                            <div style={{ flex: 1, overflow: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                {/* Main Card Info */}
+                                <div style={{ flexShrink: 0 }}>
+                                    {/* Art Only */}
+                                    <div style={{
+                                        width: '100%', aspectRatio: '1/1', marginBottom: 12,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        maxHeight: '35vh'
+                                    }}>
+                                        <Card card={selectedCard.card} style={{ width: '100%', height: '100%', maxHeight: '35vh' }} variant="art-only" />
+                                    </div>
+
+                                    {/* Name - dynamic font size based on length */}
+                                    <div style={{
+                                        fontSize: selectedCard.card.name.length > 12 ? '1.1rem' : selectedCard.card.name.length > 8 ? '1.2rem' : '1.4rem',
+                                        fontWeight: 'bold',
+                                        marginBottom: 6,
+                                        textAlign: 'center'
+                                    }}>
+                                        {selectedCard.card.name}
+                                    </div>
+
+                                    {/* Stats with Icons */}
+                                    {selectedCard.card.type === 'FOLLOWER' && (
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
+                                            {/* Attack Spade */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                                    <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
+                                                </svg>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4299e1' }}>
+                                                    {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
+                                                </span>
+                                            </div>
+                                            {/* Health Heart */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="#f56565">
+                                                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                                </svg>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#f56565' }}>
+                                                    {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Description - dynamic font size based on length */}
+                                    <div style={{
+                                        fontSize: (selectedCard.card.description?.length || 0) > 150 ? '0.75rem' : (selectedCard.card.description?.length || 0) > 100 ? '0.85rem' : '0.95rem',
+                                        color: '#cbd5e0',
+                                        lineHeight: '1.5',
+                                        whiteSpace: 'pre-wrap',
+                                        borderTop: '1px solid #4a5568',
+                                        paddingTop: 8
+                                    }}>
+                                        {renderDescriptionWithCardLinks(selectedCard.card.description)}
+                                    </div>
                                 </div>
 
-                                {/* Name */}
-                                <div style={{ fontSize: '1.4rem', fontWeight: 'bold', marginBottom: 6, textAlign: 'center' }}>{selectedCard.card.name}</div>
-
-                                {/* Stats with Icons */}
-                                {selectedCard.card.type === 'FOLLOWER' && (
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
-                                        {/* Attack Spade */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                                                <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
-                                            </svg>
-                                            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4299e1' }}>
-                                                {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
-                                            </span>
-                                        </div>
-                                        {/* Health Heart */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="#f56565">
-                                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                                            </svg>
-                                            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#f56565' }}>
-                                                {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
-                                            </span>
+                                {/* Flavor Text */}
+                                {selectedCard.card.flavorText && (
+                                    <div style={{
+                                        marginTop: 'auto',
+                                        paddingTop: 15,
+                                        paddingBottom: 10,
+                                        flexShrink: 0
+                                    }}>
+                                        <div style={{
+                                            fontSize: (selectedCard.card.flavorText?.length || 0) > 100 ? '0.65rem' : '0.75rem',
+                                            color: 'rgba(160, 174, 192, 0.6)',
+                                            lineHeight: '1.4',
+                                            fontStyle: 'italic',
+                                            whiteSpace: 'pre-wrap',
+                                            textAlign: 'right',
+                                        }}>
+                                            {selectedCard.card.flavorText}
                                         </div>
                                     </div>
                                 )}
-
-                                <div style={{ fontSize: '0.95rem', color: '#cbd5e0', lineHeight: '1.5', whiteSpace: 'pre-wrap', borderTop: '1px solid #4a5568', paddingTop: 8 }}>
-                                    {renderDescriptionWithCardLinks(selectedCard.card.description)}
-                                </div>
                             </div>
-
-                            {/* Flavor Text - Bottom Aligned */}
-                            {selectedCard.card.flavorText && (
-                                <div style={{
-                                    marginTop: 'auto',
-                                    paddingTop: 15,
-                                    paddingBottom: 10,
-                                }}>
-                                    <div style={{
-                                        fontSize: '0.75rem',
-                                        color: 'rgba(160, 174, 192, 0.6)',
-                                        lineHeight: '1.5',
-                                        fontStyle: 'italic',
-                                        whiteSpace: 'pre-wrap',
-                                        textAlign: 'right',
-                                    }}>
-                                        {selectedCard.card.flavorText}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     ) : (
                         <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic', flex: 1 }}>カードを選択して詳細を表示</div>
