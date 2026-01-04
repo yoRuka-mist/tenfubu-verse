@@ -1659,6 +1659,8 @@ function processSingleEffect(
                 }
                 if (target.currentHealth <= 0) {
                     target.currentHealth = 0;
+                    // ラストワード発動
+                    triggerLastWord(target, targetPid);
                     newState.players[targetPid].graveyard.push(target);
                     targetBoard[idx] = null;
                     newState.logs.push(`${target.name} は破壊されました`);
@@ -1974,12 +1976,16 @@ function processSingleEffect(
         }
         case 'DESTROY_AND_GENERATE': {
             // 相手フォロワーを破壊して手札に加える（コスト修正付き）
+            // NOTE: 破壊なのでラストワードは発動する（奪取ではなく、破壊してコピーを手札に加える）
             if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
                 const targetInfo = getBoardCardById(targetId);
                 if (targetInfo) {
                     const { card, player: targetOwner, index: idx } = targetInfo;
+                    const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === targetOwner) || opponentId;
 
-                    // ラストワードを発動させない（奪取なので）
+                    // ラストワード発動（破壊なので発動する）
+                    triggerLastWord(card, ownerId);
+                    targetOwner.graveyard.push(card);
                     targetOwner.board[idx] = null;
                     newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
 
