@@ -3,6 +3,7 @@ import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_
 import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
 import { Card } from '../components/Card';
 import { BattleIntro } from '../components/BattleIntro';
+import { BattleOutro } from '../components/BattleOutro';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 
@@ -2114,6 +2115,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
     const [showBattleIntro, setShowBattleIntro] = React.useState(gameMode !== 'JOIN'); // Show battle intro on game start (skip for JOIN until INIT_GAME)
+    const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
+    const [outroCompleted, setOutroCompleted] = React.useState(false); // Track if outro animation has completed
     const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
@@ -2138,6 +2141,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Card info display for result screen (when clicking card names in log)
     const [resultCardInfo, setResultCardInfo] = React.useState<CardModel | null>(null);
+
+    // ゲーム終了時にOutro演出を開始
+    React.useEffect(() => {
+        if (gameState.winnerId && !outroCompleted && !showBattleOutro) {
+            // winnerId が設定されたら演出開始
+            setShowBattleOutro(true);
+        }
+    }, [gameState.winnerId, outroCompleted, showBattleOutro]);
 
     // Necromance effect state - shows -X on graveyard when necromance is activated
     interface NecromanceEffect {
@@ -3501,6 +3512,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         prevBoardCountRef.current = { player: 0, opponent: 0 };
         // Reset result card info
         setResultCardInfo(null);
+
+        // Reset battle outro states for new game
+        setShowBattleOutro(false);
+        setOutroCompleted(false);
 
         // 3. Reset rematch states
         setMyRematchRequested(false);
@@ -9315,9 +9330,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
                 )}
 
+                {/* --- Battle Outro Animation --- */}
+                {showBattleOutro && gameState.winnerId && (
+                    <BattleOutro
+                        isVictory={gameState.winnerId === currentPlayerId}
+                        loserLeaderRef={gameState.winnerId === currentPlayerId ? opponentLeaderRef : playerLeaderRef}
+                        onComplete={() => {
+                            setShowBattleOutro(false);
+                            setOutroCompleted(true);
+                        }}
+                        scale={scale}
+                    />
+                )}
+
                 {/* --- Game Over Overlay --- */}
                 {
-                    gameState.winnerId && (
+                    gameState.winnerId && outroCompleted && (
                         <GameOverScreen
                             winnerId={gameState.winnerId}
                             playerId={currentPlayerId}
