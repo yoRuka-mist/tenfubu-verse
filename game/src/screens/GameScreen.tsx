@@ -2,6 +2,7 @@
 import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_DEFINITIONS, getStampImagePath, getStampSE } from '../core/engine';
 import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
 import { Card } from '../components/Card';
+import { BattleIntro } from '../components/BattleIntro';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 
@@ -2111,7 +2112,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Track if game has been synced (for JOIN)
     const [gameSynced, setGameSynced] = useState(gameMode !== 'JOIN');
 
-    // Coin toss and game start animation states - declared early for use in INIT_GAME effect
+    // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
+    const [showBattleIntro, setShowBattleIntro] = React.useState(true); // Show battle intro on game start
     const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
@@ -3527,7 +3529,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // 6. Force BGM re-roll and restart
         setBgmLoadedForClass(null);
 
-        // 7. Reset coin toss for new game
+        // 7. Reset battle intro and coin toss for new game
+        setShowBattleIntro(true);
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
@@ -3541,16 +3544,50 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         dispatch({ type: 'SYNC_STATE', payload: freshState });
     }, [currentPlayerClass, opponentClass, opponentType, gameMode]);
 
-    // Coin Toss and Game Start Animation Sequence
+    // BattleIntro completion callback
+    const handleBattleIntroComplete = useCallback((isFirst: boolean) => {
+        setShowBattleIntro(false);
+        setCoinTossResult(isFirst ? 'FIRST' : 'SECOND');
+
+        // If going second, swap turn order
+        if (!isFirst) {
+            const newState = {
+                ...gameState,
+                activePlayerId: 'p2',
+                firstPlayerId: 'p2',
+                players: {
+                    p1: {
+                        ...gameState.players.p1,
+                        maxPp: 0,
+                        pp: 0
+                    },
+                    p2: {
+                        ...gameState.players.p2,
+                        maxPp: 1,
+                        pp: 1
+                    }
+                },
+                logs: [`ターン 1 - ${gameState.players.p2.name} のターン`]
+            };
+            dispatch({ type: 'SYNC_STATE', payload: newState });
+        }
+
+        setCoinTossPhase('DONE');
+    }, [gameState]);
+
+    // Coin Toss and Game Start Animation Sequence - DISABLED (replaced by BattleIntro)
     // JOIN mode: Skip coin toss, wait for INIT_GAME from HOST
     // HOST mode: Wait for JOIN to connect before starting coin toss
     useEffect(() => {
+        // DISABLED: Now handled by BattleIntro component
+        return;
+
         // CPU: Start immediately
         // HOST: Wait for connection (so JOIN can see the coin toss)
         // JOIN: Skip (will receive game state from HOST via INIT_GAME)
         const canStartCoinToss = gameMode === 'CPU' || (gameMode === 'HOST' && connected);
 
-        if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE' && canStartCoinToss) {
+        if (gameState.phase === 'INIT' && coinTossPhase === 'IDLE' && canStartCoinToss && !showBattleIntro) {
             // Start coin toss animation (HOST and CPU only)
             setCoinTossPhase('TOSSING');
             playSE('coin.mp3', 0.7); // Coin toss sound
@@ -6508,6 +6545,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 position: 'relative'
             }}
         >
+            {/* Battle Intro Animation */}
+            {showBattleIntro && (
+                <BattleIntro
+                    myPlayer={player}
+                    opponentPlayer={opponent}
+                    onComplete={handleBattleIntroComplete}
+                    scale={scale}
+                />
+            )}
+
             <div className="game-screen"
                 style={{
                     width: '100%',
@@ -6521,7 +6568,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     color: '#fff',
                     position: 'absolute',
                     top: 0,
-                    left: 0
+                    left: 0,
+                    opacity: showBattleIntro ? 0 : 1,
+                    transition: 'opacity 0.5s ease-in'
                 }}
                 // REMOVED local onMouseMove/Up listeners to avoid conflict/lag
                 onClick={handleBackgroundClick} // Close hand on bg click
