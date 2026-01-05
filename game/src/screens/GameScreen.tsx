@@ -864,8 +864,8 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: Battl
         return <>{parts}</>;
     };
 
-    // 画面サイズに応じた最大高さ（PC/モバイルで分岐）
-    const logMaxHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
+    // 画面サイズに応じた固定高さ（PC/モバイルで分岐）- レイアウトシフト防止のため固定
+    const logHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
     const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
 
     return (
@@ -877,7 +877,7 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: Battl
                 top: '45%',
                 transform: 'translateY(-50%)',
                 width: logWidth,
-                maxHeight: logMaxHeight,
+                height: logHeight, // Fixed height to prevent layout shift
                 overflowY: 'auto',
                 background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                 color: '#fff',
@@ -7788,11 +7788,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ?
                             </button>
 
-                            {/* Battle Log - Inline instead of absolute */}
+                            {/* Battle Log - Inline instead of absolute, fixed height to prevent layout shift */}
                             <div
                                 style={{
                                     width: Math.max(180, 220 * scale),
-                                    maxHeight: Math.max(200, 280 * scale),
+                                    height: Math.max(200, 280 * scale), // Fixed height to prevent layout shift
                                     overflowY: 'auto',
                                     background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                                     color: '#fff',
