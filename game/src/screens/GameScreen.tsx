@@ -3912,9 +3912,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // SURRENDER: Opponent surrendered - we win
             if (msg.type === 'SURRENDER') {
-                console.log('[GameScreen] Opponent surrendered:', msg.payload.playerId);
-                // 相手が降参したので、CONCEDEアクションをディスパッチ
-                dispatch({ type: 'CONCEDE', playerId: msg.payload.playerId });
+                const surrenderedPlayerId = msg.payload?.playerId;
+
+                // セキュリティ: 既にゲーム終了している場合は無視
+                if (gameState.phase === 'GAME_OVER') {
+                    console.warn('[GameScreen] Ignoring SURRENDER - game already over');
+                    return;
+                }
+
+                // セキュリティ: 自分自身のIDが来た場合は不正なので無視
+                if (surrenderedPlayerId === currentPlayerId) {
+                    console.warn(`[GameScreen] Security Alert: Received SURRENDER message targeting self (${currentPlayerId}). Ignoring.`);
+                    return;
+                }
+
+                // セキュリティ: 相手のIDでない場合も無視
+                if (surrenderedPlayerId !== opponentPlayerId) {
+                    console.warn(`[GameScreen] Security Alert: Invalid playerId in SURRENDER: ${surrenderedPlayerId}. Expected: ${opponentPlayerId}. Ignoring.`);
+                    return;
+                }
+
+                console.log('[GameScreen] Opponent surrendered:', surrenderedPlayerId);
+                dispatch({ type: 'CONCEDE', playerId: surrenderedPlayerId });
                 return;
             }
 

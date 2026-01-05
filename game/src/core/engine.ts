@@ -2506,8 +2506,21 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
         // 降参処理
         case 'CONCEDE': {
             const concedingPlayerId = action.playerId;
-            const opponentId = getOpponentId(concedingPlayerId);
             const concedingPlayer = newState.players[concedingPlayerId];
+
+            // 防御的チェック: プレイヤーが存在しない場合は無視
+            if (!concedingPlayer) {
+                console.warn(`[Engine] CONCEDE: Unknown playerId: ${concedingPlayerId}. Ignoring.`);
+                return state;
+            }
+
+            // 既にゲーム終了している場合は無視
+            if (state.phase === 'GAME_OVER') {
+                console.warn(`[Engine] CONCEDE: Game already over. Ignoring.`);
+                return state;
+            }
+
+            const opponentId = getOpponentId(concedingPlayerId);
 
             newState.phase = 'GAME_OVER';
             newState.winnerId = opponentId;
