@@ -2503,6 +2503,20 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             return newState;
         }
 
+        // 降参処理
+        case 'CONCEDE': {
+            const concedingPlayerId = action.playerId;
+            const opponentId = getOpponentId(concedingPlayerId);
+            const concedingPlayer = newState.players[concedingPlayerId];
+
+            newState.phase = 'GAME_OVER';
+            newState.winnerId = opponentId;
+            newState.logs.push(`${concedingPlayer.name} が降参しました`);
+
+            console.log(`[Engine] CONCEDE: ${concedingPlayerId} surrendered. Winner: ${opponentId}`);
+            return newState;
+        }
+
         case 'RESOLVE_EFFECT': {
             if (!newState.pendingEffects || newState.pendingEffects.length === 0) return newState;
 
