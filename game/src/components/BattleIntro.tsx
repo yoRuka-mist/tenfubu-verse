@@ -130,9 +130,6 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         top: '50%',
                         transform: `translate(-50%, -50%) translateX(${phaseIndex >= 1 ? '0' : '-150%'})`,
                         transition: 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
                         zIndex: 100,
                     }}
                 >
@@ -156,12 +153,16 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {phaseIndex >= 2 && (
                         <div
                             style={{
-                                marginTop: 30 * scale,
+                                position: 'absolute',
+                                bottom: -80 * scale,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
                                 padding: `${16 * scale}px ${40 * scale}px`,
                                 background: 'rgba(0,0,0,0.9)',
                                 borderRadius: 30 * scale,
                                 border: '3px solid rgba(255,255,255,0.4)',
                                 animation: 'nameplateSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                whiteSpace: 'nowrap',
                             }}
                         >
                             <div
@@ -170,7 +171,6 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                     fontSize: 2.5 * scale + 'rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
-                                    whiteSpace: 'nowrap',
                                 }}
                             >
                                 {myPlayer.name}
@@ -183,7 +183,9 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -60 * scale,
+                                top: -100 * scale,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
                                 background: isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
                                 borderRadius: 20 * scale,
@@ -214,9 +216,6 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         top: '50%',
                         transform: `translate(50%, -50%) translateX(${phaseIndex >= 1 ? '0' : '150%'})`,
                         transition: 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
                         zIndex: 100,
                     }}
                 >
@@ -240,12 +239,16 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {phaseIndex >= 2 && (
                         <div
                             style={{
-                                marginTop: 30 * scale,
+                                position: 'absolute',
+                                bottom: -80 * scale,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
                                 padding: `${16 * scale}px ${40 * scale}px`,
                                 background: 'rgba(0,0,0,0.9)',
                                 borderRadius: 30 * scale,
                                 border: '3px solid rgba(255,255,255,0.4)',
                                 animation: 'nameplateSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                whiteSpace: 'nowrap',
                             }}
                         >
                             <div
@@ -254,7 +257,6 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                     fontSize: 2.5 * scale + 'rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
-                                    whiteSpace: 'nowrap',
                                 }}
                             >
                                 {opponentPlayer.name}
@@ -267,7 +269,9 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -60 * scale,
+                                top: -100 * scale,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
                                 background: !isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
                                 borderRadius: 20 * scale,
@@ -324,7 +328,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                 <div
                     style={{
                         position: 'absolute',
-                        top: '50%',
+                        top: '20%',
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
                         zIndex: 150,
