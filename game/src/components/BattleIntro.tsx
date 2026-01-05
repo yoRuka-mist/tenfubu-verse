@@ -386,14 +386,14 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
 
                 @keyframes nameplateSlideUp {
                     0% {
-                        transform: translateY(50px);
+                        transform: translateX(-50%) translateY(50px);
                         opacity: 0;
                     }
                     60% {
-                        transform: translateY(-10px);
+                        transform: translateX(-50%) translateY(-10px);
                     }
                     100% {
-                        transform: translateY(0);
+                        transform: translateX(-50%) translateY(0);
                         opacity: 1;
                     }
                 }
@@ -431,14 +431,14 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                 @keyframes turnOrderFadeIn {
                     0% {
                         opacity: 0;
-                        transform: scale(0.5);
+                        transform: translateX(-50%) scale(0.5);
                     }
                     50% {
-                        transform: scale(1.2);
+                        transform: translateX(-50%) scale(1.2);
                     }
                     100% {
                         opacity: 1;
-                        transform: scale(1);
+                        transform: translateX(-50%) scale(1);
                     }
                 }
 
