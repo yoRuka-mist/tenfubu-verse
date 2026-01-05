@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
 import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_DEFINITIONS, getStampImagePath, getStampSE } from '../core/engine';
-import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
+import { ClassType, Player, Card as CardModel, StampId, StampDisplay, GameState } from '../core/types';
 import { Card } from '../components/Card';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
@@ -3693,22 +3693,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // HANDSHAKE: Receive opponent's name and update GameState
             if (msg.type === 'HANDSHAKE') {
-                const { name } = msg.payload;
-                console.log('[GameScreen] Received HANDSHAKE from opponent:', name);
+                const rawName = msg.payload?.name;
+                // Validate and sanitize received name (max 12 chars, trim, fallback to default)
+                const sanitizedName = typeof rawName === 'string'
+                    ? rawName.trim().slice(0, 12) || '対戦相手'
+                    : '対戦相手';
+                console.log('[GameScreen] Received HANDSHAKE from opponent:', sanitizedName);
+                const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                 dispatch({
                     type: 'UPDATE_PLAYER_NAME',
                     payload: {
-                        playerId: currentPlayerId === 'p1' ? 'p2' : 'p1',
-                        name: name
+                        playerId: targetPlayerId,
+                        name: sanitizedName
                     }
-                } as any);
+                });
                 return;
             }
 
             // INIT_GAME: JOIN receives initial game state from HOST
             if (msg.type === 'INIT_GAME') {
                 console.log('[GameScreen] JOIN: Received initial game state from HOST');
-                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
+
+                // Re-apply local player name after SYNC_STATE (fixes JOIN-side name overwrite)
+                dispatch({
+                    type: 'UPDATE_PLAYER_NAME',
+                    payload: { playerId: 'p2', name: playerName }
+                });
+
                 setGameSynced(true);
 
                 // Show coin toss result for JOIN (JOIN is p2, so check who goes first)
@@ -3732,7 +3744,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // JOIN relies on this for pendingEffects resolution to avoid RNG desync
             if (msg.type === 'GAME_STATE') {
                 console.log('[GameScreen] JOIN: Received GAME_STATE sync from HOST');
-                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
                 // Reset processing flags since state is now synced from HOST
                 setIsProcessingEffect(false);
                 isProcessingEffectRef.current = false;

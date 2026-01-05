@@ -3252,6 +3252,11 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
         case 'UPDATE_PLAYER_NAME': {
             const { playerId, name } = action.payload;
             console.log('[Engine] UPDATE_PLAYER_NAME:', playerId, name);
+            // Defensive check: ensure player exists
+            if (!state.players[playerId]) {
+                console.warn('[Engine] UPDATE_PLAYER_NAME: Unknown playerId:', playerId);
+                return state;
+            }
             return {
                 ...state,
                 players: {
