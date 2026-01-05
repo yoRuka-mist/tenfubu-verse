@@ -2113,10 +2113,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [gameSynced, setGameSynced] = useState(gameMode !== 'JOIN');
 
     // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
-    const [showBattleIntro, setShowBattleIntro] = React.useState(true); // Show battle intro on game start
+    const [showBattleIntro, setShowBattleIntro] = React.useState(gameMode !== 'JOIN'); // Show battle intro on game start (skip for JOIN until INIT_GAME)
     const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
+    // コイントス結果（先攻/後攻）を保持 - CPU/HOSTではランダム、JOINではINIT_GAMEから同期
+    const [isFirstPlayer, setIsFirstPlayer] = React.useState(() => Math.random() > 0.5);
 
     // Rematch states for online play
     const [myRematchRequested, setMyRematchRequested] = React.useState(false);
@@ -3530,7 +3532,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setBgmLoadedForClass(null);
 
         // 7. Reset battle intro and coin toss for new game
-        setShowBattleIntro(true);
+        setShowBattleIntro(gameMode !== 'JOIN'); // JOIN時はホストからの同期を待つ
+        setIsFirstPlayer(Math.random() > 0.5); // 新しいランダム結果
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
@@ -3544,13 +3547,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         dispatch({ type: 'SYNC_STATE', payload: freshState });
     }, [currentPlayerClass, opponentClass, opponentType, gameMode]);
 
-    // BattleIntro completion callback
-    const handleBattleIntroComplete = useCallback((isFirst: boolean) => {
+    // BattleIntro completion callback - useRefで安定化
+    const handleBattleIntroComplete = useCallback(() => {
         setShowBattleIntro(false);
-        setCoinTossResult(isFirst ? 'FIRST' : 'SECOND');
+        setCoinTossResult(isFirstPlayer ? 'FIRST' : 'SECOND');
 
         // If going second, swap turn order
-        if (!isFirst) {
+        if (!isFirstPlayer) {
             const newState = {
                 ...gameState,
                 activePlayerId: 'p2',
@@ -3573,7 +3576,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         setCoinTossPhase('DONE');
-    }, [gameState]);
+    }, [gameState, isFirstPlayer]);
 
     // Coin Toss and Game Start Animation Sequence - DISABLED (replaced by BattleIntro)
     // JOIN mode: Skip coin toss, wait for INIT_GAME from HOST
@@ -6550,6 +6553,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 <BattleIntro
                     myPlayer={player}
                     opponentPlayer={opponent}
+                    isFirstPlayer={isFirstPlayer}
                     onComplete={handleBattleIntroComplete}
                     scale={scale}
                 />

@@ -18,7 +18,8 @@ const getLeaderImg = (cls: ClassType): string => {
 interface BattleIntroProps {
     myPlayer: Player;
     opponentPlayer: Player;
-    onComplete: (isFirstPlayer: boolean) => void; // 演出完了時のコールバック（先攻/後攻の結果を返す）
+    isFirstPlayer: boolean; // 先攻かどうか（GameScreen側で決定）
+    onComplete: () => void; // 演出完了時のコールバック
     scale?: number; // スケールファクター
 }
 
@@ -35,13 +36,12 @@ type AnimationPhase =
 export const BattleIntro: React.FC<BattleIntroProps> = ({
     myPlayer,
     opponentPlayer,
+    isFirstPlayer,
     onComplete,
     scale = 1
 }) => {
     const [phase, setPhase] = useState<AnimationPhase>('fade-in');
     const [shakeScreen, setShakeScreen] = useState(false);
-    // コイントスの結果をコンポーネント内で決定
-    const [isFirstPlayer] = useState(() => Math.random() > 0.5);
 
     // 演出フェーズ管理
     useEffect(() => {
@@ -56,7 +56,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
         };
 
         if (phase === 'complete') {
-            onComplete(isFirstPlayer);
+            onComplete();
             return;
         }
 
@@ -78,7 +78,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
         }, timings[phase] || 1000);
 
         return () => clearTimeout(timer);
-    }, [phase, onComplete]);
+    }, [phase, onComplete, isFirstPlayer]);
 
     // VS表示時の画面振動
     useEffect(() => {
