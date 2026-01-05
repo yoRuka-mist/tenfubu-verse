@@ -154,7 +154,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                bottom: -80 * scale,
+                                bottom: -40 * scale,
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${16 * scale}px ${40 * scale}px`,
@@ -183,7 +183,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -100 * scale,
+                                top: -60 * scale,
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
@@ -240,7 +240,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                bottom: -80 * scale,
+                                bottom: -40 * scale,
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${16 * scale}px ${40 * scale}px`,
@@ -269,7 +269,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -100 * scale,
+                                top: -60 * scale,
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
