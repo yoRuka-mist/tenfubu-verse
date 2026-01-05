@@ -7977,6 +7977,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     </div>
                                 );
                             })()}
+
+                            {/* Placeholder for buttons when no card is selected - prevents layout shift */}
+                            {!(selectedCard && selectedCard.owner === 'PLAYER' && (selectedCard.source === 'HAND' || selectedCard.source === 'BOARD')) && (() => {
+                                const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
+                                return (
+                                    <div style={{
+                                        width: logWidth,
+                                        height: 52, // Same height as buttons (padding + content)
+                                        visibility: 'hidden',
+                                        pointerEvents: 'none'
+                                    }} />
+                                );
+                            })()}
                         </div>
                     )}
 
