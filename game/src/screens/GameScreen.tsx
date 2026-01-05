@@ -3899,20 +3899,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 setGameSynced(true);
 
-                // Show coin toss result for JOIN (JOIN is p2, so check who goes first)
+                // Show BattleIntro for JOIN with correct first player info
                 const isJoinFirst = msg.payload.firstPlayerId === 'p2';
-                setCoinTossResult(isJoinFirst ? 'FIRST' : 'SECOND');
-                setCoinTossPhase('RESULT');
-                playSE('coin.mp3', 0.7);
-
-                // After showing result, transition to GAME START
-                setTimeout(() => {
-                    setCoinTossPhase('DONE');
-                    setIsGameStartAnim(true);
-                    setTimeout(() => {
-                        setIsGameStartAnim(false);
-                    }, 1200);
-                }, 1500);
+                setIsFirstPlayer(isJoinFirst);
+                setShowBattleIntro(true); // JOINもBattleIntroを表示
                 return;
             }
 
