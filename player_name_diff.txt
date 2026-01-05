@@ -1,0 +1,232 @@
+diff --git a/game/src/App.tsx b/game/src/App.tsx
+index 1352110..dd9d31e 100644
+--- a/game/src/App.tsx
++++ b/game/src/App.tsx
+@@ -81,6 +81,11 @@ function App() {
+     const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
+     const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('NORMAL');
+ 
++    // Player name state (persisted to localStorage)
++    const [playerName, setPlayerName] = useState<string>(() => {
++        return localStorage.getItem('playerName') || '';
++    });
++
+     // Portrait mode detection
+     const isPortrait = useIsPortrait();
+ 
+@@ -269,6 +274,11 @@ function App() {
+                     gameMode={gameMode}
+                     aiDifficulty={aiDifficulty}
+                     onDifficultyChange={setAiDifficulty}
++                    playerName={playerName}
++                    onPlayerNameChange={(name: string) => {
++                        setPlayerName(name);
++                        localStorage.setItem('playerName', name);
++                    }}
+                 />
+             )}
+             {currentScreen === 'LOBBY' && (
+@@ -291,6 +301,7 @@ function App() {
+                     networkConnected={networkConnected}
+                     opponentClass={opponentClass}
+                     aiDifficulty={aiDifficulty}
++                    playerName={playerName || 'プレイヤー'}
+                 />
+             )}
+         </div>
+diff --git a/game/src/core/engine.ts b/game/src/core/engine.ts
+index d1f6bd3..64488ca 100644
+--- a/game/src/core/engine.ts
++++ b/game/src/core/engine.ts
+@@ -3248,6 +3248,22 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
+             return action.payload;
+         }
+ 
++        // プレイヤー名の更新（オンライン対戦でHANDSHAKE受信時）
++        case 'UPDATE_PLAYER_NAME': {
++            const { playerId, name } = action.payload;
++            console.log('[Engine] UPDATE_PLAYER_NAME:', playerId, name);
++            return {
++                ...state,
++                players: {
++                    ...state.players,
++                    [playerId]: {
++                        ...state.players[playerId],
++                        name: name
++                    }
++                }
++            };
++        }
++
+         // エクストラPPの有効化/無効化
+         case 'TOGGLE_EXTRA_PP': {
+             const playerId = action.playerId;
+diff --git a/game/src/core/types.ts b/game/src/core/types.ts
+index dd7429d..1ae7a37 100644
+--- a/game/src/core/types.ts
++++ b/game/src/core/types.ts
+@@ -147,7 +147,8 @@ export type GameAction =
+     | { type: 'CONCEDE'; playerId: string }
+     | { type: 'SYNC_STATE'; payload: GameState }
+     | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } }
+-    | { type: 'TOGGLE_EXTRA_PP'; playerId: string }; // エクストラPPの有効化/無効化
++    | { type: 'TOGGLE_EXTRA_PP'; playerId: string } // エクストラPPの有効化/無効化
++    | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; name: string } }; // プレイヤー名の更新
+ 
+ // ===== スタンプ機能 =====
+ 
+diff --git a/game/src/screens/ClassSelectScreen.tsx b/game/src/screens/ClassSelectScreen.tsx
+index 2bd201e..c4b6137 100644
+--- a/game/src/screens/ClassSelectScreen.tsx
++++ b/game/src/screens/ClassSelectScreen.tsx
+@@ -24,6 +24,8 @@ interface ClassSelectScreenProps {
+     gameMode?: 'CPU' | 'HOST' | 'JOIN';
+     aiDifficulty?: AIDifficulty;
+     onDifficultyChange?: (difficulty: AIDifficulty) => void;
++    playerName: string;
++    onPlayerNameChange: (name: string) => void;
+ }
+ 
+ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
+@@ -31,7 +33,9 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
+     onBack,
+     gameMode = 'CPU',
+     aiDifficulty = 'NORMAL',
+-    onDifficultyChange
++    onDifficultyChange,
++    playerName,
++    onPlayerNameChange
+ }) => {
+     // Responsive scaling (same approach as GameScreen)
+     const [scale, setScale] = useState(1);
+@@ -67,7 +71,45 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
+             background: '#1a1a2e',
+             color: 'white'
+         }}>
+-            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${3 * scale}rem` }}>クラスを選択</h2>
++            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${1.5 * scale}rem` }}>クラスを選択</h2>
++
++            {/* Player Name Input */}
++            <div style={{
++                marginBottom: `${2 * scale}rem`,
++                display: 'flex',
++                flexDirection: 'column',
++                alignItems: 'center',
++                gap: `${0.5 * scale}rem`
++            }}>
++                <label style={{
++                    fontSize: `${1 * scale}rem`,
++                    opacity: 0.8,
++                    fontFamily: 'Tamanegi, sans-serif'
++                }}>
++                    プレイヤー名
++                </label>
++                <input
++                    type="text"
++                    value={playerName}
++                    onChange={(e) => onPlayerNameChange(e.target.value)}
++                    maxLength={12}
++                    placeholder="名前を入力"
++                    style={{
++                        padding: `${8 * scale}px ${16 * scale}px`,
++                        fontSize: `${1 * scale}rem`,
++                        background: '#2d3748',
++                        border: '2px solid #4a5568',
++                        borderRadius: 8 * scale,
++                        color: 'white',
++                        outline: 'none',
++                        width: 200 * scale,
++                        textAlign: 'center',
++                        fontFamily: 'Tamanegi, sans-serif'
++                    }}
++                    onFocus={(e) => e.target.style.borderColor = '#63b3ed'}
++                    onBlur={(e) => e.target.style.borderColor = '#4a5568'}
++                />
++            </div>
+ 
+             <div style={{ display: 'flex', gap: `${gap}rem`, marginBottom: `${3 * scale}rem` }}>
+                 {/* Senka Class */}
+diff --git a/game/src/screens/GameScreen.tsx b/game/src/screens/GameScreen.tsx
+index 31d3809..0a1b114 100644
+--- a/game/src/screens/GameScreen.tsx
++++ b/game/src/screens/GameScreen.tsx
+@@ -126,6 +126,7 @@ interface GameScreenProps {
+     networkConnected?: boolean;
+     opponentClass?: ClassType; // For online play: opponent's class selection
+     aiDifficulty?: 'EASY' | 'NORMAL' | 'HARD'; // AI difficulty for CPU mode
++    playerName: string; // Player's display name
+ }
+ 
+ 
+@@ -2043,7 +2044,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
+     return visualBoard;
+ };
+ 
+-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL' }) => {
++export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName }) => {
+     // For online play, use the adapter passed from LobbyScreen
+     // Only use useGameNetwork hook for CPU mode (where it returns nothing)
+     // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
+@@ -2100,12 +2101,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+     // Game state initialization
+     // HOST initializes the game, JOIN waits for INIT_GAME message
+     const [gameState, dispatch] = useReducer(gameReducer, null, () => {
++        const opponentDefaultName = gameMode === 'CPU' ? 'CPU' : '対戦相手';
+         if (gameMode === 'JOIN') {
+             // JOIN: Create empty placeholder state, will be replaced by SYNC_STATE
+-            return initializeGame('ENEMY', opponentClass, 'You', playerClass);
++            return initializeGame(opponentDefaultName, opponentClass, playerName, playerClass);
+         }
+         // HOST or CPU: Initialize normally (HOST is p1)
+-        return initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', opponentClass);
++        return initializeGame(playerName, playerClass, opponentDefaultName, opponentClass);
+     });
+ 
+     // Track if game has been synced (for JOIN)
+@@ -3520,7 +3522,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+         }
+ 
+         // 5. Suppress immediate diff detection by clearing and then resetting the Ref
+-        const freshState = initializeGame('You', deckToUse, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', newOpponentClass);
++        const opponentDefaultName = opponentType === 'ONLINE' ? '対戦相手' : 'CPU';
++        const freshState = initializeGame(playerName, deckToUse, opponentDefaultName, newOpponentClass);
+         prevPlayersRef.current = freshState.players;
+         prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
+ 
+@@ -3688,6 +3691,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+         const handleMessage = (msg: any) => {
+             console.log('[GameScreen] Received message:', msg.type, msg);
+ 
++            // HANDSHAKE: Receive opponent's name and update GameState
++            if (msg.type === 'HANDSHAKE') {
++                const { name } = msg.payload;
++                console.log('[GameScreen] Received HANDSHAKE from opponent:', name);
++                dispatch({
++                    type: 'UPDATE_PLAYER_NAME',
++                    payload: {
++                        playerId: currentPlayerId === 'p1' ? 'p2' : 'p1',
++                        name: name
++                    }
++                } as any);
++                return;
++            }
++
+             // INIT_GAME: JOIN receives initial game state from HOST
+             if (msg.type === 'INIT_GAME') {
+                 console.log('[GameScreen] JOIN: Received initial game state from HOST');
+@@ -3967,6 +3984,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+ 
+         adapter.onMessage(handleMessage);
+ 
++        // Send HANDSHAKE to opponent with player name (for online play only)
++        if (gameMode !== 'CPU') {
++            adapter.send({
++                type: 'HANDSHAKE',
++                payload: { name: playerName, class: playerClass }
++            });
++            console.log('[GameScreen] Sent HANDSHAKE:', playerName, playerClass);
++        }
++
+         adapter.onClose(() => {
+             alert('相手との接続が切断されました。\nタイトルに戻ります。');
+             onLeave();

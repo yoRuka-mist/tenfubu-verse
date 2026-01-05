@@ -11,7 +11,8 @@ export type NetworkMessage =
     | { type: 'PLAY_CARD_ANIM'; payload: { playerId: string; cardIndex: number; card: any; targetBoardIndex?: number } }
     | { type: 'EFFECT'; payload: { effectType: string; targetPlayerId: string; targetIndex: number; targetInstanceId?: string; isBuff?: boolean; atkBuff?: number; hpBuff?: number } }
     | { type: 'REMATCH_REQUEST' }
-    | { type: 'REMATCH_ACCEPT' };
+    | { type: 'REMATCH_ACCEPT' }
+    | { type: 'SURRENDER'; payload: { playerId: string } };
 
 export interface NetworkAdapter {
     isHost: boolean;

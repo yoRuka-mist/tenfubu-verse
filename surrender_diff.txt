@@ -1,0 +1,159 @@
+diff --git a/game/src/core/engine.ts b/game/src/core/engine.ts
+index d1f6bd3..b90387e 100644
+--- a/game/src/core/engine.ts
++++ b/game/src/core/engine.ts
+@@ -2503,6 +2503,20 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
+             return newState;
+         }
+ 
++        // 降参処理
++        case 'CONCEDE': {
++            const concedingPlayerId = action.playerId;
++            const opponentId = getOpponentId(concedingPlayerId);
++            const concedingPlayer = newState.players[concedingPlayerId];
++
++            newState.phase = 'GAME_OVER';
++            newState.winnerId = opponentId;
++            newState.logs.push(`${concedingPlayer.name} が降参しました`);
++
++            console.log(`[Engine] CONCEDE: ${concedingPlayerId} surrendered. Winner: ${opponentId}`);
++            return newState;
++        }
++
+         case 'RESOLVE_EFFECT': {
+             if (!newState.pendingEffects || newState.pendingEffects.length === 0) return newState;
+ 
+diff --git a/game/src/network/types.ts b/game/src/network/types.ts
+index b4116f9..3edb8a4 100644
+--- a/game/src/network/types.ts
++++ b/game/src/network/types.ts
+@@ -11,7 +11,8 @@ export type NetworkMessage =
+     | { type: 'PLAY_CARD_ANIM'; payload: { playerId: string; cardIndex: number; card: any; targetBoardIndex?: number } }
+     | { type: 'EFFECT'; payload: { effectType: string; targetPlayerId: string; targetIndex: number; targetInstanceId?: string; isBuff?: boolean; atkBuff?: number; hpBuff?: number } }
+     | { type: 'REMATCH_REQUEST' }
+-    | { type: 'REMATCH_ACCEPT' };
++    | { type: 'REMATCH_ACCEPT' }
++    | { type: 'SURRENDER'; payload: { playerId: string } };
+ 
+ export interface NetworkAdapter {
+     isHost: boolean;
+diff --git a/game/src/screens/GameScreen.tsx b/game/src/screens/GameScreen.tsx
+index 31d3809..d29f267 100644
+--- a/game/src/screens/GameScreen.tsx
++++ b/game/src/screens/GameScreen.tsx
+@@ -2763,6 +2763,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+     }, [audioSettings]);
+     const [showMenu, setShowMenu] = React.useState(false);
+     const [showHelp, setShowHelp] = React.useState(false);
++    const [showSurrenderConfirm, setShowSurrenderConfirm] = React.useState(false);
++
++    // 降参処理
++    const handleSurrender = React.useCallback(() => {
++        console.log('[GameScreen] handleSurrender called');
++        setShowSurrenderConfirm(false);
++        setShowMenu(false);
++
++        // オンライン対戦時は相手にSURRENDERメッセージを送信
++        if (gameMode !== 'CPU' && adapter) {
++            adapter.send({
++                type: 'SURRENDER',
++                payload: { playerId: currentPlayerId }
++            });
++        }
++
++        // CONCEDEアクションをディスパッチ
++        dispatch({ type: 'CONCEDE', playerId: currentPlayerId });
++    }, [gameMode, adapter, currentPlayerId]);
++
+     // coinTossPhase, coinTossResult, isGameStartAnim are declared earlier (near line 1145)
+     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
+     const handJustExpandedRef = React.useRef(false); // 手札を展開した直後かどうか
+@@ -3890,6 +3910,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+                 return;
+             }
+ 
++            // SURRENDER: Opponent surrendered - we win
++            if (msg.type === 'SURRENDER') {
++                console.log('[GameScreen] Opponent surrendered:', msg.payload.playerId);
++                // 相手が降参したので、CONCEDEアクションをディスパッチ
++                dispatch({ type: 'CONCEDE', playerId: msg.payload.playerId });
++                return;
++            }
++
+             // STAMP: Opponent sent a stamp
+             // ※ スタンプはゲーム状態に一切影響を与えない独立した処理
+             if (msg.type === 'STAMP') {
+@@ -6636,7 +6664,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+                                 <>
+                                     <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
+                                     <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
+-                                    <button onClick={onLeave} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参して終了</button>
++                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参</button>
+                                 </>
+                             ) : (
+                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+@@ -6707,7 +6735,63 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+                     </div>
+                 )}
+ 
+-
++                {/* --- Surrender Confirm Dialog --- */}
++                {showSurrenderConfirm && (
++                    <div style={{
++                        position: 'absolute', inset: 0, zIndex: 4100,
++                        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)',
++                        display: 'flex', alignItems: 'center', justifyContent: 'center'
++                    }} onClick={() => setShowSurrenderConfirm(false)}>
++                        <div style={{
++                            background: '#2d3748',
++                            padding: 40,
++                            borderRadius: 16,
++                            display: 'flex',
++                            flexDirection: 'column',
++                            gap: 20,
++                            minWidth: 320,
++                            border: '2px solid #e53e3e',
++                            boxShadow: '0 0 30px rgba(229, 62, 62, 0.3)'
++                        }} onClick={e => e.stopPropagation()}>
++                            <h2 style={{ margin: 0, textAlign: 'center', color: '#fff', fontSize: '1.5rem' }}>降参しますか？</h2>
++                            <p style={{ margin: 0, textAlign: 'center', color: '#a0aec0', fontSize: '1rem' }}>
++                                降参すると敗北となります。
++                            </p>
++                            <div style={{ display: 'flex', gap: 15, marginTop: 10 }}>
++                                <button
++                                    onClick={() => setShowSurrenderConfirm(false)}
++                                    style={{
++                                        flex: 1,
++                                        padding: 15,
++                                        background: '#4a5568',
++                                        border: 'none',
++                                        color: 'white',
++                                        borderRadius: 8,
++                                        cursor: 'pointer',
++                                        fontSize: '1.1rem'
++                                    }}
++                                >
++                                    キャンセル
++                                </button>
++                                <button
++                                    onClick={handleSurrender}
++                                    style={{
++                                        flex: 1,
++                                        padding: 15,
++                                        background: '#e53e3e',
++                                        border: 'none',
++                                        color: 'white',
++                                        borderRadius: 8,
++                                        cursor: 'pointer',
++                                        fontSize: '1.1rem'
++                                    }}
++                                >
++                                    降参する
++                                </button>
++                            </div>
++                        </div>
++                    </div>
++                )}
+ 
+                 {/* --- Left Sidebar: Card Info & Menu (Responsive width) --- */}
+                 <div className={shake ? 'shake-target' : ''} style={{ width: (isMobile ? 280 : 340) * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: isMobile ? `${10 * scale}px ${12 * scale}px` : `${20 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>

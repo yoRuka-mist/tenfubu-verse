@@ -865,8 +865,8 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: Battl
         return <>{parts}</>;
     };
 
-    // 画面サイズに応じた最大高さ（PC/モバイルで分岐）
-    const logMaxHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
+    // 画面サイズに応じた固定高さ（PC/モバイルで分岐）- レイアウトシフト防止のため固定
+    const logHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
     const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
 
     return (
@@ -878,7 +878,7 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: Battl
                 top: '45%',
                 transform: 'translateY(-50%)',
                 width: logWidth,
-                maxHeight: logMaxHeight,
+                height: logHeight, // Fixed height to prevent layout shift
                 overflowY: 'auto',
                 background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                 color: '#fff',
@@ -2765,6 +2765,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [audioSettings]);
     const [showMenu, setShowMenu] = React.useState(false);
     const [showHelp, setShowHelp] = React.useState(false);
+    const [showSurrenderConfirm, setShowSurrenderConfirm] = React.useState(false);
+
+    // 降参処理
+    const handleSurrender = React.useCallback(() => {
+        console.log('[GameScreen] handleSurrender called');
+        setShowSurrenderConfirm(false);
+        setShowMenu(false);
+
+        // オンライン対戦時は相手にSURRENDERメッセージを送信
+        if (gameMode !== 'CPU' && adapter) {
+            adapter.send({
+                type: 'SURRENDER',
+                payload: { playerId: currentPlayerId }
+            });
+        }
+
+        // CONCEDEアクションをディスパッチ
+        dispatch({ type: 'CONCEDE', playerId: currentPlayerId });
+    }, [gameMode, adapter, currentPlayerId]);
+
     // coinTossPhase, coinTossResult, isGameStartAnim are declared earlier (near line 1145)
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
     const handJustExpandedRef = React.useRef(false); // 手札を展開した直後かどうか
@@ -3916,6 +3936,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 console.log('[GameScreen] Opponent accepted rematch - starting new game');
                 // Both players agreed - start rematch with currently selected deck
                 startRematch(currentPlayerClass);
+                return;
+            }
+
+            // SURRENDER: Opponent surrendered - we win
+            if (msg.type === 'SURRENDER') {
+                const surrenderedPlayerId = msg.payload?.playerId;
+
+                // セキュリティ: 既にゲーム終了している場合は無視
+                if (gameState.phase === 'GAME_OVER') {
+                    console.warn('[GameScreen] Ignoring SURRENDER - game already over');
+                    return;
+                }
+
+                // セキュリティ: 自分自身のIDが来た場合は不正なので無視
+                if (surrenderedPlayerId === currentPlayerId) {
+                    console.warn(`[GameScreen] Security Alert: Received SURRENDER message targeting self (${currentPlayerId}). Ignoring.`);
+                    return;
+                }
+
+                // セキュリティ: 相手のIDでない場合も無視
+                if (surrenderedPlayerId !== opponentPlayerId) {
+                    console.warn(`[GameScreen] Security Alert: Invalid playerId in SURRENDER: ${surrenderedPlayerId}. Expected: ${opponentPlayerId}. Ignoring.`);
+                    return;
+                }
+
+                console.log('[GameScreen] Opponent surrendered:', surrenderedPlayerId);
+                dispatch({ type: 'CONCEDE', playerId: surrenderedPlayerId });
                 return;
             }
 
@@ -6674,7 +6721,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 <>
                                     <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
                                     <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
-                                    <button onClick={onLeave} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参して終了</button>
+                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参</button>
                                 </>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
@@ -6745,7 +6792,63 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
                 )}
 
-
+                {/* --- Surrender Confirm Dialog --- */}
+                {showSurrenderConfirm && (
+                    <div style={{
+                        position: 'absolute', inset: 0, zIndex: 4100,
+                        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }} onClick={() => setShowSurrenderConfirm(false)}>
+                        <div style={{
+                            background: '#2d3748',
+                            padding: 40,
+                            borderRadius: 16,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 20,
+                            minWidth: 320,
+                            border: '2px solid #e53e3e',
+                            boxShadow: '0 0 30px rgba(229, 62, 62, 0.3)'
+                        }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, textAlign: 'center', color: '#fff', fontSize: '1.5rem' }}>降参しますか？</h2>
+                            <p style={{ margin: 0, textAlign: 'center', color: '#a0aec0', fontSize: '1rem' }}>
+                                降参すると敗北となります。
+                            </p>
+                            <div style={{ display: 'flex', gap: 15, marginTop: 10 }}>
+                                <button
+                                    onClick={() => setShowSurrenderConfirm(false)}
+                                    style={{
+                                        flex: 1,
+                                        padding: 15,
+                                        background: '#4a5568',
+                                        border: 'none',
+                                        color: 'white',
+                                        borderRadius: 8,
+                                        cursor: 'pointer',
+                                        fontSize: '1.1rem'
+                                    }}
+                                >
+                                    キャンセル
+                                </button>
+                                <button
+                                    onClick={handleSurrender}
+                                    style={{
+                                        flex: 1,
+                                        padding: 15,
+                                        background: '#e53e3e',
+                                        border: 'none',
+                                        color: 'white',
+                                        borderRadius: 8,
+                                        cursor: 'pointer',
+                                        fontSize: '1.1rem'
+                                    }}
+                                >
+                                    降参する
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* --- Left Sidebar: Card Info & Menu (Responsive width) --- */}
                 <div className={shake ? 'shake-target' : ''} style={{ width: (isMobile ? 280 : 340) * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: isMobile ? `${10 * scale}px ${12 * scale}px` : `${20 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -7723,11 +7826,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ?
                             </button>
 
-                            {/* Battle Log - Inline instead of absolute */}
+                            {/* Battle Log - Inline instead of absolute, fixed height to prevent layout shift */}
                             <div
                                 style={{
                                     width: Math.max(180, 220 * scale),
-                                    maxHeight: Math.max(200, 280 * scale),
+                                    height: Math.max(200, 280 * scale), // Fixed height to prevent layout shift
                                     overflowY: 'auto',
                                     background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                                     color: '#fff',
@@ -7910,6 +8013,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             <div style={{ fontSize: '0.6rem', opacity: 0.8, marginTop: 2 }}>SEP</div>
                                         </button>
                                     </div>
+                                );
+                            })()}
+
+                            {/* Placeholder for buttons when no card is selected - prevents layout shift */}
+                            {!(selectedCard && selectedCard.owner === 'PLAYER' && (selectedCard.source === 'HAND' || selectedCard.source === 'BOARD')) && (() => {
+                                const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
+                                return (
+                                    <div style={{
+                                        width: logWidth,
+                                        height: 52, // Same height as buttons (padding + content)
+                                        visibility: 'hidden',
+                                        pointerEvents: 'none'
+                                    }} />
                                 );
                             })()}
                         </div>
