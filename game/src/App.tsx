@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { TitleScreen } from './screens/TitleScreen';
 import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
+import { MatchmakingScreen } from './screens/MatchmakingScreen';
 import { GameScreen } from './screens/GameScreen';
 import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
@@ -44,8 +45,8 @@ const loadAudioSettings = (): AudioSettings => {
     }
 };
 
-type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'GAME';
-type GameMode = 'CPU' | 'HOST' | 'JOIN';
+type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME';
+type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH';
 
 // Portrait mode detection hook
 const useIsPortrait = () => {
@@ -80,6 +81,12 @@ function App() {
     const [roomId, setRoomId] = useState<string>('');
     const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
     const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('NORMAL');
+
+    // Turn timer setting (persisted to localStorage)
+    const [timerEnabled, setTimerEnabled] = useState<boolean>(() => {
+        const saved = localStorage.getItem('timerEnabled');
+        return saved !== null ? JSON.parse(saved) : true;
+    });
 
     // Player name state (persisted to localStorage)
     const [playerName, setPlayerName] = useState<string>(() => {
@@ -178,9 +185,12 @@ function App() {
     const startGame = (cls: ClassType) => {
         setSelectedClass(cls);
         // CPU mode: go directly to game
+        // Casual/Ranked match: go to matchmaking screen
         // HOST/JOIN mode: go to lobby first to wait for connection
         if (gameMode === 'CPU') {
             setCurrentScreen('GAME');
+        } else if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
+            setCurrentScreen('MATCHMAKING');
         } else {
             setCurrentScreen('LOBBY');
         }
@@ -190,6 +200,16 @@ function App() {
         networkAdapterRef.current = adapter;
         setNetworkConnected(true);
         if (oppClass) setOpponentClass(oppClass);
+        setCurrentScreen('GAME');
+    };
+
+    // マッチメイキング成功時のハンドラ
+    const handleMatchmakingGameStart = (adapter: NetworkAdapter, oppClass: ClassType, _isHost: boolean) => {
+        networkAdapterRef.current = adapter;
+        setNetworkConnected(true);
+        setOpponentClass(oppClass);
+        // カジュアルマッチではタイマー強制ON
+        // Note: timerEnabled stateは変更せず、GameScreenに渡すときに強制的にtrueにする
         setCurrentScreen('GAME');
     };
 
@@ -205,6 +225,20 @@ function App() {
         setRoomId('');
         setGameMode('CPU');
         setOpponentClass(undefined);
+    };
+
+    // ランダムマッチの再マッチング処理
+    const handleRematching = (deckType: ClassType) => {
+        // 現在の接続を切断
+        if (networkAdapterRef.current) {
+            networkAdapterRef.current.disconnect();
+            networkAdapterRef.current = null;
+        }
+        setNetworkConnected(false);
+        setOpponentClass(undefined);
+        // 選択したクラスを設定してマッチメイキング画面へ
+        setSelectedClass(deckType);
+        setCurrentScreen('MATCHMAKING');
     };
 
     return (
@@ -279,6 +313,11 @@ function App() {
                         setPlayerName(name);
                         localStorage.setItem('playerName', name);
                     }}
+                    timerEnabled={timerEnabled}
+                    onTimerEnabledChange={(enabled: boolean) => {
+                        setTimerEnabled(enabled);
+                        localStorage.setItem('timerEnabled', JSON.stringify(enabled));
+                    }}
                 />
             )}
             {currentScreen === 'LOBBY' && (
@@ -290,6 +329,15 @@ function App() {
                     onBack={backToTitle}
                 />
             )}
+            {currentScreen === 'MATCHMAKING' && (
+                <MatchmakingScreen
+                    matchType={gameMode === 'CASUAL_MATCH' ? 'casual' : 'ranked'}
+                    playerClass={selectedClass}
+                    playerName={playerName || 'プレイヤー'}
+                    onGameStart={handleMatchmakingGameStart}
+                    onCancel={backToTitle}
+                />
+            )}
             {currentScreen === 'GAME' && (
                 <GameScreen
                     playerClass={selectedClass}
@@ -297,11 +345,13 @@ function App() {
                     gameMode={gameMode}
                     targetRoomId={roomId}
                     onLeave={backToTitle}
+                    onRematching={handleRematching}
                     networkAdapter={networkAdapterRef.current}
                     networkConnected={networkConnected}
                     opponentClass={opponentClass}
                     aiDifficulty={aiDifficulty}
                     playerName={playerName || 'プレイヤー'}
+                    timerEnabled={gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH' ? true : timerEnabled}
                 />
             )}
         </div>

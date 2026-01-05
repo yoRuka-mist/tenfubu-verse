@@ -21,6 +21,8 @@ interface BattleIntroProps {
     isFirstPlayer: boolean; // 先攻かどうか（GameScreen側で決定）
     onComplete: () => void; // 演出完了時のコールバック
     scale?: number; // スケールファクター
+    onVsImpact?: () => void; // VS着地時のSE再生コールバック
+    onCoinToss?: () => void; // コイントス時のSE再生コールバック
 }
 
 type AnimationPhase =
@@ -38,7 +40,9 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
     opponentPlayer,
     isFirstPlayer,
     onComplete,
-    scale = 1
+    scale = 1,
+    onVsImpact,
+    onCoinToss
 }) => {
     const [phase, setPhase] = useState<AnimationPhase>('fade-in');
     const [shakeScreen, setShakeScreen] = useState(false);
@@ -80,17 +84,25 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
         return () => clearTimeout(timer);
     }, [phase, onComplete, isFirstPlayer]);
 
-    // VS表示時の画面振動
+    // VS表示時の画面振動とSE再生
     useEffect(() => {
         if (phase === 'vs-display') {
             const timer = setTimeout(() => {
                 setShakeScreen(true);
-                // SE再生（実装はGameScreenで行う想定）
+                // VS着地時のSE再生
+                onVsImpact?.();
                 setTimeout(() => setShakeScreen(false), 300);
             }, 800);
             return () => clearTimeout(timer);
         }
-    }, [phase]);
+    }, [phase, onVsImpact]);
+
+    // コイントス時のSE再生
+    useEffect(() => {
+        if (phase === 'coin-toss') {
+            onCoinToss?.();
+        }
+    }, [phase, onCoinToss]);
 
     const phaseIndex = ['fade-in', 'leaders-enter', 'nameplate', 'vs-display', 'coin-toss', 'turn-order', 'ui-build', 'complete'].indexOf(phase);
 
@@ -139,13 +151,16 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                             width: 600 * scale,
                             height: 600 * scale,
                             overflow: 'hidden',
-                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${isFirstPlayer ? 'rgba(72, 187, 120, 0.3)' : 'rgba(246, 173, 85, 0.3)'}`,
+                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${isFirstPlayer ? 'rgba(248, 113, 113, 0.4)' : 'rgba(147, 197, 253, 0.4)'}`,
                         }}
                     >
                         <img
                             src={getLeaderImg(myPlayer.class)}
                             alt={myPlayer.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={myPlayer.class === 'AJA'
+                                ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }
+                                : { width: '100%', height: '100%', objectFit: 'cover' }
+                            }
                         />
                     </div>
 
@@ -187,7 +202,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
-                                background: isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
+                                background: isFirstPlayer ? 'rgba(248, 113, 113, 0.85)' : 'rgba(147, 197, 253, 0.85)',
                                 borderRadius: 20 * scale,
                                 border: '3px solid white',
                                 animation: 'turnOrderFadeIn 1s ease-out',
@@ -225,13 +240,16 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                             width: 600 * scale,
                             height: 600 * scale,
                             overflow: 'hidden',
-                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${!isFirstPlayer ? 'rgba(72, 187, 120, 0.3)' : 'rgba(246, 173, 85, 0.3)'}`,
+                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${!isFirstPlayer ? 'rgba(248, 113, 113, 0.4)' : 'rgba(147, 197, 253, 0.4)'}`,
                         }}
                     >
                         <img
                             src={getLeaderImg(opponentPlayer.class)}
                             alt={opponentPlayer.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={opponentPlayer.class === 'AJA'
+                                ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }
+                                : { width: '100%', height: '100%', objectFit: 'cover' }
+                            }
                         />
                     </div>
 
@@ -273,7 +291,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 padding: `${12 * scale}px ${32 * scale}px`,
-                                background: !isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
+                                background: !isFirstPlayer ? 'rgba(248, 113, 113, 0.85)' : 'rgba(147, 197, 253, 0.85)',
                                 borderRadius: 20 * scale,
                                 border: '3px solid white',
                                 animation: 'turnOrderFadeIn 1s ease-out',

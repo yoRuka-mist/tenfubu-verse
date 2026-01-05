@@ -12,7 +12,9 @@ export type NetworkMessage =
     | { type: 'EFFECT'; payload: { effectType: string; targetPlayerId: string; targetIndex: number; targetInstanceId?: string; isBuff?: boolean; atkBuff?: number; hpBuff?: number } }
     | { type: 'REMATCH_REQUEST' }
     | { type: 'REMATCH_ACCEPT' }
-    | { type: 'SURRENDER'; payload: { playerId: string } };
+    | { type: 'SURRENDER'; payload: { playerId: string } }
+    | { type: 'READY_FOR_INTRO' }  // Signal that player is ready for BattleIntro
+    | { type: 'START_INTRO' };     // Signal to start BattleIntro simultaneously
 
 export interface NetworkAdapter {
     isHost: boolean;

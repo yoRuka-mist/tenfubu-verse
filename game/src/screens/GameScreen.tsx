@@ -4,6 +4,7 @@ import { ClassType, Player, Card as CardModel, StampId, StampDisplay, GameState 
 import { Card } from '../components/Card';
 import { BattleIntro } from '../components/BattleIntro';
 import { BattleOutro, OutroPhase } from '../components/BattleOutro';
+import { TurnTimer } from '../components/TurnTimer';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 
@@ -121,14 +122,16 @@ const LEADER_SIZE = 240;
 interface GameScreenProps {
     playerClass: ClassType;
     opponentType: 'CPU' | 'ONLINE';
-    gameMode: 'CPU' | 'HOST' | 'JOIN';
+    gameMode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH';
     targetRoomId?: string;
     onLeave: () => void;
+    onRematching?: (deckType: ClassType) => void; // ランダムマッチ用：マッチング再開コールバック（クラス選択付き）
     networkAdapter?: any; // NetworkAdapter passed from LobbyScreen
     networkConnected?: boolean;
     opponentClass?: ClassType; // For online play: opponent's class selection
     aiDifficulty?: 'EASY' | 'NORMAL' | 'HARD'; // AI difficulty for CPU mode
     playerName: string; // Player's display name
+    timerEnabled?: boolean; // ターンタイマー有効/無効（デフォルト: true）
 }
 
 
@@ -1544,12 +1547,16 @@ interface BattleStats {
     myFollowersDestroyed: number;
 }
 
+// 勝利理由の型
+type VictoryReason = 'normal' | 'disconnect' | 'surrender';
+
 // Simple internal component for Game Over
 interface GameOverScreenProps {
     winnerId: string;
     playerId: string;
     playerClass: ClassType;
     onRematch: (deckType: ClassType) => void;
+    onRematching?: (deckType: ClassType) => void; // ランダムマッチ用：マッチング再開（クラス選択付き）
     onLeave: () => void;
     isOnline: boolean;
     isRoomMatch?: boolean; // ルームマッチかどうか（falseならランダムマッチ）
@@ -1558,6 +1565,7 @@ interface GameOverScreenProps {
     battleStats: BattleStats;
     selectedCardInfo: CardModel | null;
     onCardInfoClick: (card: CardModel | null) => void;
+    victoryReason?: VictoryReason; // 勝利理由（切断/降参/通常）
 }
 
 // リザルト画面のアニメーションフェーズ
@@ -1570,8 +1578,22 @@ type ResultAnimPhase =
     | 'buttons'         // ボタン
     | 'complete';       // 完了
 
-const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
+const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematching, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick, victoryReason = 'normal' }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
+
+    // 勝利理由のメッセージを取得
+    const getVictoryReasonMessage = () => {
+        if (!isVictory) return null;
+        switch (victoryReason) {
+            case 'disconnect':
+                return '対戦相手が切断されました。';
+            case 'surrender':
+                return '対戦相手が降参しました。';
+            default:
+                return null;
+        }
+    };
+    const victoryReasonMessage = getVictoryReasonMessage();
 
     // アニメーションフェーズ管理
     const [animPhase, setAnimPhase] = React.useState<ResultAnimPhase>('bg-fade');
@@ -1645,13 +1667,19 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
     // Handle deck selection and start rematch
     const handleDeckSelect = (deckType: ClassType) => {
         setSelectedDeck(deckType);
-        onRematch(deckType);
+        // ランダムマッチ（オンライン＆非ルームマッチ）：onRematching
+        // CPU戦・ルームマッチ：onRematch
+        if (isOnline && !isRoomMatch && onRematching) {
+            onRematching(deckType);
+        } else {
+            onRematch(deckType);
+        }
     };
 
     // Get rematch button text based on state
     const getRematchButtonText = () => {
-        // ルームマッチ: 再戦、ランダムマッチ: 再マッチング
-        const rematchLabel = isRoomMatch ? '再戦' : '再マッチング';
+        // CPU戦・ルームマッチ: 再戦、ランダムマッチ: 再マッチング
+        const rematchLabel = (!isOnline || isRoomMatch) ? '再戦' : '再マッチング';
         if (!isOnline) {
             return myRematchRequested ? '再戦中...' : rematchLabel;
         }
@@ -1707,7 +1735,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
         height: 220,
         borderRadius: '50%',
         border: selectedDeck === deckType ? '5px solid #f6e05e' : '4px solid rgba(255,255,255,0.4)',
-        background: `url(${getLeaderImg(deckType)}) center/cover`,
+        background: deckType === 'AJA'
+            ? `url(${getLeaderImg(deckType)}) center top/cover`
+            : `url(${getLeaderImg(deckType)}) center/cover`,
         cursor: 'pointer',
         transform: isHovered ? 'scale(1.1)' : 'scale(1)',
         transition: 'all 0.2s ease',
@@ -1864,6 +1894,21 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                     {isVictory ? '勝利' : '敗北'}
                 </div>
 
+                {/* Victory reason message (disconnect/surrender) */}
+                {victoryReasonMessage && (
+                    <div style={{
+                        fontSize: '1.1rem',
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        marginTop: -10,
+                        marginBottom: 20,
+                        opacity: phaseIndex >= 2 ? 1 : 0,
+                        transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(20px)',
+                        transition: 'opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s'
+                    }}>
+                        {victoryReasonMessage}
+                    </div>
+                )}
+
                 {/* Battle Statistics - phase 3 (stats) */}
                 <div style={{
                     display: 'flex',
@@ -1979,6 +2024,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                         <button
                             onClick={() => {
                                 if (!myRematchRequested) {
+                                    // ルームマッチ・ランダムマッチ共通：デッキ選択画面を表示
                                     setShowDeckSelect(true);
                                 }
                             }}
@@ -2065,8 +2111,12 @@ const DeckSelectButton = ({ deckType, label, onSelect, getStyle }: DeckSelectBut
 // --- Custom Hook for Visual Board ---
 // NOTE: Deep copy passiveAbilities to ensure React detects changes correctly
 // This fixes the issue where effects (AURA, BARRIER) don't display during rapid updates
-const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
+// isProcessingEffectRef: 効果処理中は死んだカードの削除を遅延して位置ずれを防ぐ
+const useVisualBoard = (realBoard: (CardModel | any | null)[], isProcessingEffectRef?: React.RefObject<boolean>) => {
     const [visualBoard, setVisualBoard] = React.useState<(any & { isDying?: boolean })[]>([]);
+    // Track dying cards that need cleanup after effects complete
+    const pendingCleanupRef = React.useRef(false);
+
     // Track previous real board to detect removals
     React.useEffect(() => {
         setVisualBoard(prev => {
@@ -2108,21 +2158,45 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
         });
     }, [realBoard]);
 
-    // Cleanup timer
+    // Cleanup timer - 効果処理中は死んだカードの削除を遅延
     React.useEffect(() => {
         const hasDying = visualBoard.some(c => c.isDying);
         if (hasDying) {
+            // 効果処理中の場合はクリーンアップを遅延
+            if (isProcessingEffectRef?.current) {
+                pendingCleanupRef.current = true;
+                return;
+            }
+
             const timer = setTimeout(() => {
                 setVisualBoard(prev => prev.filter(c => !c.isDying));
             }, 700); // 0.7s delay (shortened from 1.2s)
             return () => clearTimeout(timer);
         }
-    }, [visualBoard]);
+    }, [visualBoard, isProcessingEffectRef]);
+
+    // 効果処理が完了したら遅延していたクリーンアップを実行
+    React.useEffect(() => {
+        const checkAndCleanup = () => {
+            if (!isProcessingEffectRef?.current && pendingCleanupRef.current) {
+                pendingCleanupRef.current = false;
+                // 効果処理完了後、少し待ってからクリーンアップ
+                const timer = setTimeout(() => {
+                    setVisualBoard(prev => prev.filter(c => !c.isDying));
+                }, 300);
+                return () => clearTimeout(timer);
+            }
+        };
+
+        // 定期的にチェック（効果処理完了を検知）
+        const interval = setInterval(checkAndCleanup, 100);
+        return () => clearInterval(interval);
+    }, [isProcessingEffectRef]);
 
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, onRematching, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName, timerEnabled = true }) => {
     // For online play, use the adapter passed from LobbyScreen
     // Only use useGameNetwork hook for CPU mode (where it returns nothing)
     // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
@@ -2162,9 +2236,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // === ONLINE PLAY: Player ID assignment ===
     // HOST is always p1 (goes first in standard rules)
     // JOIN is always p2
-    const isHost = gameMode === 'HOST' || gameMode === 'CPU';
+    // For CASUAL_MATCH/RANKED_MATCH, use adapter.isHost to determine player role
+    const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
+                   ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter?.isHost === true);
     const currentPlayerId = isHost ? 'p1' : 'p2';
     const opponentPlayerId = isHost ? 'p2' : 'p1';
+
+    // DEBUG: Log initial state for intro sync troubleshooting
+    console.log('[GameScreen INIT]', {
+        gameMode,
+        'adapter?.isHost': adapter?.isHost,
+        isHost,
+        currentPlayerId,
+        connected,
+        'networkAdapter provided': !!networkAdapter,
+        networkConnected
+    });
 
     // CPU対戦時は相手クラスを決定
     // For online play, use propOpponentClass if provided
@@ -2178,22 +2265,45 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Game state initialization
     // HOST initializes the game, JOIN waits for INIT_GAME message
+    // For CASUAL_MATCH/RANKED_MATCH, non-host also waits for INIT_GAME
+    const isJoinSide = gameMode === 'JOIN' ||
+                       ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && !isHost);
     const [gameState, dispatch] = useReducer(gameReducer, null, () => {
         const opponentDefaultName = gameMode === 'CPU' ? 'CPU' : '対戦相手';
-        if (gameMode === 'JOIN') {
-            // JOIN: Create empty placeholder state, will be replaced by SYNC_STATE
+        if (isJoinSide) {
+            // JOIN side: Create empty placeholder state, will be replaced by SYNC_STATE
             return initializeGame(opponentDefaultName, opponentClass, playerName, playerClass);
         }
         // HOST or CPU: Initialize normally (HOST is p1)
         return initializeGame(playerName, playerClass, opponentDefaultName, opponentClass);
     });
 
-    // Track if game has been synced (for JOIN)
-    const [gameSynced, setGameSynced] = useState(gameMode !== 'JOIN');
+    // Track if game has been synced (for JOIN side)
+    const [gameSynced, setGameSynced] = useState(!isJoinSide);
 
     // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
-    const [showBattleIntro, setShowBattleIntro] = React.useState(gameMode !== 'JOIN'); // Show battle intro on game start (skip for JOIN until INIT_GAME)
+    // For CASUAL_MATCH/RANKED_MATCH: Both sides wait for sync before showing BattleIntro
+    const isCasualOrRanked = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+    const [showBattleIntro, setShowBattleIntro] = React.useState(
+        isCasualOrRanked ? false : !isJoinSide // CASUAL_MATCH: wait for sync, otherwise: show immediately (except JOIN)
+    );
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
+
+    // CASUAL_MATCH/RANKED_MATCH: Sync state for coordinated BattleIntro start
+    const [waitingForIntroSync, setWaitingForIntroSync] = React.useState(isCasualOrRanked);
+    const [opponentReadyForIntro, setOpponentReadyForIntro] = React.useState(false);
+    const introSyncSentRef = React.useRef(false); // Prevent multiple READY_FOR_INTRO sends
+
+    // DEBUG: Log sync state for troubleshooting
+    console.log('[GameScreen SYNC STATE]', {
+        isCasualOrRanked,
+        isJoinSide,
+        gameSynced,
+        waitingForIntroSync,
+        opponentReadyForIntro,
+        showBattleIntro,
+        'introSyncSentRef.current': introSyncSentRef.current
+    });
     const [outroCompleted, setOutroCompleted] = React.useState(false); // Track if outro animation has completed
     const [outroPhase, setOutroPhase] = React.useState<OutroPhase | null>(null); // Current outro animation phase
     const [outroShakeIntensity, setOutroShakeIntensity] = React.useState(0); // 爆散時の画面振動強度（0〜1）
@@ -2207,6 +2317,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Rematch states for online play
     const [myRematchRequested, setMyRematchRequested] = React.useState(false);
     const [opponentRematchRequested, setOpponentRematchRequested] = React.useState(false);
+
+    // Victory reason tracking (disconnect/surrender/normal)
+    const [victoryReason, setVictoryReason] = React.useState<VictoryReason>('normal');
 
     // Current player class (can be changed on rematch)
     const [currentPlayerClass, setCurrentPlayerClass] = React.useState<ClassType>(playerClass);
@@ -2279,18 +2392,99 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Track previous logs to detect necromance activation
     const prevLogsLengthRef = React.useRef(gameState.logs.length);
 
-    // HOST: Send initial game state when connected AND coin toss is complete
+    // HOST side: Send initial game state when connected
+    // For HOST/JOIN mode: Wait for coin toss to complete before sending INIT_GAME
+    // For CASUAL_MATCH/RANKED_MATCH: Send immediately on connection (BattleIntro handles coin toss)
     const initialStateSentRef = useRef(false);
+    // Prevent multiple HANDSHAKE sends (caused by useEffect re-running on gameState changes)
+    const handshakeSentRef = useRef(false);
+    // Store opponent's name received via HANDSHAKE to re-apply after INIT_GAME sync
+    const opponentNameRef = useRef<string | null>(null);
     useEffect(() => {
-        if (gameMode === 'HOST' && connected && adapter && !initialStateSentRef.current && coinTossPhase === 'DONE') {
-            console.log('[GameScreen] HOST: Sending initial game state to JOIN after coin toss');
+        const isHostSide = gameMode === 'HOST' ||
+                           ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && isHost);
+
+        // For CASUAL_MATCH/RANKED_MATCH: Send INIT_GAME immediately on connection
+        // For HOST mode: Wait for coinTossPhase === 'DONE'
+        const canSendInitGame = isCasualOrRanked
+            ? (connected && adapter)
+            : (connected && adapter && coinTossPhase === 'DONE');
+
+        // DEBUG: Log INIT_GAME send conditions
+        console.log('[GameScreen INIT_GAME useEffect]', {
+            isHostSide,
+            isCasualOrRanked,
+            connected,
+            'adapter exists': !!adapter,
+            coinTossPhase,
+            canSendInitGame,
+            'initialStateSentRef.current': initialStateSentRef.current
+        });
+
+        if (isHostSide && canSendInitGame && !initialStateSentRef.current) {
+            console.log('[GameScreen] HOST side: Sending initial game state to JOIN');
+            initialStateSentRef.current = true; // Set early to prevent double-send
+
             // Small delay to ensure JOIN's message handler is ready
-            setTimeout(() => {
-                adapter.send({ type: 'INIT_GAME', payload: gameState });
-                initialStateSentRef.current = true;
-            }, 500);
+            const sendInitAndReady = () => {
+                console.log('[GameScreen] HOST side: Actually sending INIT_GAME now, isFirstPlayer:', isFirstPlayer);
+
+                // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
+                // isFirstPlayer indicates if HOST (p1) goes first
+                // If HOST goes second (isFirstPlayer=false), then p2 is first player
+                const stateToSend = isCasualOrRanked
+                    ? {
+                        ...gameState,
+                        firstPlayerId: isFirstPlayer ? 'p1' : 'p2'
+                    }
+                    : gameState;
+
+                adapter.send({ type: 'INIT_GAME', payload: stateToSend });
+
+                // For CASUAL_MATCH/RANKED_MATCH: Send READY_FOR_INTRO after INIT_GAME
+                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
+                    console.log('[GameScreen] HOST side: Sending READY_FOR_INTRO');
+                    adapter.send({ type: 'READY_FOR_INTRO' });
+                    introSyncSentRef.current = true;
+                }
+            };
+
+            // Initial send after 500ms
+            setTimeout(sendInitAndReady, 500);
+
+            // Retry after 2 seconds if opponent hasn't responded with READY_FOR_INTRO
+            // This handles cases where JOIN's message handler wasn't ready
+            if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
+                setTimeout(() => {
+                    if (!opponentReadyForIntro) {
+                        console.log('[GameScreen] HOST side: Retrying INIT_GAME (no response yet)');
+                        sendInitAndReady();
+                    }
+                }, 2500);
+            }
         }
-    }, [gameMode, connected, adapter, gameState, coinTossPhase]);
+    }, [gameMode, connected, adapter, gameState, coinTossPhase, isHost, isCasualOrRanked, opponentReadyForIntro]);
+
+    // CASUAL_MATCH/RANKED_MATCH: JOIN side sends READY_FOR_INTRO after receiving INIT_GAME
+    useEffect(() => {
+        if (!isCasualOrRanked || !adapter || !gameSynced || introSyncSentRef.current) return;
+        if (isJoinSide) {
+            console.log('[GameScreen] JOIN side: Sending READY_FOR_INTRO after game sync');
+            adapter.send({ type: 'READY_FOR_INTRO' });
+            introSyncSentRef.current = true;
+        }
+    }, [isCasualOrRanked, adapter, gameSynced, isJoinSide]);
+
+    // CASUAL_MATCH/RANKED_MATCH: HOST sends START_INTRO when both sides are ready
+    useEffect(() => {
+        if (!isCasualOrRanked || !adapter || !waitingForIntroSync) return;
+        if (isHost && opponentReadyForIntro && introSyncSentRef.current) {
+            console.log('[GameScreen] HOST side: Both ready, sending START_INTRO');
+            adapter.send({ type: 'START_INTRO' });
+            setWaitingForIntroSync(false);
+            setShowBattleIntro(true);
+        }
+    }, [isCasualOrRanked, adapter, isHost, opponentReadyForIntro, waitingForIntroSync]);
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
@@ -2350,16 +2544,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         prevLogsLengthRef.current = currentLength;
     }, [gameState.logs.length, currentPlayerId, opponentPlayerId, player?.name, gameState.players]);
 
-    const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || []);
-    const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || []);
+    // Effect Processing State - useVisualBoardより前に宣言（依存関係のため）
+    const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
+    const isProcessingEffectRef = React.useRef(false); // Ref for stable access in async functions
+
+    // useVisualBoardにisProcessingEffectRefを渡して、効果処理中は盤面整理を遅延
+    const visualPlayerBoard = useVisualBoard(gameState.players[currentPlayerId]?.board || [], isProcessingEffectRef);
+    const visualOpponentBoard = useVisualBoard(gameState.players[opponentPlayerId]?.board || [], isProcessingEffectRef);
 
     // --- Visual Board Refs (declared early for use in playEffect) ---
     const visualPlayerBoardRef = React.useRef(visualPlayerBoard);
     const visualOpponentBoardRef = React.useRef(visualOpponentBoard);
-
-    // Effect Processing State
-    const [isProcessingEffect, setIsProcessingEffect] = React.useState(false);
-    const isProcessingEffectRef = React.useRef(false); // Ref for stable access in async functions
     const [turnNotification, setTurnNotification] = React.useState<string | null>(null);
     const [notifiedTurn, setNotifiedTurn] = React.useState<number>(-1); // Track notified turn
     const processingHandledRef = React.useRef<any>(null);
@@ -2408,6 +2603,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [dragParticles, setDragParticles] = React.useState<DragParticle[]>([]);
     const dragParticleIdRef = React.useRef(0);
     const dragParticleAngleRef = React.useRef(0); // 360度均等に散らばらせるための角度追跡
+
+    // End Turn Button Ref（タイムアップ時のエフェクト発火用）
+    const endTurnButtonRef = React.useRef<HTMLButtonElement>(null);
 
     // ドラッグ中にパーティクルを生成
     // dragStateを直接参照し、座標はuseRef経由で取得
@@ -3862,7 +4060,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         };
     }, [audioSettings.bgmEnabled, audioSettings.bgm, bgmLoadedForClass]); // Changed audioSettings.enabled to audioSettings.bgmEnabled
     useEffect(() => {
-        if (!adapter) return;
+        if (!adapter) {
+            console.log('[GameScreen] Message handler setup skipped - no adapter yet');
+            return;
+        }
+
+        console.log('[GameScreen] Setting up message handler, adapter.isHost:', adapter.isHost);
 
         const handleMessage = (msg: any) => {
             console.log('[GameScreen] Received message:', msg.type, msg);
@@ -3875,6 +4078,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     ? rawName.trim().slice(0, 12) || '対戦相手'
                     : '対戦相手';
                 console.log('[GameScreen] Received HANDSHAKE from opponent:', sanitizedName);
+
+                // Store opponent's name in ref for later use (in case INIT_GAME overwrites it)
+                opponentNameRef.current = sanitizedName;
+
                 const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                 dispatch({
                     type: 'UPDATE_PLAYER_NAME',
@@ -3886,23 +4093,58 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 return;
             }
 
-            // INIT_GAME: JOIN receives initial game state from HOST
+            // INIT_GAME: JOIN side receives initial game state from HOST
             if (msg.type === 'INIT_GAME') {
-                console.log('[GameScreen] JOIN: Received initial game state from HOST');
+                console.log('[GameScreen] JOIN side: Received initial game state from HOST');
                 dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
 
                 // Re-apply local player name after SYNC_STATE (fixes JOIN-side name overwrite)
+                // Use currentPlayerId instead of hardcoded 'p2' for CASUAL_MATCH compatibility
                 dispatch({
                     type: 'UPDATE_PLAYER_NAME',
-                    payload: { playerId: 'p2', name: playerName }
+                    payload: { playerId: currentPlayerId, name: playerName }
                 });
+
+                // Re-apply opponent's name if we received HANDSHAKE before INIT_GAME
+                // This fixes the case where INIT_GAME payload has default name "対戦相手"
+                const opponentId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                if (opponentNameRef.current) {
+                    console.log('[GameScreen] Re-applying opponent name after INIT_GAME:', opponentNameRef.current);
+                    dispatch({
+                        type: 'UPDATE_PLAYER_NAME',
+                        payload: { playerId: opponentId, name: opponentNameRef.current }
+                    });
+                }
 
                 setGameSynced(true);
 
                 // Show BattleIntro for JOIN with correct first player info
-                const isJoinFirst = msg.payload.firstPlayerId === 'p2';
-                setIsFirstPlayer(isJoinFirst);
-                setShowBattleIntro(true); // JOINもBattleIntroを表示
+                const isJoinSideFirst = msg.payload.firstPlayerId === currentPlayerId;
+                console.log('[GameScreen] JOIN side: Setting isFirstPlayer, firstPlayerId:', msg.payload.firstPlayerId, 'currentPlayerId:', currentPlayerId, 'isJoinSideFirst:', isJoinSideFirst);
+                setIsFirstPlayer(isJoinSideFirst);
+
+                // For CASUAL_MATCH/RANKED_MATCH: Don't show BattleIntro immediately, wait for sync
+                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
+                    console.log('[GameScreen] CASUAL_MATCH JOIN side: Waiting for intro sync');
+                    // Intro sync will be handled by READY_FOR_INTRO/START_INTRO messages
+                } else {
+                    setShowBattleIntro(true); // For HOST/JOIN mode: show immediately
+                }
+                return;
+            }
+
+            // READY_FOR_INTRO: Opponent is ready to start BattleIntro (CASUAL_MATCH/RANKED_MATCH only)
+            if (msg.type === 'READY_FOR_INTRO') {
+                console.log('[GameScreen] Received READY_FOR_INTRO from opponent');
+                setOpponentReadyForIntro(true);
+                return;
+            }
+
+            // START_INTRO: Host signals to start BattleIntro simultaneously
+            if (msg.type === 'START_INTRO') {
+                console.log('[GameScreen] Received START_INTRO - starting BattleIntro now');
+                setWaitingForIntroSync(false);
+                setShowBattleIntro(true);
                 return;
             }
 
@@ -4108,6 +4350,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 console.log('[GameScreen] Opponent surrendered:', surrenderedPlayerId);
+                setVictoryReason('surrender');
                 dispatch({ type: 'CONCEDE', playerId: surrenderedPlayerId });
                 return;
             }
@@ -4190,7 +4433,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         adapter.onMessage(handleMessage);
 
         // Send HANDSHAKE to opponent with player name (for online play only)
-        if (gameMode !== 'CPU') {
+        // Use handshakeSentRef to prevent re-sending on useEffect re-runs (triggered by gameState changes)
+        if (gameMode !== 'CPU' && !handshakeSentRef.current) {
+            handshakeSentRef.current = true;
             adapter.send({
                 type: 'HANDSHAKE',
                 payload: { name: playerName, class: playerClass }
@@ -4199,6 +4444,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         adapter.onClose(() => {
+            // For CASUAL_MATCH/RANKED_MATCH, don't show alert if game is already over
+            // The player will naturally go back to title after viewing results
+            if ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && gameState.phase === 'GAME_OVER') {
+                console.log('[GameScreen] Connection closed after game over (casual match) - silent disconnect');
+                return; // Don't force return to title, let player view results
+            }
+
+            // For online play: If game is still in progress, treat disconnect as opponent surrender
+            // The remaining player wins
+            if (gameMode !== 'CPU' && gameState.phase !== 'GAME_OVER') {
+                console.log('[GameScreen] Opponent disconnected during game - treating as surrender, player wins');
+
+                // Set victory reason to disconnect
+                setVictoryReason('disconnect');
+
+                // Set game state to game over with current player as winner
+                const newState = {
+                    ...gameState,
+                    phase: 'GAME_OVER' as const,
+                    winnerId: currentPlayerId,
+                    logs: [...gameState.logs, '相手との接続が切断されました。あなたの勝利です！']
+                };
+                dispatch({ type: 'SYNC_STATE', payload: newState });
+                return; // Don't show alert or force return - let victory animation play
+            }
+
+            // For other cases (e.g., lobby/room match with no game in progress)
             alert('相手との接続が切断されました。\nタイトルに戻ります。');
             onLeave();
         });
@@ -4207,7 +4479,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         return () => {
             // Note: PeerJS replaces the callback when onMessage is called again
         };
-    }, [adapter, gameState, playSE, playEffect, gameMode, onLeave]);  // Removed 'connected' from deps to avoid re-registering
+    }, [adapter, gameState, playSE, playEffect, gameMode, onLeave, currentPlayerId]);  // Removed 'connected' from deps to avoid re-registering
 
     // AI Logic State
     const aiProcessing = React.useRef(false);
@@ -4691,6 +4963,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     useEffect(() => {
         if (gameMode !== 'CPU') return;
 
+        // ゲーム終了後はAI処理を停止
+        if (gameState.winnerId) {
+            aiProcessing.current = false;
+            return;
+        }
+
         const currentTurnKey = `${gameState.turnCount}-${gameState.activePlayerId}`;
 
         // Reset processing flag if turn changed to player
@@ -4781,40 +5059,136 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     return attacker.currentAttack >= target.currentHealth;
                 };
 
+                // Calculate total damage AI can deal this turn (for lethal check)
+                const calculatePotentialDamage = (state: any): number => {
+                    let damage = 0;
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                    const playerBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    const hasWard = playerBoard.some((c: any) => c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH'));
+
+                    for (const card of aiBoard) {
+                        if (!card.canAttack) continue;
+                        // STORM can attack face even on turn played
+                        const isStorm = card.passiveAbilities?.includes('STORM');
+                        const canGoFace = isStorm || card.turnPlayed !== state.turnCount;
+                        if (!canGoFace) continue;
+                        // If there's a ward, can't attack face (unless stealth)
+                        if (hasWard && !card.passiveAbilities?.includes('STEALTH') && !card.hadStealth) continue;
+                        damage += card.currentAttack || 0;
+                        if (card.passiveAbilities?.includes('DOUBLE_ATTACK')) damage += card.currentAttack || 0;
+                    }
+                    return damage;
+                };
+
+                // Calculate enemy's potential threat (damage they could deal next turn)
+                const calculateEnemyThreat = (state: any): number => {
+                    let threat = 0;
+                    const playerBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    for (const card of playerBoard) {
+                        threat += (card.currentAttack || 0);
+                        if (card.passiveAbilities?.includes('DOUBLE_ATTACK')) threat += card.currentAttack || 0;
+                        if (card.passiveAbilities?.includes('BANE')) threat += 15; // BANE is very threatening
+                        if (card.passiveAbilities?.includes('STORM')) threat += 10;
+                    }
+                    return threat;
+                };
+
                 // Score a card for playing (higher = better)
                 const scoreCardForPlaying = (card: any, state: any): number => {
                     let score = card.cost * 10; // Base score from cost
                     const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
                     const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                    const playerHp = state.players[currentPlayerId].hp;
+                    const aiHp = state.players[opponentPlayerId].hp;
+                    const aiPp = state.players[opponentPlayerId].pp;
 
-                    // Bonus for removal effects when enemy has board
+                    // === LETHAL CHECK: Highest priority ===
+                    // If playing this STORM card could win the game, massive bonus
+                    if (card.passiveAbilities?.includes('STORM')) {
+                        const currentDamage = calculatePotentialDamage(state);
+                        const cardDamage = card.attack || 0;
+                        if (currentDamage + cardDamage >= playerHp) {
+                            score += 500; // Lethal! Play this for sure
+                        } else if (playerHp <= 10) {
+                            score += 100; // Close to lethal
+                        } else {
+                            score += 30; // Storm is always good
+                        }
+                    }
+
+                    // === REMOVAL when enemy has threats ===
                     if (enemyBoard.length > 0) {
                         const triggers = card.triggers || [];
+                        const enemyThreat = calculateEnemyThreat(state);
                         for (const trig of triggers) {
                             if (trig.trigger === 'FANFARE') {
                                 for (const eff of trig.effects || []) {
-                                    if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
-                                        score += 30;
+                                    if (eff.type === 'DESTROY') {
+                                        score += 60 + (enemyThreat > 10 ? 30 : 0);
+                                    }
+                                    if (eff.type === 'RANDOM_DESTROY') {
+                                        const count = eff.value || 1;
+                                        score += 40 * count + (enemyThreat > 10 ? 20 : 0);
+                                    }
+                                    if (['DAMAGE', 'SELECT_DAMAGE'].includes(eff.type)) {
+                                        score += 35;
+                                    }
+                                    if (eff.type === 'AOE_DAMAGE') {
+                                        score += 25 * Math.min(enemyBoard.length, 3);
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Bonus for STORM when enemy leader is low HP
-                    const playerHp = state.players[currentPlayerId].hp;
-                    if (card.passiveAbilities?.includes('STORM') && playerHp <= 10) {
-                        score += 50;
+                    // === SURVIVAL: Play defensively if low HP ===
+                    if (aiHp <= 10) {
+                        if (card.passiveAbilities?.includes('WARD')) {
+                            score += 80; // WARD is critical when low
+                        }
+                        // Removal becomes more valuable
+                        score += 20;
+                    }
+
+                    // === TEMPO: Prefer efficient plays ===
+                    // Bonus for using PP efficiently (don't waste PP)
+                    if (card.cost === aiPp) {
+                        score += 15; // Perfect PP usage
+                    } else if (aiPp - card.cost <= 1) {
+                        score += 10; // Near-perfect usage
+                    }
+
+                    // === VALUE CARDS ===
+                    const triggers = card.triggers || [];
+                    for (const trig of triggers) {
+                        if (trig.trigger === 'FANFARE') {
+                            for (const eff of trig.effects || []) {
+                                if (eff.type === 'DRAW') score += 20 * (eff.value || 1);
+                                if (eff.type === 'SUMMON_CARD' || eff.type === 'SUMMON_CARD_RUSH') score += 30;
+                                if (eff.type === 'GENERATE_CARD') score += 15;
+                                if (eff.type === 'HEAL') score += (aiHp < 15 ? 25 : 10);
+                            }
+                        }
+                    }
+
+                    // === STAT-BASED VALUE ===
+                    if (card.type === 'FOLLOWER') {
+                        // Good stat efficiency
+                        const statTotal = (card.attack || 0) + (card.health || 0);
+                        if (statTotal >= card.cost * 2.5) score += 15;
+
+                        // WARD when enemy has board
+                        if (card.passiveAbilities?.includes('WARD') && enemyBoard.length > 0) {
+                            score += 25;
+                        }
+
+                        // BANE is valuable
+                        if (card.passiveAbilities?.includes('BANE')) score += 20;
                     }
 
                     // Penalty if board is full
                     if (card.type === 'FOLLOWER' && aiBoard.length >= 5) {
-                        score -= 100;
-                    }
-
-                    // Bonus for WARD when enemy has threats
-                    if (card.passiveAbilities?.includes('WARD') && enemyBoard.length > 0) {
-                        score += 20;
+                        score -= 200;
                     }
 
                     return score;
@@ -4824,46 +5198,145 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const scoreEvolveTarget = (card: any, _idx: number, state: any, useSuperEvolve: boolean): number => {
                     let score = 0;
                     const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
 
                     // Base: Cards with evolve effects are priority
                     const triggers = card.triggers || [];
+                    const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
+                    let hasEvolveEffect = false;
+
                     for (const trig of triggers) {
-                        const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
                         if (trig.trigger === trigType) {
+                            hasEvolveEffect = true;
                             for (const eff of trig.effects || []) {
                                 // Damage/Destroy effects are valuable when enemy has board
                                 if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
-                                    score += enemyBoard.length > 0 ? 50 : 10;
+                                    score += enemyBoard.length > 0 ? 80 : 5; // Much higher if enemy has board
                                 }
                                 // Summon effects are always good
                                 if (['SUMMON_CARD', 'SUMMON_CARD_RUSH'].includes(eff.type)) {
-                                    score += 40;
+                                    score += 60;
                                 }
-                                // Buff effects
+                                // Buff effects - valuable if we have multiple followers
                                 if (eff.type === 'BUFF_STATS') {
-                                    score += 30;
+                                    const targetType = eff.targetType || 'SELF';
+                                    if (targetType === 'ALL_OTHER_FOLLOWERS' || targetType === 'ALL_FOLLOWERS') {
+                                        score += 25 * Math.max(1, aiBoard.length - 1);
+                                    } else {
+                                        score += 30;
+                                    }
                                 }
                                 // Draw
                                 if (eff.type === 'DRAW') {
-                                    score += 25;
+                                    score += 35;
                                 }
                                 // Generate card
                                 if (eff.type === 'GENERATE_CARD') {
-                                    score += 20;
+                                    score += 25;
                                 }
                             }
                         }
                     }
 
-                    // Cards that can attack immediately get +2/+2 value
+                    // Cards that can attack immediately benefit more from evolve
                     if (card.canAttack) {
+                        score += 30;
+                        // +2/+2 is more valuable on cards that can attack now
+                        score += (card.currentAttack || 0) * 5;
+                    } else {
+                        // Cards that can't attack yet benefit less from stat boost
+                        score += (card.currentAttack || 0) * 2;
+                    }
+
+                    // High-cost cards usually have better evolve effects
+                    if (card.cost >= 6 && hasEvolveEffect) {
                         score += 20;
                     }
 
-                    // Higher attack cards benefit more from +2/+2
-                    score += (card.currentAttack || 0) * 3;
+                    // Penalty for evolving low-impact cards without effects
+                    if (!hasEvolveEffect && card.cost <= 3) {
+                        score -= 30;
+                    }
 
                     return score;
+                };
+
+                // Decide if AI should evolve this turn (returns true if evolving is worth it)
+                const shouldEvolveThisTurn = (state: any, useSuperEvolve: boolean): boolean => {
+                    const aiPlayer = state.players[opponentPlayerId];
+                    const aiBoard = aiPlayer.board.filter((c: any) => c !== null);
+                    const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    const playerHp = state.players[currentPlayerId].hp;
+                    const aiHp = state.players[opponentPlayerId].hp;
+                    const turnCount = state.turnCount;
+
+                    // No cards to evolve
+                    const evolvableCandidates = aiBoard.filter((c: any) => c && !c.hasEvolved);
+                    if (evolvableCandidates.length === 0) return false;
+
+                    // Get the best candidate and its score
+                    const scores = evolvableCandidates.map((c: any, i: number) => ({
+                        c, i, score: scoreEvolveTarget(c, i, state, useSuperEvolve)
+                    }));
+                    const bestScore = Math.max(...scores.map((s: { c: any, i: number, score: number }) => s.score));
+
+                    // === Situations where evolving is GOOD ===
+
+                    // 1. Close to lethal - evolve for extra damage
+                    if (playerHp <= 12 && aiBoard.some((c: any) => c && c.canAttack)) {
+                        return true;
+                    }
+
+                    // 2. AI HP is low - need to stabilize
+                    if (aiHp <= 10) {
+                        return true;
+                    }
+
+                    // 3. Enemy has threatening board
+                    const enemyThreat = calculateEnemyThreat(state);
+                    if (enemyThreat >= 8) {
+                        // Check if we have removal evolve effects
+                        const hasRemovalEvolve = evolvableCandidates.some((c: any) => {
+                            const triggers = c.triggers || [];
+                            for (const trig of triggers) {
+                                if (trig.trigger === (useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE')) {
+                                    for (const eff of trig.effects || []) {
+                                        if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                            return false;
+                        });
+                        if (hasRemovalEvolve && enemyBoard.length > 0) return true;
+                    }
+
+                    // 4. High-value evolve available (strong evolve effect)
+                    if (bestScore >= 80) {
+                        return true;
+                    }
+
+                    // 5. Super evolve is generally worth using when available
+                    if (useSuperEvolve && bestScore >= 50) {
+                        return true;
+                    }
+
+                    // === Situations where we should SAVE evolve ===
+
+                    // 1. Early game (turn 4-5) - save evolve unless urgent
+                    if (turnCount <= 5 && aiHp >= 15 && enemyThreat < 8) {
+                        // Only evolve early if there's a really good target
+                        return bestScore >= 100;
+                    }
+
+                    // 2. No good evolve targets
+                    if (bestScore < 30) {
+                        return false;
+                    }
+
+                    // Default: evolve if score is decent
+                    return bestScore >= 50;
                 };
 
                 // Find best target for attack
@@ -5133,68 +5606,100 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             let target;
                             const useSuper = canSuperEvolveCheck;
 
-                            if (aiDifficulty === 'EASY') {
-                                // Random selection
-                                target = candidates[Math.floor(Math.random() * candidates.length)];
-                            } else {
-                                // Score-based selection
-                                const scored = candidates.map(({ c, i }) => ({
-                                    c, i, score: scoreEvolveTarget(c!, i, state, useSuper)
-                                }));
-                                scored.sort((a, b) => b.score - a.score);
-                                target = scored[0];
-                            }
-
-                            // Find best target for evolve effects
-                            let targetId = undefined;
-                            const enemyBoard = state.players[currentPlayerId].board;
-                            const validTargets = enemyBoard.filter((c: any) =>
-                                c !== null &&
-                                !c.passiveAbilities?.includes('STEALTH') &&
-                                !c.passiveAbilities?.includes('AURA')
-                            );
-
-                            if (validTargets.length > 0) {
-                                if (aiDifficulty === 'HARD') {
-                                    // Choose highest value target
-                                    const sortedTargets = [...validTargets].sort((a: any, b: any) => {
-                                        let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
-                                        let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
-                                        return scoreB - scoreA;
-                                    });
-                                    targetId = sortedTargets[0]!.instanceId;
-                                } else {
-                                    targetId = validTargets[0]!.instanceId;
+                            // HARD: Check if we should even evolve this turn
+                            if (aiDifficulty === 'HARD') {
+                                if (!shouldEvolveThisTurn(state, useSuper)) {
+                                    // Skip evolution - save EP for better opportunity
+                                    console.log('[AI HARD] Skipping evolution - saving EP for better opportunity');
+                                    // Continue to attack phase without evolving
                                 }
                             }
 
-                            const cardRect = opponentBoardRefs.current[target.i]?.getBoundingClientRect();
+                            // Proceed with evolution selection if not skipped
+                            const shouldSkipEvolve = aiDifficulty === 'HARD' && !shouldEvolveThisTurn(state, useSuper);
 
-                            if (cardRect) {
-                                setEvolveAnimation({
-                                    card: target.c!,
-                                    evolvedImageUrl: target.c!.evolvedImageUrl,
-                                    startX: cardRect.left + cardRect.width / 2,
-                                    startY: cardRect.top + cardRect.height / 2,
-                                    useSep: useSuper,
-                                    phase: 'ZOOM_IN',
-                                    followerIndex: target.i,
-                                    sourcePlayerId: opponentPlayerId,
-                                    targetId: targetId
-                                });
+                            if (!shouldSkipEvolve) {
+                                if (aiDifficulty === 'EASY') {
+                                    // Random selection
+                                    target = candidates[Math.floor(Math.random() * candidates.length)];
+                                } else {
+                                    // Score-based selection
+                                    const scored = candidates.map(({ c, i }) => ({
+                                        c, i, score: scoreEvolveTarget(c!, i, state, useSuper)
+                                    }));
+                                    scored.sort((a, b) => b.score - a.score);
 
-                                await waitForIdle(800);
-                            } else {
-                                dispatchAndSend({
-                                    type: 'EVOLVE',
-                                    playerId: opponentPlayerId,
-                                    payload: {
-                                        followerIndex: target.i,
-                                        useSep: useSuper,
-                                        targetId: targetId
+                                    // HARD: Only evolve if score is high enough
+                                    if (aiDifficulty === 'HARD' && scored[0].score < 5) {
+                                        // Low value evolution, skip
+                                        console.log('[AI HARD] Evolution target score too low:', scored[0].score);
+                                        target = null;
+                                    } else {
+                                        target = scored[0];
                                     }
-                                });
-                                await waitForIdle(400);
+                                }
+                            } else {
+                                target = null;
+                            }
+
+                            // Only proceed with evolution if target was selected
+                            if (target) {
+                                // Find best target for evolve effects
+                                let targetId = undefined;
+                                const enemyBoard = state.players[currentPlayerId].board;
+                                const validTargets = enemyBoard.filter((c: any) =>
+                                    c !== null &&
+                                    !c.passiveAbilities?.includes('STEALTH') &&
+                                    !c.passiveAbilities?.includes('AURA')
+                                );
+
+                                if (validTargets.length > 0) {
+                                    if (aiDifficulty === 'HARD') {
+                                        // Choose highest value target based on threat level
+                                        const sortedTargets = [...validTargets].sort((a: any, b: any) => {
+                                            let scoreA = (a.currentAttack || 0) * 2 + (a.currentHealth || 0);
+                                            let scoreB = (b.currentAttack || 0) * 2 + (b.currentHealth || 0);
+                                            // Bonus for dangerous abilities
+                                            if (a.passiveAbilities?.includes('BANE')) scoreA += 10;
+                                            if (b.passiveAbilities?.includes('BANE')) scoreB += 10;
+                                            if (a.passiveAbilities?.includes('DOUBLE_ATTACK')) scoreA += 5;
+                                            if (b.passiveAbilities?.includes('DOUBLE_ATTACK')) scoreB += 5;
+                                            return scoreB - scoreA;
+                                        });
+                                        targetId = sortedTargets[0]!.instanceId;
+                                    } else {
+                                        targetId = validTargets[0]!.instanceId;
+                                    }
+                                }
+
+                                const cardRect = opponentBoardRefs.current[target.i]?.getBoundingClientRect();
+
+                                if (cardRect) {
+                                    setEvolveAnimation({
+                                        card: target.c!,
+                                        evolvedImageUrl: target.c!.evolvedImageUrl,
+                                        startX: cardRect.left + cardRect.width / 2,
+                                        startY: cardRect.top + cardRect.height / 2,
+                                        useSep: useSuper,
+                                        phase: 'ZOOM_IN',
+                                        followerIndex: target.i,
+                                        sourcePlayerId: opponentPlayerId,
+                                        targetId: targetId
+                                    });
+
+                                    await waitForIdle(800);
+                                } else {
+                                    dispatchAndSend({
+                                        type: 'EVOLVE',
+                                        playerId: opponentPlayerId,
+                                        payload: {
+                                            followerIndex: target.i,
+                                            useSep: useSuper,
+                                            targetId: targetId
+                                        }
+                                    });
+                                    await waitForIdle(400);
+                                }
                             }
                         }
                     }
@@ -5205,11 +5710,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     let continueAttacking = true;
                     let attempts = 0;
 
+                    // === LETHAL CHECK (HARD only): Go face if we can kill ===
+                    const checkForLethal = (state: any): boolean => {
+                        if (aiDifficulty !== 'HARD') return false;
+                        const playerHp = state.players[currentPlayerId].hp;
+                        const potentialDamage = calculatePotentialDamage(state);
+                        return potentialDamage >= playerHp;
+                    };
+
                     while (continueAttacking && attempts < 15) {
+                        // ゲーム終了チェック
+                        if (gameStateRef.current.winnerId) {
+                            continueAttacking = false;
+                            break;
+                        }
                         attempts++;
                         const state = gameStateRef.current;
                         const aiBoard = state.players[opponentPlayerId].board;
                         const playerBoard = state.players[currentPlayerId].board;
+
+                        // Lethal mode: all attackers go face
+                        const isLethalMode = checkForLethal(state);
 
                         let actionTaken = false;
 
@@ -5232,8 +5753,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 )
                                 : -1;
 
+                            // === LETHAL MODE: Skip followers, go face (unless ward blocks) ===
+                            if (isLethalMode && wardTarget === -1) {
+                                const hasStorm = attacker.passiveAbilities?.includes('STORM');
+                                const canGoFace = hasStorm || attacker.turnPlayed !== state.turnCount;
+                                if (canGoFace) {
+                                    targetIndex = -1;
+                                    targetIsLeader = true;
+                                } else {
+                                    // RUSH: must attack follower, find any valid target
+                                    const validTargets = playerBoard
+                                        .map((c: any, idx: number) => ({ c, idx }))
+                                        .filter(({ c }: any) => c && !c.passiveAbilities?.includes('STEALTH') && !c.passiveAbilities?.includes('AURA') && !isImmuneToFollowerAttack(c, state));
+                                    if (validTargets.length > 0) {
+                                        targetIndex = validTargets[0].idx;
+                                        targetIsLeader = false;
+                                    } else {
+                                        continue; // Can't attack
+                                    }
+                                }
+                            }
                             // If ward exists and attacker can't ignore it, must attack ward
-                            if (wardTarget !== -1) {
+                            else if (wardTarget !== -1) {
                                 targetIndex = wardTarget;
                                 targetIsLeader = false;
                             } else if (aiDifficulty === 'EASY') {
@@ -5343,12 +5884,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // ターン終了前にすべてのpendingEffects（ラストワード等）が処理されるまで待機
                 await waitForIdle(300);
 
+                // ゲーム終了していたらEND_TURNを発行しない
+                if (gameStateRef.current.winnerId) {
+                    aiProcessing.current = false;
+                    return;
+                }
+
                 dispatch({ type: 'END_TURN', playerId: opponentPlayerId });
                 aiProcessing.current = false;
             };
             runAiTurn();
         }
-    }, [gameState.activePlayerId, gameState.turnCount, gameMode, gameState.phase, aiDifficulty]);
+    }, [gameState.activePlayerId, gameState.turnCount, gameMode, gameState.phase, aiDifficulty, gameState.winnerId]);
 
 
 
@@ -5392,6 +5939,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // Block card play while pendingEffects are being processed
         const currentState = gameStateRef.current;
+
+        // 勝敗決着後は操作をブロック
+        if (currentState.winnerId) {
+            console.log("UI: Card play drag blocked - game has ended");
+            return;
+        }
+
         if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
             console.log("UI: Card play drag blocked - pendingEffects still processing");
             return;
@@ -5425,6 +5979,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // Use fresh state for validation to fix evolution-attack sync issues
         const currentState = gameStateRef.current;
+
+        // 勝敗決着後は操作をブロック
+        if (currentState.winnerId) {
+            console.log("UI: Attack drag blocked - game has ended");
+            return;
+        }
         const playerBoard = currentState.players[currentPlayerId].board;
 
         // Find actual board index using instanceId (critical for correct targeting when board has nulls)
@@ -5480,6 +6040,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // Block evolve while pendingEffects are being processed
         const currentState = gameStateRef.current;
+
+        // 勝敗決着後は操作をブロック
+        if (currentState.winnerId) {
+            console.log("UI: Evolve drag blocked - game has ended");
+            return;
+        }
+
         if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
             console.log("UI: Evolve drag blocked - pendingEffects still processing");
             return;
@@ -5495,12 +6062,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (!canEvolve(player, gameState.turnCount, isFirstPlayer)) return;
         }
 
-        // Use Screen Coords directly
+        // Use EP/SEP element center as start position (not mouse position)
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const startCenterX = rect.left + rect.width / 2;
+        const startCenterY = rect.top + rect.height / 2;
+
         const newState = {
             sourceType: 'EVOLVE' as const,
             sourceIndex: 0, // Dummy index
-            startX: clientX,
-            startY: clientY,
+            startX: startCenterX,
+            startY: startCenterY,
             currentX: clientX,
             currentY: clientY,
             offsetX: 0,
@@ -5585,8 +6156,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             const distance = Math.sqrt(dx * dx + dy * dy);
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-            // 距離が一定以上（80px = innerRadius）離れ、かつ上半円内（-180度〜0度、つまりdy < 0）
-            if (distance > 60 && dy < 0) {
+            // UIと同じ判定範囲（innerRadius=200, outerRadius=320）、かつ上半円内（dy < 0）
+            const innerRadius = 200;
+            const outerRadius = 320;
+            if (distance >= innerRadius && distance <= outerRadius && dy < 0) {
                 // 角度からスタンプIDを計算（上半円を8等分）
                 // Math.atan2で上方向: -180度（左上）〜 -90度（真上）〜 0度（右上）
                 // SVG描画では: 180度（左）〜 90度（真上）〜 0度（右）
@@ -5725,6 +6298,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const handleGlobalMouseUp = () => {
             const currentDrag = dragStateRef.current;
             const currentHover = hoveredTargetRef.current;
+
+            // 勝敗決着後は全ての操作をキャンセル
+            if (gameStateRef.current.winnerId) {
+                console.log("[handleGlobalMouseUp] Game has ended, cancelling all actions");
+                setDragState(null);
+                dragStateRef.current = null;
+                setHoveredTarget(null);
+                return;
+            }
 
             if (currentDrag) {
                 // Hand Drag Logic (Arrow to Board)
@@ -6514,6 +7096,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     };
 
     const handleEndTurn = async () => {
+        // ゲーム終了後は何もしない
+        if (gameState.winnerId) {
+            console.log('[handleEndTurn] Game is over, ignoring');
+            return;
+        }
         // CRITICAL: Check using ref for accurate async state
         if (gameState.activePlayerId !== currentPlayerId) {
             console.log('[handleEndTurn] Not my turn, ignoring');
@@ -6605,6 +7192,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setIsEndingTurn(false);
     };
 
+    // タイムアップ時のハンドラ（パーティクルエフェクト＋SE＋ターン終了）
+    const handleTimerTimeUp = useCallback(() => {
+        // SE再生
+        playSE('sisiodosi.mp3', 0.6);
+
+        // ボタンの位置を取得してエフェクト発火
+        const button = endTurnButtonRef.current;
+        if (button) {
+            const rect = button.getBoundingClientRect();
+            triggerEndTurnEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }
+
+        // ターン終了処理
+        handleEndTurn();
+    }, [playSE, handleEndTurn]);
+
     const remainingEvolves = 2 - (player?.evolutionsUsed || 0);
     const isPlayerFirstPlayer = currentPlayerId === gameState.firstPlayerId;
 
@@ -6680,9 +7283,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         };
     }, []); // Only run once on mount
 
-    // JOIN: Wait for game state sync from HOST
+    // JOIN/CASUAL_MATCH: Wait for game state sync from HOST
     // This must be AFTER all hooks to maintain consistent hook order
-    if (gameMode === 'JOIN' && !gameSynced) {
+    const needsSync = (gameMode === 'JOIN' && !gameSynced) ||
+                      (isCasualOrRanked && isJoinSide && !gameSynced);
+    if (needsSync) {
         return (
             <div style={{
                 height: '100dvh',
@@ -6724,6 +7329,48 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         );
     }
 
+    // CASUAL_MATCH/RANKED_MATCH: Wait for intro sync (both sides ready)
+    // Show "マッチング完了！" while waiting for BattleIntro to start
+    if (isCasualOrRanked && waitingForIntroSync && gameSynced) {
+        return (
+            <div style={{
+                height: '100dvh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                color: 'white',
+                gap: '1rem'
+            }}>
+                <div style={{
+                    fontSize: '2rem',
+                    fontWeight: 'bold',
+                    color: '#4ade80',
+                    textShadow: '0 0 10px rgba(74, 222, 128, 0.5)',
+                    marginBottom: '0.5rem'
+                }}>
+                    マッチング完了！
+                </div>
+                <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid rgba(74, 222, 128, 0.3)',
+                    borderTop: '4px solid #4ade80',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                }} />
+                <p style={{ color: '#a0aec0' }}>対戦を開始しています...</p>
+                <style>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        );
+    }
+
     // Scale-adjusted base dimensions for 4K support
     // Now uses independent X/Y scaling to fill entire viewport without black bars
     // At base resolution (1920x1080), scaleX = scaleY = 1
@@ -6747,6 +7394,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     isFirstPlayer={isFirstPlayer}
                     onComplete={handleBattleIntroComplete}
                     scale={scale}
+                    onVsImpact={() => playSE('vs.mp3', 0.7)}
+                    onCoinToss={() => playSE('coin.mp3', 0.7)}
                 />
             )}
 
@@ -7155,7 +7804,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute',
                             inset: 0,
                             borderRadius: '50%',
-                            background: `url(${getLeaderImg(opponent.class)}) center/cover`,
+                            background: opponent.class === 'AJA'
+                                ? `url(${getLeaderImg(opponent.class)}) center top/cover`
+                                : `url(${getLeaderImg(opponent.class)}) center/cover`,
                             border: opponentHasLeaderDamageCap
                                 ? '4px solid #67e8f9'
                                 : (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
@@ -7165,11 +7816,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
                             animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
                             // 終了演出: 自分の勝利時（相手が敗者）にフェーズに応じてスタイル変更
-                            ...(gameState.winnerId === currentPlayerId && outroPhase ? {
+                            // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
+                            ...(gameState.winnerId === currentPlayerId && (outroPhase || outroCompleted) ? {
                                 filter: outroPhase === 'white-fade' ? 'brightness(2) saturate(0.3)'
-                                    : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 'brightness(3) saturate(0) blur(10px)'
+                                    : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out' || outroCompleted) ? 'brightness(3) saturate(0) blur(10px)'
                                     : 'none',
-                                opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 0 : 1,
+                                opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out' || outroCompleted) ? 0 : 1,
                             } : {})
                         }}>
                             {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
@@ -7733,84 +8385,99 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             <div style={{ fontSize: `${1.8 * scale}rem`, fontWeight: 900, color: '#f6e05e', fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif' }}>{opponent.pp}/{opponent.maxPp}</div>
                             <div style={{ display: 'flex', gap: 4 * scale, justifyContent: 'center' }}>{Array(Math.min(10, opponent.maxPp)).fill(0).map((_, i) => <div key={i} style={{ width: 10 * scale, height: 10 * scale, borderRadius: '50%', background: i < opponent.pp ? '#f6e05e' : '#2d3748' }} />)}</div>
                         </div>
-                        {/* End Turn Button */}
-                        <button
-                            disabled={gameState.activePlayerId !== currentPlayerId || isEndingTurn}
-                            onMouseDown={(e) => {
-                                e.stopPropagation();
-                                if (gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
-                                    setIsEndTurnPressed(true);
-                                }
-                            }}
-                            onMouseUp={(e) => {
-                                e.stopPropagation();
-                                if (isEndTurnPressed && gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
-                                    setIsEndTurnPressed(false);
-                                    // SE再生
-                                    playSE('sisiodosi.mp3', 0.6);
-                                    // ボタン中央の座標を取得してエフェクト発火
-                                    const rect = (e.target as HTMLElement).closest('button')?.getBoundingClientRect();
-                                    if (rect) {
-                                        triggerEndTurnEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
-                                    }
-                                    handleEndTurn();
-                                }
-                            }}
-                            onMouseLeave={() => {
-                                // マウスがボタン外に出たら押下状態をリセット
-                                setIsEndTurnPressed(false);
-                            }}
-                            style={{
-                                width: 160 * scale,
-                                height: 160 * scale,
-                                borderRadius: '50%',
-                                border: '4px solid rgba(255,255,255,0.2)',
-                                background: isEndingTurn
-                                    ? 'linear-gradient(135deg, #805ad5, #6b46c1)'
-                                    : isEndTurnPressed
-                                        ? 'linear-gradient(135deg, #5a9bd5, #4a7fb0)' // 押下中は明るめに
-                                        : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
-                                color: 'white',
-                                fontWeight: 900,
-                                fontSize: `${2 * scale}rem`,
-                                fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif',
-                                boxShadow: gameState.activePlayerId === currentPlayerId
-                                    ? (isEndTurnPressed ? '0 0 20px rgba(66, 153, 225, 0.5)' : '0 0 40px rgba(66, 153, 225, 0.8)')
-                                    : 'none',
-                                opacity: isEndTurnPressed ? 0.8 : 1, // 押下中は少し薄く
-                                cursor: (gameState.activePlayerId === currentPlayerId && !isEndingTurn) ? 'pointer' : 'default',
-                                transition: 'all 0.1s', // 押下反応を早くする
-                                position: 'relative',
-                                overflow: 'hidden',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                lineHeight: 1.2
-                            }}
-                        >
-                            {/* 紋章背景 */}
-                            <img
-                                src={getAssetUrl('/assets/tenfubu_mark.png')}
-                                alt=""
-                                style={{
-                                    position: 'absolute',
-                                    width: '80%',
-                                    height: '80%',
-                                    objectFit: 'contain',
-                                    opacity: 0.25, // 0.15 → 0.25 くっきり表示
-                                    pointerEvents: 'none'
-                                }}
+                        {/* End Turn Button with Timer */}
+                        <div style={{ position: 'relative', width: 160 * scale, height: 160 * scale }}>
+                            {/* Turn Timer (circular gauge around button) */}
+                            <TurnTimer
+                                isMyTurn={gameState.activePlayerId === currentPlayerId}
+                                turnCount={gameState.turnCount}
+                                activePlayerId={gameState.activePlayerId}
+                                onTimeUp={handleTimerTimeUp}
+                                timerEnabled={timerEnabled}
+                                isGameOver={!!gameState.winnerId}
+                                scale={scale}
+                                buttonSize={160}
+                                timerDuration={60}
                             />
-                            {isEndingTurn ? (
-                                <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>処理中...</span>
-                            ) : (
-                                <>
-                                    <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>ターン</span>
-                                    <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>終了</span>
-                                </>
-                            )}
-                        </button>
+                            <button
+                                ref={endTurnButtonRef}
+                                disabled={gameState.activePlayerId !== currentPlayerId || isEndingTurn}
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    if (gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
+                                        setIsEndTurnPressed(true);
+                                    }
+                                }}
+                                onMouseUp={(e) => {
+                                    e.stopPropagation();
+                                    if (isEndTurnPressed && gameState.activePlayerId === currentPlayerId && !isEndingTurn) {
+                                        setIsEndTurnPressed(false);
+                                        // SE再生
+                                        playSE('sisiodosi.mp3', 0.6);
+                                        // ボタン中央の座標を取得してエフェクト発火
+                                        const rect = (e.target as HTMLElement).closest('button')?.getBoundingClientRect();
+                                        if (rect) {
+                                            triggerEndTurnEffect(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                                        }
+                                        handleEndTurn();
+                                    }
+                                }}
+                                onMouseLeave={() => {
+                                    // マウスがボタン外に出たら押下状態をリセット
+                                    setIsEndTurnPressed(false);
+                                }}
+                                style={{
+                                    width: 160 * scale,
+                                    height: 160 * scale,
+                                    borderRadius: '50%',
+                                    border: '4px solid rgba(255,255,255,0.2)',
+                                    background: isEndingTurn
+                                        ? 'linear-gradient(135deg, #805ad5, #6b46c1)'
+                                        : isEndTurnPressed
+                                            ? 'linear-gradient(135deg, #5a9bd5, #4a7fb0)' // 押下中は明るめに
+                                            : (gameState.activePlayerId === currentPlayerId ? 'linear-gradient(135deg, #3182ce, #2b6cb0)' : '#2d3748'),
+                                    color: 'white',
+                                    fontWeight: 900,
+                                    fontSize: `${2 * scale}rem`,
+                                    fontFamily: '"游明朝", "Yu Mincho", "ヒラギノ明朝 ProN", "Hiragino Mincho ProN", serif',
+                                    boxShadow: gameState.activePlayerId === currentPlayerId
+                                        ? (isEndTurnPressed ? '0 0 20px rgba(66, 153, 225, 0.5)' : '0 0 40px rgba(66, 153, 225, 0.8)')
+                                        : 'none',
+                                    opacity: isEndTurnPressed ? 0.8 : 1, // 押下中は少し薄く
+                                    cursor: (gameState.activePlayerId === currentPlayerId && !isEndingTurn) ? 'pointer' : 'default',
+                                    transition: 'all 0.1s', // 押下反応を早くする
+                                    position: 'relative',
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    lineHeight: 1.2
+                                }}
+                            >
+                                {/* 紋章背景 */}
+                                <img
+                                    src={getAssetUrl('/assets/tenfubu_mark.png')}
+                                    alt=""
+                                    style={{
+                                        position: 'absolute',
+                                        width: '80%',
+                                        height: '80%',
+                                        objectFit: 'contain',
+                                        opacity: 0.25, // 0.15 → 0.25 くっきり表示
+                                        pointerEvents: 'none'
+                                    }}
+                                />
+                                {isEndingTurn ? (
+                                    <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>処理中...</span>
+                                ) : (
+                                    <>
+                                        <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>ターン</span>
+                                        <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>終了</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                         {/* Player PP */}
                         <div style={{ textAlign: 'center' }}>
                             {/* PP数値表示 - エクストラPP有効時は「PP + 1」表示 */}
@@ -8329,15 +8996,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
                                 position: 'relative',
                                 // 終了演出: 相手の勝利時（自分が敗者）にフェーズに応じてスタイル変更
-                                ...(gameState.winnerId && gameState.winnerId !== currentPlayerId && outroPhase ? {
+                                // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
+                                ...(gameState.winnerId && gameState.winnerId !== currentPlayerId && (outroPhase || outroCompleted) ? {
                                     filter: outroPhase === 'white-fade' ? 'brightness(2) saturate(0.3)'
-                                        : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 'brightness(3) saturate(0) blur(10px)'
+                                        : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out' || outroCompleted) ? 'brightness(3) saturate(0) blur(10px)'
                                         : 'none',
-                                    opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 0 : 1,
+                                    opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out' || outroCompleted) ? 0 : 1,
                                 } : {})
                             }}
                         >
-                            <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                            <img src={getLeaderImg(player.class)} style={player.class === 'AJA'
+                                ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', pointerEvents: 'none' }
+                                : { width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }
+                            } />
                             {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
                             {playerHasCyanEffect && (
                                 <div style={{
@@ -9607,6 +10278,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             setOutroCompleted(true);
                             setOutroPhase(null);
                             setOutroShakeIntensity(0);
+
+                            // For CASUAL_MATCH/RANKED_MATCH, disconnect after game over
+                            // This prevents the "connection closed" alert when opponent leaves
+                            if ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter) {
+                                console.log('[GameScreen] Disconnecting after game over (casual match)');
+                                adapter.disconnect();
+                            }
                         }}
                         onPhaseChange={setOutroPhase}
                         onShakeIntensityChange={setOutroShakeIntensity}
@@ -9622,6 +10300,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             playerId={currentPlayerId}
                             playerClass={player?.class || 'SENKA'}
                             isOnline={opponentType === 'ONLINE'}
+                            isRoomMatch={gameMode === 'HOST' || gameMode === 'JOIN'}
                             myRematchRequested={myRematchRequested}
                             opponentRematchRequested={opponentRematchRequested}
                             battleStats={{
@@ -9633,6 +10312,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }}
                             selectedCardInfo={resultCardInfo}
                             onCardInfoClick={setResultCardInfo}
+                            victoryReason={victoryReason}
+                            onRematching={onRematching}
                             onRematch={(deckType: ClassType) => {
                                 if (opponentType === 'ONLINE') {
                                     // Online mode: Send rematch request to opponent

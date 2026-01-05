@@ -12,7 +12,7 @@ const getAssetUrl = (path: string): string => {
 // Leader Images
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
-const yorukaSecretImg = getAssetUrl('/leaders/yoruka_secret.png');
+const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -21,11 +21,13 @@ const BASE_HEIGHT = 720;
 interface ClassSelectScreenProps {
     onSelectClass: (cls: ClassType) => void;
     onBack: () => void;
-    gameMode?: 'CPU' | 'HOST' | 'JOIN';
+    gameMode?: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH';
     aiDifficulty?: AIDifficulty;
     onDifficultyChange?: (difficulty: AIDifficulty) => void;
     playerName: string;
     onPlayerNameChange: (name: string) => void;
+    timerEnabled?: boolean;
+    onTimerEnabledChange?: (enabled: boolean) => void;
 }
 
 export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
@@ -35,7 +37,9 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
     aiDifficulty = 'NORMAL',
     onDifficultyChange,
     playerName,
-    onPlayerNameChange
+    onPlayerNameChange,
+    timerEnabled = true,
+    onTimerEnabledChange
 }) => {
     // Responsive scaling (same approach as GameScreen)
     const [scale, setScale] = useState(1);
@@ -51,15 +55,15 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
         return () => window.removeEventListener('resize', updateScale);
     }, []);
 
-    // Base sizes
-    const cardWidth = 250 * scale;
-    const cardHeight = 350 * scale;
-    const titleSize = 2.5 * scale;
-    const classNameSize = 2 * scale;
-    const subtitleSize = 0.9 * scale;
-    const descSize = 0.8 * scale;
-    const gap = 2 * scale;
-    const buttonPadding = `${10 * scale}px ${20 * scale}px`;
+    // Base sizes - reduced for 3 cards fit
+    const cardWidth = 200 * scale;
+    const cardHeight = 280 * scale;
+    const titleSize = 2 * scale;
+    const classNameSize = 1.4 * scale;
+    const subtitleSize = 0.75 * scale;
+    const descSize = 0.65 * scale;
+    const gap = 1.2 * scale;
+    const buttonPadding = `${8 * scale}px ${16 * scale}px`;
 
     return (
         <div className="screen" style={{
@@ -71,18 +75,18 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
             background: '#1a1a2e',
             color: 'white'
         }}>
-            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${1.5 * scale}rem` }}>クラスを選択</h2>
+            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${0.5 * scale}rem`, marginTop: 0 }}>クラスを選択</h2>
 
             {/* Player Name Input */}
             <div style={{
-                marginBottom: `${2 * scale}rem`,
+                marginBottom: `${0.8 * scale}rem`,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: `${0.5 * scale}rem`
+                gap: `${0.3 * scale}rem`
             }}>
                 <label style={{
-                    fontSize: `${1 * scale}rem`,
+                    fontSize: `${0.9 * scale}rem`,
                     opacity: 0.8,
                     fontFamily: 'Tamanegi, sans-serif'
                 }}>
@@ -95,14 +99,14 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                     maxLength={12}
                     placeholder="名前を入力"
                     style={{
-                        padding: `${8 * scale}px ${16 * scale}px`,
-                        fontSize: `${1 * scale}rem`,
+                        padding: `${6 * scale}px ${12 * scale}px`,
+                        fontSize: `${0.9 * scale}rem`,
                         background: '#2d3748',
                         border: '2px solid #4a5568',
-                        borderRadius: 8 * scale,
+                        borderRadius: 6 * scale,
                         color: 'white',
                         outline: 'none',
-                        width: 200 * scale,
+                        width: 180 * scale,
                         textAlign: 'center',
                         fontFamily: 'Tamanegi, sans-serif'
                     }}
@@ -111,7 +115,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                 />
             </div>
 
-            <div style={{ display: 'flex', gap: `${gap}rem`, marginBottom: `${3 * scale}rem` }}>
+            <div style={{ display: 'flex', gap: `${gap}rem`, marginBottom: `${1 * scale}rem` }}>
                 {/* Senka Class */}
                 <div
                     onClick={() => onSelectClass('SENKA')}
@@ -119,7 +123,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                         width: cardWidth,
                         height: cardHeight,
                         border: '1px solid #444',
-                        borderRadius: 12 * scale,
+                        borderRadius: 10 * scale,
                         background: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -135,10 +139,10 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                     onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
                     <img src={senkaLeaderImg} alt="Senka" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
-                    <div style={{ padding: `${10 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ padding: `${6 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <h3 style={{ fontSize: `${classNameSize}rem`, color: '#e94560', margin: 0 }}>盞華</h3>
-                        <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>アグロ / ラッシュ</p>
-                        <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
+                        <p style={{ color: '#aaa', margin: `${3 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>アグロ / ラッシュ</p>
+                        <p style={{ padding: `0 ${0.5 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', lineHeight: 1.3 }}>
                             突進フォロワーと多面展開で<br />相手を圧倒する。
                         </p>
                     </div>
@@ -151,7 +155,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                         width: cardWidth,
                         height: cardHeight,
                         border: '1px solid #444',
-                        borderRadius: 12 * scale,
+                        borderRadius: 10 * scale,
                         background: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -166,12 +170,44 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                     onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                     onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img src={azyaLeaderImg} alt="Azya" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
-                    <div style={{ padding: `${10 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <img src={azyaLeaderImg} alt="Azya" style={{ width: '100%', height: '60%', objectFit: 'cover', objectPosition: 'center top' }} />
+                    <div style={{ padding: `${6 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <h3 style={{ fontSize: `${classNameSize}rem`, color: '#45a2e9', margin: 0 }}>あじゃ</h3>
-                        <p style={{ color: '#aaa', margin: `${5 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>コントロール / テクニカル</p>
-                        <p style={{ padding: `0 ${1 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif' }}>
+                        <p style={{ color: '#aaa', margin: `${3 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>コントロール / テクニカル</p>
+                        <p style={{ padding: `0 ${0.5 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', lineHeight: 1.3 }}>
                             強力な除去と堅牢な守護で<br />盤面を支配する。
+                        </p>
+                    </div>
+                </div>
+
+                {/* Yoruka Class */}
+                <div
+                    onClick={() => onSelectClass('YORUKA')}
+                    style={{
+                        width: cardWidth,
+                        height: cardHeight,
+                        border: '1px solid #444',
+                        borderRadius: 10 * scale,
+                        background: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s',
+                        boxShadow: '0 4px 20px rgba(168, 85, 247, 0.2)',
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                    <img src={yorukaLeaderImg} alt="Yoruka" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
+                    <div style={{ padding: `${6 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#a855f7', margin: 0 }}>Y</h3>
+                        <p style={{ color: '#aaa', margin: `${3 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>ミッドレンジ / トリッキー</p>
+                        <p style={{ padding: `0 ${0.5 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', lineHeight: 1.3 }}>
+                            墓地をリソースにする変則的な戦法で<br />相手を翻弄する。
                         </p>
                     </div>
                 </div>
@@ -180,23 +216,23 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
             {/* Difficulty Selector - Only show for CPU mode */}
             {gameMode === 'CPU' && onDifficultyChange && (
                 <div style={{
-                    marginBottom: `${2 * scale}rem`,
+                    marginBottom: `${0.6 * scale}rem`,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: `${0.5 * scale}rem`
+                    gap: `${0.3 * scale}rem`
                 }}>
-                    <p style={{ fontSize: `${1 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', marginBottom: `${0.5 * scale}rem` }}>
+                    <p style={{ fontSize: `${0.85 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', margin: 0 }}>
                         難易度を選択
                     </p>
-                    <div style={{ display: 'flex', gap: `${1 * scale}rem` }}>
+                    <div style={{ display: 'flex', gap: `${0.6 * scale}rem` }}>
                         {(['EASY', 'NORMAL', 'HARD'] as AIDifficulty[]).map((diff) => (
                             <button
                                 key={diff}
                                 onClick={() => onDifficultyChange(diff)}
                                 style={{
-                                    padding: `${8 * scale}px ${20 * scale}px`,
-                                    fontSize: `${0.9 * scale}rem`,
+                                    padding: `${6 * scale}px ${14 * scale}px`,
+                                    fontSize: `${0.8 * scale}rem`,
                                     background: aiDifficulty === diff
                                         ? (diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea')
                                         : 'transparent',
@@ -208,61 +244,83 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {diff === 'EASY' ? 'かんたん' : diff === 'NORMAL' ? 'ふつう' : 'むずかしい'}
+                                {diff === 'EASY' ? 'かんたん' : diff === 'NORMAL' ? 'ふつう' : 'オニ'}
                             </button>
                         ))}
                     </div>
                     <p style={{
-                        fontSize: `${0.75 * scale}rem`,
+                        fontSize: `${0.65 * scale}rem`,
                         opacity: 0.6,
                         fontFamily: 'Tamanegi, sans-serif',
-                        marginTop: `${0.3 * scale}rem`
+                        margin: 0
                     }}>
                         {aiDifficulty === 'EASY' && '初心者向け。CPUは単純な行動をとります。'}
                         {aiDifficulty === 'NORMAL' && '標準的な難易度。CPUは基本的な戦略を使います。'}
-                        {aiDifficulty === 'HARD' && '上級者向け。CPUは効果的な戦略で挑んできます。'}
+                        {aiDifficulty === 'HARD' && '上級者向け。CPUは最適な行動を計算してきます。'}
                     </p>
                 </div>
             )}
 
-            <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${1 * scale}rem`, marginBottom: `${1.5 * scale}rem` }}>タイトルに戻る</button>
-
-            {/* Hidden Character - yoRuka Secret Entry */}
-            <div
-                onClick={() => onSelectClass('YORUKA')}
-                style={{
-                    position: 'absolute',
-                    bottom: 20 * scale,
-                    right: 20 * scale,
+            {/* Turn Timer Toggle */}
+            {onTimerEnabledChange && (
+                <div style={{
+                    marginBottom: `${0.6 * scale}rem`,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    cursor: 'pointer',
-                    opacity: 0.6,
-                }}
-            >
-                <img
-                    src={yorukaSecretImg}
-                    alt="?"
-                    style={{
-                        width: 80 * scale,
-                        height: 80 * scale,
-                        objectFit: 'contain',
-                    }}
-                />
-                <div style={{
-                    marginTop: 8 * scale,
-                    padding: `${4 * scale}px ${10 * scale}px`,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    borderRadius: 8 * scale,
-                    fontSize: `${0.7 * scale}rem`,
-                    color: '#e2e8f0',
-                    fontFamily: 'Tamanegi, sans-serif',
-                    whiteSpace: 'nowrap',
+                    gap: `${0.3 * scale}rem`
                 }}>
-                    ほぼAIで作りました
+                    <p style={{ fontSize: `${0.85 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', margin: 0 }}>
+                        ターンタイマー
+                    </p>
+                    <div style={{ display: 'flex', gap: `${0.6 * scale}rem` }}>
+                        <button
+                            onClick={() => onTimerEnabledChange(true)}
+                            style={{
+                                padding: `${6 * scale}px ${14 * scale}px`,
+                                fontSize: `${0.8 * scale}rem`,
+                                background: timerEnabled ? '#3182ce' : 'transparent',
+                                border: `2px solid #3182ce`,
+                                color: '#fff',
+                                cursor: 'pointer',
+                                borderRadius: 4 * scale,
+                                fontFamily: 'Tamanegi, sans-serif',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            ON (60秒)
+                        </button>
+                        <button
+                            onClick={() => onTimerEnabledChange(false)}
+                            style={{
+                                padding: `${6 * scale}px ${14 * scale}px`,
+                                fontSize: `${0.8 * scale}rem`,
+                                background: !timerEnabled ? '#718096' : 'transparent',
+                                border: `2px solid #718096`,
+                                color: '#fff',
+                                cursor: 'pointer',
+                                borderRadius: 4 * scale,
+                                fontFamily: 'Tamanegi, sans-serif',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            OFF
+                        </button>
+                    </div>
+                    <p style={{
+                        fontSize: `${0.65 * scale}rem`,
+                        opacity: 0.6,
+                        fontFamily: 'Tamanegi, sans-serif',
+                        margin: 0
+                    }}>
+                        {timerEnabled
+                            ? '各ターン60秒の制限時間。0秒で自動ターン終了。'
+                            : '制限時間なし。じっくりプレイできます。'}
+                    </p>
                 </div>
-            </div>
+            )}
+
+            <button onClick={onBack} style={{ background: '#333', padding: buttonPadding, fontSize: `${0.9 * scale}rem`, marginBottom: `${0.5 * scale}rem` }}>タイトルに戻る</button>
         </div>
     );
 };
