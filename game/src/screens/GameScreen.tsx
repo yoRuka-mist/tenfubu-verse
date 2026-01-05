@@ -3,7 +3,7 @@ import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_
 import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
 import { Card } from '../components/Card';
 import { BattleIntro } from '../components/BattleIntro';
-import { BattleOutro } from '../components/BattleOutro';
+import { BattleOutro, OutroPhase } from '../components/BattleOutro';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 
@@ -1551,6 +1551,7 @@ interface GameOverScreenProps {
     onRematch: (deckType: ClassType) => void;
     onLeave: () => void;
     isOnline: boolean;
+    isRoomMatch?: boolean; // ルームマッチかどうか（falseならランダムマッチ）
     myRematchRequested: boolean;
     opponentRematchRequested: boolean;
     battleStats: BattleStats;
@@ -1558,8 +1559,54 @@ interface GameOverScreenProps {
     onCardInfoClick: (card: CardModel | null) => void;
 }
 
-const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, isOnline, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
+// リザルト画面のアニメーションフェーズ
+type ResultAnimPhase =
+    | 'bg-fade'         // 背景フェードイン
+    | 'image'           // 左側の勝利/敗北画像
+    | 'result-text'     // 勝利 or 敗北テキスト
+    | 'stats'           // 戦闘履歴
+    | 'rate'            // レート表示（将来実装）
+    | 'buttons'         // ボタン
+    | 'complete';       // 完了
+
+const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
+
+    // アニメーションフェーズ管理
+    const [animPhase, setAnimPhase] = React.useState<ResultAnimPhase>('bg-fade');
+    const phaseIndex = ['bg-fade', 'image', 'result-text', 'stats', 'rate', 'buttons', 'complete'].indexOf(animPhase);
+
+    // フェーズタイマー
+    React.useEffect(() => {
+        const timings: { [key in ResultAnimPhase]?: number } = {
+            'bg-fade': 300,
+            'image': 600,
+            'result-text': 400,
+            'stats': 400,
+            'rate': 300,     // 将来のレート表示用
+            'buttons': 0,    // 最後のフェーズ
+        };
+
+        if (animPhase === 'complete') return;
+
+        const nextPhase: { [key in ResultAnimPhase]?: ResultAnimPhase } = {
+            'bg-fade': 'image',
+            'image': 'result-text',
+            'result-text': 'stats',
+            'stats': 'rate',
+            'rate': 'buttons',
+            'buttons': 'complete',
+        };
+
+        const timer = setTimeout(() => {
+            const next = nextPhase[animPhase];
+            if (next) {
+                setAnimPhase(next);
+            }
+        }, timings[animPhase] || 0);
+
+        return () => clearTimeout(timer);
+    }, [animPhase]);
 
     // Get result image based on player class and victory status
     const getResultImage = () => {
@@ -1602,8 +1649,10 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
 
     // Get rematch button text based on state
     const getRematchButtonText = () => {
+        // ルームマッチ: 再戦、ランダムマッチ: 再マッチング
+        const rematchLabel = isRoomMatch ? '再戦' : '再マッチング';
         if (!isOnline) {
-            return myRematchRequested ? '再戦中...' : '再戦';
+            return myRematchRequested ? '再戦中...' : rematchLabel;
         }
         if (myRematchRequested && opponentRematchRequested) {
             return '再戦開始...';
@@ -1612,9 +1661,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
             return '相手を待機中...';
         }
         if (opponentRematchRequested) {
-            return '相手が再戦希望！';
+            return `相手が${rematchLabel}希望！`;
         }
-        return '再戦';
+        return rematchLabel;
     };
 
     const getRematchButtonStyle = () => {
@@ -1669,7 +1718,8 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
             position: 'absolute', inset: 0, zIndex: 5000,
             background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
             display: 'flex', flexDirection: 'row', alignItems: 'stretch',
-            animation: 'fadeIn 0.5s ease-out'
+            opacity: phaseIndex >= 0 ? 1 : 0,
+            transition: 'opacity 0.3s ease-out'
         }} onClick={() => { /* background click */ }}>
             <style>{`
                 @keyframes pulse {
@@ -1679,6 +1729,14 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                 @keyframes float {
                     0%, 100% { transform: translateY(0); }
                     50% { transform: translateY(-10px); }
+                }
+                @keyframes slideUpFadeIn {
+                    0% { opacity: 0; transform: translateY(30px); }
+                    100% { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes imageFadeIn {
+                    0% { opacity: 0; transform: scale(0.95); }
+                    100% { opacity: 0.9; transform: scale(1); }
                 }
             `}</style>
 
@@ -1771,7 +1829,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                         backgroundSize: 'contain',
                         backgroundPosition: 'center',
                         backgroundRepeat: 'no-repeat',
-                        opacity: 0.9
+                        opacity: phaseIndex >= 1 ? 0.9 : 0,
+                        transform: phaseIndex >= 1 ? 'scale(1)' : 'scale(0.95)',
+                        transition: 'opacity 0.6s ease-out, transform 0.6s ease-out'
                     }} />
                 )}
             </div>
@@ -1786,7 +1846,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                 padding: 40,
                 position: 'relative'
             }}>
-                {/* Result Text with Tamanegi font */}
+                {/* Result Text with Tamanegi font - phase 2 (result-text) */}
                 <div style={{
                     fontFamily: 'var(--font-tamanegi)',
                     fontSize: '5rem',
@@ -1795,12 +1855,15 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                         ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
                         : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
                     marginBottom: 20,
-                    animation: 'float 3s ease-in-out infinite'
+                    opacity: phaseIndex >= 2 ? 1 : 0,
+                    transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(30px)',
+                    transition: 'opacity 0.4s ease-out, transform 0.4s ease-out',
+                    animation: phaseIndex >= 2 ? 'float 3s ease-in-out infinite' : 'none'
                 }}>
                     {isVictory ? '勝利' : '敗北'}
                 </div>
 
-                {/* Battle Statistics */}
+                {/* Battle Statistics - phase 3 (stats) */}
                 <div style={{
                     display: 'flex',
                     flexWrap: 'wrap',
@@ -1810,7 +1873,10 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                     padding: '16px 24px',
                     background: 'rgba(0,0,0,0.3)',
                     borderRadius: 12,
-                    border: '1px solid rgba(255,255,255,0.1)'
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    opacity: phaseIndex >= 3 ? 1 : 0,
+                    transform: phaseIndex >= 3 ? 'translateY(0)' : 'translateY(30px)',
+                    transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
                 }}>
                     <div style={{ textAlign: 'center', minWidth: 80 }}>
                         <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f6e05e' }}>
@@ -1838,6 +1904,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                     </div>
                 </div>
 
+                {/* Rate display placeholder - phase 4 (rate) - 将来のランクマッチ用 */}
+                {/* TODO: ランクマッチ実装時にレート増減アニメーション、昇格演出を追加 */}
+
                 {/* yoRuka message - positioned above the yoRuka image */}
                 <div style={{
                     position: 'absolute',
@@ -1851,7 +1920,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                     textShadow: isVictory
                         ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
                         : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
-                    zIndex: 10
+                    zIndex: 10,
+                    opacity: phaseIndex >= 5 ? 1 : 0,
+                    transition: 'opacity 0.4s ease-out'
                 }}>
                     {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
                 </div>
@@ -1898,7 +1969,12 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', gap: 20 }}>
+                    <div style={{
+                        display: 'flex', gap: 20,
+                        opacity: phaseIndex >= 5 ? 1 : 0,
+                        transform: phaseIndex >= 5 ? 'translateY(0)' : 'translateY(30px)',
+                        transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
+                    }}>
                         <button
                             onClick={() => {
                                 if (!myRematchRequested) {
@@ -1944,8 +2020,8 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onLeave, i
                         backgroundPosition: 'center',
                         borderRadius: 12,
                         cursor: showDeckSelect && !myRematchRequested ? 'pointer' : 'default',
-                        opacity: 0.7,
-                        transition: 'opacity 0.3s ease',
+                        opacity: phaseIndex >= 5 ? 0.7 : 0,
+                        transition: 'opacity 0.4s ease',
                         boxShadow: '0 8px 20px rgba(0,0,0,0.4)'
                     }}
                 />
@@ -2117,6 +2193,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [showBattleIntro, setShowBattleIntro] = React.useState(gameMode !== 'JOIN'); // Show battle intro on game start (skip for JOIN until INIT_GAME)
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
     const [outroCompleted, setOutroCompleted] = React.useState(false); // Track if outro animation has completed
+    const [outroPhase, setOutroPhase] = React.useState<OutroPhase | null>(null); // Current outro animation phase
+    const [outroShakeIntensity, setOutroShakeIntensity] = React.useState(0); // 爆散時の画面振動強度（0〜1）
+    const [outroShakeOffset, setOutroShakeOffset] = React.useState({ x: 0, y: 0 }); // 爆散時の画面振動オフセット
     const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
@@ -2149,6 +2228,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             setShowBattleOutro(true);
         }
     }, [gameState.winnerId, outroCompleted, showBattleOutro]);
+
+    // 爆散時の画面振動オフセットをリアルタイムで計算
+    React.useEffect(() => {
+        if (outroShakeIntensity <= 0) {
+            setOutroShakeOffset({ x: 0, y: 0 });
+            return;
+        }
+
+        let animationFrameId: number;
+        const animate = () => {
+            const time = Date.now() * 0.03;
+            const maxAmplitude = 25 * outroShakeIntensity * scale;
+            const x = Math.sin(time * 7) * maxAmplitude + Math.sin(time * 13) * maxAmplitude * 0.5;
+            const y = Math.cos(time * 11) * maxAmplitude + Math.cos(time * 17) * maxAmplitude * 0.3;
+            setOutroShakeOffset({ x, y });
+            animationFrameId = requestAnimationFrame(animate);
+        };
+        animationFrameId = requestAnimationFrame(animate);
+
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [outroShakeIntensity, scale]);
 
     // Necromance effect state - shows -X on graveyard when necromance is activated
     interface NecromanceEffect {
@@ -3536,6 +3636,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Reset battle outro states for new game
         setShowBattleOutro(false);
         setOutroCompleted(false);
+        setOutroPhase(null);
 
         // 3. Reset rematch states
         setMyRematchRequested(false);
@@ -6625,7 +6726,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 style={{
                     width: '100%',
                     height: '100%',
-                    // Transform removed, layout now responsive
+                    // Transform for outro shake effect
+                    transform: outroShakeIntensity > 0 ? `translate(${outroShakeOffset.x}px, ${outroShakeOffset.y}px)` : 'none',
                     display: 'flex',
                     overflow: 'hidden',
                     background: 'radial-gradient(circle at center, #1a202c 0%, #000 100%)',
@@ -7017,6 +7119,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         style={{
                             position: 'absolute', top: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                             width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
+                            zIndex: 100,
+                            cursor: 'default',
+                        }}>
+                        {/* リーダー画像部分（終了演出のフィルター対象） */}
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%',
                             background: `url(${getLeaderImg(opponent.class)}) center/cover`,
                             border: opponentHasLeaderDamageCap
                                 ? '4px solid #67e8f9'
@@ -7024,23 +7134,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             boxShadow: opponentHasLeaderDamageCap
                                 ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
                                 : '0 0 20px rgba(0,0,0,0.5)',
-                            zIndex: 100,
-                            cursor: 'default',
-                            transition: 'border-color 0.3s, box-shadow 0.3s',
-                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none'
+                            transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
+                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                            // 終了演出: 自分の勝利時（相手が敗者）にフェーズに応じてスタイル変更
+                            ...(gameState.winnerId === currentPlayerId && outroPhase ? {
+                                filter: outroPhase === 'white-fade' ? 'brightness(2) saturate(0.3)'
+                                    : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 'brightness(3) saturate(0) blur(10px)'
+                                    : 'none',
+                                opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 0 : 1,
+                            } : {})
                         }}>
-                        {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
-                        {opponentHasCyanEffect && (
-                            <div style={{
-                                position: 'absolute',
-                                inset: 0,
-                                borderRadius: '50%',
-                                background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
-                                pointerEvents: 'none',
-                                animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
-                                zIndex: 1
-                            }} />
-                        )}
+                            {/* Cyan overlay for LEADER_DAMAGE_CAP or leaderDamageShield effect */}
+                            {opponentHasCyanEffect && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
+                        </div>
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
                         <div style={{
                             position: 'absolute', bottom: 0, left: '50%', transform: `translateX(-50%) translateX(${-140 * scale}px)`,
@@ -8181,9 +8297,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     : '0 0 20px rgba(49, 130, 206, 0.4)',
                                 background: '#1a202c',
                                 cursor: 'grab',
-                                transition: 'border-color 0.3s, box-shadow 0.3s',
+                                transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
                                 animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
-                                position: 'relative'
+                                position: 'relative',
+                                // 終了演出: 相手の勝利時（自分が敗者）にフェーズに応じてスタイル変更
+                                ...(gameState.winnerId && gameState.winnerId !== currentPlayerId && outroPhase ? {
+                                    filter: outroPhase === 'white-fade' ? 'brightness(2) saturate(0.3)'
+                                        : (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 'brightness(3) saturate(0) blur(10px)'
+                                        : 'none',
+                                    opacity: (outroPhase === 'explode' || outroPhase === 'result-text' || outroPhase === 'fade-out') ? 0 : 1,
+                                } : {})
                             }}
                         >
                             <img src={getLeaderImg(player.class)} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
@@ -9454,7 +9577,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         onComplete={() => {
                             setShowBattleOutro(false);
                             setOutroCompleted(true);
+                            setOutroPhase(null);
+                            setOutroShakeIntensity(0);
                         }}
+                        onPhaseChange={setOutroPhase}
+                        onShakeIntensityChange={setOutroShakeIntensity}
                         scale={scale}
                     />
                 )}

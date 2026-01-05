@@ -1,13 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-interface BattleOutroProps {
-    isVictory: boolean; // 自分の勝利かどうか
-    loserLeaderRef: React.RefObject<HTMLDivElement>; // 敗者リーダーのref
-    onComplete: () => void; // 演出完了時のコールバック
-    scale?: number; // スケールファクター
-}
-
-type AnimationPhase =
+export type OutroPhase =
     | 'start'           // 演出開始
     | 'zoom'            // リーダーにカメラズーム
     | 'white-fade'      // リーダーが白くなる
@@ -16,15 +9,37 @@ type AnimationPhase =
     | 'fade-out'        // フェードアウト
     | 'complete';       // 完了
 
+interface BattleOutroProps {
+    isVictory: boolean; // 自分の勝利かどうか
+    loserLeaderRef: React.RefObject<HTMLDivElement>; // 敗者リーダーのref
+    onComplete: () => void; // 演出完了時のコールバック
+    onPhaseChange?: (phase: OutroPhase) => void; // フェーズ変更時のコールバック
+    onShakeIntensityChange?: (intensity: number) => void; // 画面振動強度変更時のコールバック（0〜1）
+    scale?: number; // スケールファクター
+}
+
+interface Particle {
+    id: number;
+    x: number;
+    y: number;
+    angle: number;      // 飛ぶ方向（度）
+    distance: number;   // 飛ぶ距離
+    size: number;
+    delay: number;      // アニメーション開始遅延
+    duration: number;   // アニメーション時間
+}
+
 export const BattleOutro: React.FC<BattleOutroProps> = ({
     isVictory,
     loserLeaderRef,
     onComplete,
+    onPhaseChange,
+    onShakeIntensityChange,
     scale = 1
 }) => {
-    const [phase, setPhase] = useState<AnimationPhase>('start');
+    const [phase, setPhase] = useState<OutroPhase>('start');
     const [loserPosition, setLoserPosition] = useState<{ x: number; y: number; size: number } | null>(null);
-    const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; angle: number; speed: number; size: number }>>([]);
+    const [particles, setParticles] = useState<Particle[]>([]);
 
     // 敗者リーダーの位置を取得
     useEffect(() => {
@@ -38,13 +53,18 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
         }
     }, [loserLeaderRef]);
 
+    // フェーズ変更を親に通知
+    useEffect(() => {
+        onPhaseChange?.(phase);
+    }, [phase, onPhaseChange]);
+
     // 演出フェーズ管理
     useEffect(() => {
-        const timings: { [key in AnimationPhase]?: number } = {
+        const timings: { [key in OutroPhase]?: number } = {
             'start': 200,
-            'zoom': 800,
-            'white-fade': 600,
-            'explode': 1000,
+            'zoom': 600,
+            'white-fade': 800,
+            'explode': 1200,  // 振動の時間を考慮して少し長く
             'result-text': 1800,
             'fade-out': 600,
         };
@@ -54,7 +74,7 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
             return;
         }
 
-        const nextPhase: { [key in AnimationPhase]?: AnimationPhase } = {
+        const nextPhase: { [key in OutroPhase]?: OutroPhase } = {
             'start': 'zoom',
             'zoom': 'white-fade',
             'white-fade': 'explode',
@@ -73,20 +93,60 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
         return () => clearTimeout(timer);
     }, [phase, onComplete]);
 
-    // 爆散時にパーティクル生成
+    // 爆散時にパーティクル生成と画面振動
     useEffect(() => {
         if (phase === 'explode' && loserPosition) {
-            const newParticles = Array.from({ length: 20 }, (_, i) => ({
-                id: i,
-                x: loserPosition.x,
-                y: loserPosition.y,
-                angle: (Math.PI * 2 * i) / 20 + Math.random() * 0.5,
-                speed: 150 + Math.random() * 200,
-                size: 10 + Math.random() * 20
-            }));
+            // パーティクル生成（60個、360度均等に分布）
+            const particleCount = 60;
+            const newParticles: Particle[] = Array.from({ length: particleCount }, (_, i) => {
+                // 360度均等に分布 + 少しランダム
+                const baseAngle = (i / particleCount) * 360;
+                const angleVariation = (Math.random() - 0.5) * 12; // ±6度のばらつき
+                const angle = baseAngle + angleVariation;
+
+                // 距離もランダムに
+                const distance = 150 + Math.random() * 250;
+
+                // サイズは中心から離れるほど小さくなる傾向
+                const baseSize = 12 + Math.random() * 20;
+
+                return {
+                    id: i,
+                    x: loserPosition.x,
+                    y: loserPosition.y,
+                    angle,
+                    distance,
+                    size: baseSize,
+                    delay: Math.random() * 0.1, // 少しずつ遅れて発射
+                    duration: 0.6 + Math.random() * 0.4, // 0.6〜1.0秒
+                };
+            });
             setParticles(newParticles);
+
+            // 画面振動開始（大きく始まり徐々に減衰）
+            onShakeIntensityChange?.(1);
+
+            // 振動減衰アニメーション
+            const shakeDuration = 1000; // 1秒かけて減衰
+            const shakeStartTime = Date.now();
+
+            const shakeInterval = setInterval(() => {
+                const elapsed = Date.now() - shakeStartTime;
+                const progress = elapsed / shakeDuration;
+
+                if (progress >= 1) {
+                    onShakeIntensityChange?.(0);
+                    clearInterval(shakeInterval);
+                } else {
+                    // イーズアウトで減衰
+                    const newIntensity = 1 - Math.pow(progress, 2);
+                    onShakeIntensityChange?.(newIntensity);
+                }
+            }, 16); // 60fps
+
+            return () => clearInterval(shakeInterval);
         }
-    }, [phase, loserPosition]);
+    }, [phase, loserPosition, onShakeIntensityChange]);
 
     const phaseIndex = ['start', 'zoom', 'white-fade', 'explode', 'result-text', 'fade-out', 'complete'].indexOf(phase);
 
@@ -97,7 +157,7 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
             style={{
                 position: 'fixed',
                 inset: 0,
-                zIndex: 8000, // GameOverScreenより下、ゲーム画面より上
+                zIndex: 8000,
                 pointerEvents: 'none',
                 overflow: 'hidden',
             }}
@@ -108,7 +168,7 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                     position: 'absolute',
                     inset: 0,
                     background: 'black',
-                    opacity: phaseIndex >= 1 ? (phaseIndex >= 5 ? 1 : 0.6) : 0,
+                    opacity: phaseIndex >= 1 ? (phaseIndex >= 5 ? 1 : 0.5) : 0,
                     transition: 'opacity 0.5s ease-out',
                 }}
             />
@@ -121,31 +181,11 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                         left: loserPosition.x,
                         top: loserPosition.y,
                         transform: 'translate(-50%, -50%)',
-                        width: loserPosition.size * (phaseIndex >= 2 ? 1.3 : 1.5),
-                        height: loserPosition.size * (phaseIndex >= 2 ? 1.3 : 1.5),
+                        width: loserPosition.size * 1.8,
+                        height: loserPosition.size * 1.8,
                         borderRadius: '50%',
-                        background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)',
-                        transition: 'all 0.5s ease-out',
-                    }}
-                />
-            )}
-
-            {/* 白くなるエフェクト（リーダー位置に重ねる） */}
-            {phaseIndex >= 2 && phaseIndex < 4 && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: loserPosition.x,
-                        top: loserPosition.y,
-                        transform: 'translate(-50%, -50%)',
-                        width: loserPosition.size,
-                        height: loserPosition.size,
-                        borderRadius: '50%',
-                        background: 'white',
-                        opacity: phaseIndex === 2 ? 0.7 : 1,
-                        filter: phaseIndex === 3 ? 'blur(30px)' : 'none',
-                        transition: 'all 0.3s ease-out',
-                        boxShadow: '0 0 60px white, 0 0 100px white',
+                        background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%)',
+                        transition: 'all 0.4s ease-out',
                     }}
                 />
             )}
@@ -162,24 +202,35 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                         height: p.size * scale,
                         borderRadius: '50%',
                         background: 'white',
-                        boxShadow: '0 0 20px white',
-                        opacity: phaseIndex >= 4 ? 0 : 1,
+                        boxShadow: '0 0 15px white, 0 0 30px rgba(255,255,255,0.5)',
                         transform: 'translate(-50%, -50%)',
-                        animation: `particleFly${p.id % 4} 1s ease-out forwards`,
+                        animation: `particleFly-${p.id} ${p.duration}s ease-out ${p.delay}s forwards`,
                     }}
                 />
             ))}
 
-            {/* 画面振動エフェクト用のスタイル */}
-            {phaseIndex === 3 && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        inset: 0,
-                        animation: 'outroShake 0.5s ease-in-out',
-                        pointerEvents: 'none',
-                    }}
-                />
+            {/* パーティクル用動的キーフレーム */}
+            {phaseIndex >= 3 && (
+                <style>{
+                    particles.map((p) => {
+                        const rad = (p.angle * Math.PI) / 180;
+                        const dx = Math.cos(rad) * p.distance;
+                        const dy = Math.sin(rad) * p.distance;
+
+                        return `
+                            @keyframes particleFly-${p.id} {
+                                0% {
+                                    transform: translate(-50%, -50%) scale(1);
+                                    opacity: 1;
+                                }
+                                100% {
+                                    transform: translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0);
+                                    opacity: 0;
+                                }
+                            }
+                        `;
+                    }).join('\n')
+                }</style>
             )}
 
             {/* 勝利/敗北テキスト */}
@@ -197,12 +248,12 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                         style={{
                             fontSize: `${7 * scale}rem`,
                             fontWeight: 900,
+                            fontFamily: 'Tamanegi, sans-serif',
                             color: isVictory ? '#ffd700' : '#718096',
                             textShadow: isVictory
                                 ? `0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.6), 0 0 90px rgba(255,215,0,0.4), 4px 4px 8px rgba(0,0,0,0.8)`
                                 : `0 0 20px rgba(113,128,150,0.5), 4px 4px 8px rgba(0,0,0,0.8)`,
                             letterSpacing: '0.15em',
-                            fontFamily: 'sans-serif',
                         }}
                     >
                         {isVictory ? '勝利！' : '敗北...'}
@@ -211,19 +262,6 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
             )}
 
             <style>{`
-                @keyframes outroShake {
-                    0%, 100% { transform: translate(0, 0); }
-                    10% { transform: translate(-10px, -5px); }
-                    20% { transform: translate(10px, 5px); }
-                    30% { transform: translate(-8px, 8px); }
-                    40% { transform: translate(8px, -8px); }
-                    50% { transform: translate(-6px, -6px); }
-                    60% { transform: translate(6px, 6px); }
-                    70% { transform: translate(-4px, 4px); }
-                    80% { transform: translate(4px, -2px); }
-                    90% { transform: translate(-2px, 0); }
-                }
-
                 @keyframes resultTextPop {
                     0% {
                         transform: translate(-50%, -50%) scale(2.5);
@@ -240,23 +278,6 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                         opacity: 1;
                         filter: blur(0px);
                     }
-                }
-
-                @keyframes particleFly0 {
-                    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                    100% { transform: translate(calc(-50% - 200px), calc(-50% - 250px)) scale(0); opacity: 0; }
-                }
-                @keyframes particleFly1 {
-                    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                    100% { transform: translate(calc(-50% + 220px), calc(-50% - 200px)) scale(0); opacity: 0; }
-                }
-                @keyframes particleFly2 {
-                    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                    100% { transform: translate(calc(-50% - 180px), calc(-50% + 230px)) scale(0); opacity: 0; }
-                }
-                @keyframes particleFly3 {
-                    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                    100% { transform: translate(calc(-50% + 250px), calc(-50% + 180px)) scale(0); opacity: 0; }
                 }
             `}</style>
         </div>
