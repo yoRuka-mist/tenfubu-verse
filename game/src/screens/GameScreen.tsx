@@ -60,22 +60,17 @@ const useScaleFactor = (): ScaleInfo => {
     });
 
     const calculateScale = useCallback(() => {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        // Use visualViewport API for accurate dimensions (handles zoom, mobile keyboard, etc.)
+        const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+        const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-        // Calculate uniform scale based on the smaller dimension to fit, 
-        // multiplied by 1.5 as requested for larger UI elements relative to screen
-        // But we must ensure it doesn't get too crazy large.
-        // Let's stick to height-based scaling for consistent vertical layout, 
-        // but clamped by width to prevent overflow.
-
+        // Calculate uniform scale based on the smaller dimension to fit
         let scale = Math.min(width / BASE_WIDTH, height / BASE_HEIGHT);
 
         // Apply user requested magnification (approx 1.5x larger than standard relative size)
         scale *= 1.5;
 
-        // Coordinate conversion functions (Offset is 0 because we will use relative CSS positioning)
-        // Coordinate conversion functions (Identity - we use screen coords everywhere now logic-wise)
+        // Coordinate conversion functions (Identity - we use screen coords everywhere)
         const toGameX = (screenX: number) => screenX;
         const toGameY = (screenY: number) => screenY;
 
@@ -85,7 +80,31 @@ const useScaleFactor = (): ScaleInfo => {
     useEffect(() => {
         calculateScale();
         window.addEventListener('resize', calculateScale);
-        return () => window.removeEventListener('resize', calculateScale);
+        // Also listen to orientationchange for mobile device rotation
+        window.addEventListener('orientationchange', () => {
+            // Delay to ensure dimensions are updated after rotation
+            setTimeout(calculateScale, 150);
+        });
+        // Listen to visualViewport resize for accurate zoom/keyboard handling
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', calculateScale);
+        }
+        // Also recalculate on visibility change (sleep/wake, tab switch)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                // Small delay to ensure browser has updated dimensions
+                setTimeout(calculateScale, 100);
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            window.removeEventListener('resize', calculateScale);
+            window.removeEventListener('orientationchange', calculateScale);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', calculateScale);
+            }
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [calculateScale]);
 
     return scaleInfo;
@@ -112,7 +131,7 @@ interface GameScreenProps {
 
 
 // --- Heal Visual Effect (Soft) ---
-const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComplete: () => void }) => {
+const HealEffectVisual = ({ x, y, onComplete, scale = 1 }: { x: number, y: number, onComplete: () => void, scale?: number }) => {
     React.useEffect(() => {
         const timer = setTimeout(onComplete, 2000);
         return () => clearTimeout(timer);
@@ -122,11 +141,11 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
         return Array(20).fill(0).map((_, i) => ({
             id: i,
             angle: Math.random() * 360,
-            dist: 50 + Math.random() * 100,
-            size: 15 + Math.random() * 25,
+            dist: (30 + Math.random() * 60) * scale,
+            size: (10 + Math.random() * 15) * scale,
             delay: Math.random() * 0.5,
         }));
-    }, []);
+    }, [scale]);
 
     return (
         <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 6000 }}>
@@ -146,12 +165,12 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
             {/* Core Glow */}
             <div style={{
                 position: 'absolute', left: 0, top: 0,
-                width: 250, height: 250,
+                width: 150 * scale, height: 150 * scale,
                 background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,255,240,0.5) 50%, transparent 80%)',
                 borderRadius: '50%',
                 transform: 'translate(-50%, -50%)',
                 animation: 'healGlowFade 1.5s ease-out forwards',
-                filter: 'blur(10px)'
+                filter: `blur(${8 * scale}px)`
             }} />
 
             {/* Soft Particles */}
@@ -161,7 +180,7 @@ const HealEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
                     width: p.size, height: p.size,
                     background: 'rgba(255,250,240,0.6)',
                     borderRadius: '50%',
-                    filter: 'blur(5px)',
+                    filter: `blur(${4 * scale}px)`,
                     '--angle': `${p.angle}deg`,
                     '--dist': p.dist,
                     animation: `healParticleRise 1.2s ease-out ${p.delay}s forwards`,
@@ -284,7 +303,7 @@ const BuffEffectVisual = ({ x, y, atkBuff, hpBuff, onComplete }: { x: number, y:
 
 // --- Visual Effects ---
 // BANE effect component - Purple skull animation
-const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComplete: () => void }) => {
+const BaneEffectVisual = ({ x, y, onComplete, scale = 1 }: { x: number, y: number, onComplete: () => void, scale?: number }) => {
     React.useEffect(() => {
         const timer = setTimeout(onComplete, 1200);
         return () => clearTimeout(timer);
@@ -296,8 +315,8 @@ const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
             left: x,
             top: y,
             transform: 'translate(-50%, -50%)',
-            width: 200,
-            height: 200,
+            width: 130 * scale,
+            height: 130 * scale,
             pointerEvents: 'none',
             zIndex: 5000,
             display: 'flex',
@@ -306,10 +325,10 @@ const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
         }}>
             {/* Purple skull icon using emoji or custom drawing */}
             <div style={{
-                fontSize: '120px',
+                fontSize: `${80 * scale}px`,
                 animation: 'baneSkullAppear 1.2s ease-out forwards',
-                textShadow: '0 0 30px #9b59b6, 0 0 60px #8e44ad, 0 0 90px #6c3483',
-                filter: 'drop-shadow(0 0 20px #9b59b6) hue-rotate(-10deg)',
+                textShadow: `0 0 ${20 * scale}px #9b59b6, 0 0 ${40 * scale}px #8e44ad, 0 0 ${60 * scale}px #6c3483`,
+                filter: `drop-shadow(0 0 ${15 * scale}px #9b59b6) hue-rotate(-10deg)`,
             }}>
                 💀
             </div>
@@ -319,11 +338,11 @@ const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
                     position: 'absolute',
                     left: '50%',
                     top: '50%',
-                    width: 8,
-                    height: 8,
+                    width: 6 * scale,
+                    height: 6 * scale,
                     background: 'radial-gradient(circle, #9b59b6, #6c3483)',
                     borderRadius: '50%',
-                    boxShadow: '0 0 10px #9b59b6, 0 0 20px #8e44ad',
+                    boxShadow: `0 0 ${8 * scale}px #9b59b6, 0 0 ${15 * scale}px #8e44ad`,
                     animation: `baneParticle 1s ease-out ${i * 0.08}s forwards`,
                     transform: `rotate(${i * 30}deg) translateX(0)`,
                 }} />
@@ -339,14 +358,14 @@ const BaneEffectVisual = ({ x, y, onComplete }: { x: number, y: number, onComple
                 }
                 @keyframes baneParticle {
                     0% { transform: rotate(${0}deg) translateX(0); opacity: 1; }
-                    100% { transform: rotate(${0}deg) translateX(100px); opacity: 0; }
+                    100% { transform: rotate(${0}deg) translateX(${70 * scale}px); opacity: 0; }
                 }
             `}</style>
         </div>
     );
 };
 
-const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any }) => {
+const AttackEffect = ({ type, x, y, onComplete, audioSettings, scale = 1 }: { type: string, x: number, y: number, onComplete: () => void, audioSettings: any, scale?: number }) => {
     // Sprite Configuration (Updated for 8x8 standardization)
     const spriteConfig = React.useMemo(() => {
         let cols = 8;
@@ -416,16 +435,18 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
     }, [type, audioSettings]);
 
     if (type === 'HEAL') {
-        return <HealEffectVisual x={x} y={y} onComplete={onComplete} />;
+        return <HealEffectVisual x={x} y={y} onComplete={onComplete} scale={scale} />;
     }
 
     if (type === 'BANE') {
-        return <BaneEffectVisual x={x} y={y} onComplete={onComplete} />;
+        return <BaneEffectVisual x={x} y={y} onComplete={onComplete} scale={scale} />;
     }
 
+    // Scale effect size based on screen scale
+    const effectSize = 100 * scale; // Base size 100, scaled
     const style: React.CSSProperties = {
         position: 'absolute', left: x, top: y, transform: 'translate(-50%, -50%)',
-        width: 150, height: 150, pointerEvents: 'none', zIndex: 5000,
+        width: effectSize, height: effectSize, pointerEvents: 'none', zIndex: 5000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     };
 
@@ -445,11 +466,13 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
         if (type === 'BLUE_FIRE') bgImage = getAssetUrl('/effects/blue_fire.png');
 
         const steps = spriteConfig.cols * spriteConfig.rows;
+        // Scale sprite size based on screen scale (base size reduced from 256 to 160)
+        const scaledSpriteSize = Math.min(160, spriteConfig.size) * scale;
 
         return (
             <div style={{
                 ...style,
-                width: spriteConfig.size, height: spriteConfig.size,
+                width: scaledSpriteSize, height: scaledSpriteSize,
                 transform: `${style?.transform || ''}`
             }}>
                 <div style={{
@@ -517,7 +540,7 @@ const AttackEffect = ({ type, x, y, onComplete, audioSettings }: { type: string,
 
 
 // --- Floating Damage Text ---
-const DamageText = ({ value, x, y, color, onComplete }: { value: string | number, x: number, y: number, color?: string, onComplete: () => void }) => {
+const DamageText = ({ value, x, y, color, onComplete, scale = 1 }: { value: string | number, x: number, y: number, color?: string, onComplete: () => void, scale?: number }) => {
     React.useEffect(() => {
         const timer = setTimeout(onComplete, 1200);
         return () => clearTimeout(timer);
@@ -536,15 +559,15 @@ const DamageText = ({ value, x, y, color, onComplete }: { value: string | number
             position: 'absolute', left: x, top: y,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none', zIndex: 6000,
-            fontSize: '4rem',
+            fontSize: `${4 * scale}rem`,
             fontWeight: '900',
             fontFamily: '"Impact", "Arial Black", sans-serif',
-            letterSpacing: '-2px',
+            letterSpacing: `${-2 * scale}px`,
             background: gradientColors,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            filter: `drop-shadow(0 0 8px ${displayColor}) drop-shadow(0 2px 4px rgba(0,0,0,0.8))`,
+            filter: `drop-shadow(0 0 ${8 * scale}px ${displayColor}) drop-shadow(0 ${2 * scale}px ${4 * scale}px rgba(0,0,0,0.8))`,
             animation: 'floatUp 1.2s ease-out forwards'
         }}>
             {value}
@@ -719,9 +742,10 @@ interface BattleLogProps {
     logs: string[];
     onCardNameClick?: (cardName: string) => void;
     scale?: number;
+    isMobile?: boolean;
 }
 
-const BattleLog = ({ logs, onCardNameClick, scale = 1 }: BattleLogProps) => {
+const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: BattleLogProps) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         // Scroll to bottom of container without affecting parent elements
@@ -840,9 +864,9 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1 }: BattleLogProps) => {
         return <>{parts}</>;
     };
 
-    // 画面サイズに応じた最大高さ（小さい画面では短く）
-    const logMaxHeight = Math.max(150, 200 * scale);
-    const logWidth = Math.max(180, 220 * scale);
+    // 画面サイズに応じた最大高さ（PC/モバイルで分岐）
+    const logMaxHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
+    const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
 
     return (
         <div
@@ -857,9 +881,9 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1 }: BattleLogProps) => {
                 overflowY: 'auto',
                 background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
                 color: '#fff',
-                fontSize: `${Math.max(0.65, 0.75 * scale)}rem`,
-                padding: `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
-                borderLeft: '3px solid #63b3ed',
+                fontSize: isMobile ? `${Math.max(0.55, 0.65 * scale)}rem` : `${Math.max(0.65, 0.75 * scale)}rem`,
+                padding: isMobile ? `${6 * scale}px ${6 * scale}px ${6 * scale}px ${10 * scale}px` : `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
+                borderLeft: isMobile ? '2px solid #63b3ed' : '3px solid #63b3ed',
                 zIndex: 15, // Under menus, over board default
                 pointerEvents: 'auto', // Allow scroll
                 // Custom Scrollbar styling handled by browser usually, or simple CSS class if available
@@ -869,17 +893,17 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1 }: BattleLogProps) => {
             onClick={e => e.stopPropagation()} // Prevent hand collapse
         >
             <div style={{
-                fontWeight: 'bold', marginBottom: 4 * scale, color: '#a0aec0',
+                fontWeight: 'bold', marginBottom: (isMobile ? 3 : 4) * scale, color: '#a0aec0',
                 borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 2,
-                fontSize: `${Math.max(0.55, 0.65 * scale)}rem`, textTransform: 'uppercase', letterSpacing: 1
+                fontSize: isMobile ? `${Math.max(0.5, 0.55 * scale)}rem` : `${Math.max(0.55, 0.65 * scale)}rem`, textTransform: 'uppercase', letterSpacing: 1
             }}>
-                BATTLE LOG
+                {isMobile ? 'LOG' : 'BATTLE LOG'}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 * scale }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: (isMobile ? 2 : 3) * scale }}>
                 {logs.map((log, i) => (
                     <div key={i} style={{
                         opacity: 0.9,
-                        lineHeight: '1.4',
+                        lineHeight: isMobile ? '1.3' : '1.4',
                         textShadow: '0 1px 2px black',
                         animation: 'fadeIn 0.3s ease-out'
                     }}>
@@ -947,17 +971,21 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             case 'ZOOM_IN': {
                 // Start at card position, scale to match board card size initially
                 setPosition({ x: startX, y: startY });
-                setCurrentScale(0.25); // Match board card size (90/360)
+                setCurrentScale(0.25); // Match board card size (90/360) - scale is already applied via cardWidth/Height
                 setRotateZ(0); // Start at 0 degrees (no tilt) - will animate to -5 during move
 
-                // Animate Z-axis tilt during ZOOM_IN phase (0 -> -5 degrees)
+                // Animate scale and Z-axis tilt during ZOOM_IN phase
                 const zoomInStartTime = Date.now();
                 const zoomInDuration = 650; // Match the movement duration
+                const startScale = 0.25; // Board card size - NO extra scale multiplication
+                const targetScale = 0.75; // Target 3/4 size
                 const zoomInInterval = setInterval(() => {
                     const elapsed = Date.now() - zoomInStartTime;
                     const progress = Math.min(elapsed / zoomInDuration, 1);
                     const eased = 1 - Math.pow(1 - progress, 2); // Ease-out
                     setRotateZ(-5 * eased); // 0 -> -5
+                    // Animate scale from board size to enlarged size
+                    setCurrentScale(startScale + (targetScale - startScale) * eased);
                     if (progress >= 1) {
                         clearInterval(zoomInInterval);
                     }
@@ -966,10 +994,12 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Small delay to ensure initial position is set before animating
                 timer = setTimeout(() => {
                     // Move to left-center of board area (slightly left of center)
-                    const boardActualWidth = window.innerWidth - 340;
-                    const boardCenterX = 340 + (boardActualWidth * 0.35); // More left of center
-                    setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 });
-                    setCurrentScale(0.75); // Target 3/4 size during animation (270/360)
+                    // Note: 280 is the battle log width (scaled elsewhere), so use it with scale here
+                    const logWidth = 280 * scale;
+                    const boardActualWidth = window.innerWidth - logWidth;
+                    const boardCenterX = logWidth + (boardActualWidth * 0.4); // Center of board area
+                    setPosition({ x: boardCenterX, y: window.innerHeight / 2 - 30 * scale });
+                    // Scale is now animated in the interval above
                 }, 50);
                 // Play kirakira sound when card arrives (store ref for fadeout in FLIP phase)
                 const kirakiraTimer = setTimeout(() => {
@@ -1269,22 +1299,23 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 `).join('')}
             `}</style>
 
-            {/* Charge Particles - Converging toward card */}
+            {/* Charge Particles - Converging toward card center */}
             {chargeParticles.map(p => (
                 <div
                     key={`charge-${p.id}`}
                     style={{
                         position: 'absolute',
+                        // position.x/y is already the card center (card uses translate(-50%, -50%))
                         left: position.x,
                         top: position.y,
-                        width: p.size,
-                        height: p.size,
+                        width: p.size * scale,
+                        height: p.size * scale,
                         borderRadius: '50%',
                         background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
                         boxShadow: '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
                         filter: 'blur(1px)',
                         animation: `chargeParticleIn-${p.id} ${p.duration}s ease-in ${p.delay}s forwards`,
-                        transform: `rotate(${p.angle}deg) translateX(${p.dist}px)`,
+                        transform: `rotate(${p.angle}deg) translateX(${p.dist * scale}px)`,
                         opacity: 0,
                         pointerEvents: 'none'
                     }}
@@ -1337,12 +1368,13 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 </div>
             )}
 
-            {/* Burst Particles - Exploding outward on evolve */}
+            {/* Burst Particles - Exploding outward on evolve (centered on card) */}
             {burstParticles.map(p => (
                 <div
                     key={`burst-${p.id}`}
                     style={{
                         position: 'absolute',
+                        // Center particles on the card's center
                         left: position.x,
                         top: position.y,
                         width: p.size * scale, // Scaled
@@ -2024,6 +2056,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const scaleInfo = useScaleFactor();
     const { scale, toGameX, toGameY } = scaleInfo;
 
+    // Mobile detection for responsive UI
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        };
+        checkMobile();
+    }, []);
+
     // Helper to convert screen coordinates to game container coordinates
     // Since we now use independent X/Y scaling that fills the entire screen,
     // screen coords can be directly converted using the scale factors
@@ -2375,6 +2416,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [selectedCard, setSelectedCard] = React.useState<{
         card: any;
         owner: 'PLAYER' | 'OPPONENT';
+        source: 'HAND' | 'BOARD' | 'LOG';
     } | null>(null);
 
     // バトルログからカード名をクリックした時にカード情報を表示
@@ -2386,7 +2428,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             if (gameState.winnerId) {
                 setResultCardInfo(cardDef as CardModel);
             } else {
-                setSelectedCard({ card: cardDef, owner: 'OPPONENT' }); // バトルログからは相手カードとして扱う
+                setSelectedCard({ card: cardDef, owner: 'OPPONENT', source: 'LOG' }); // バトルログからは相手カードとして扱う
             }
         }
     }, [gameState.winnerId]);
@@ -5081,13 +5123,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // --- Interaction Handlers ---
 
-    // Hand Click / Drag Start
-    const handleHandMouseDown = (e: React.MouseEvent, index: number) => {
+    // Hand Click / Drag Start (supports both mouse and touch)
+    const handleHandMouseDown = (e: React.MouseEvent | React.TouchEvent, index: number) => {
         // --- PREVENTION: Do not start a new drag if one is active ---
         if (dragStateRef.current || playingCardAnim || animatingCards.length > 0) return;
 
         const card = player.hand[index];
         e.stopPropagation();
+
+        // Get clientX/clientY from mouse or touch event
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 
@@ -5095,14 +5141,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // This ensures the hand can always be viewed regardless of game state
         if (!isHandExpanded) {
             setIsHandExpanded(true);
-            setSelectedCard({ card, owner: 'PLAYER' });
+            setSelectedCard({ card, owner: 'PLAYER', source: 'HAND' });
             // 展開した直後フラグを立てる（次のクリックまで折りたたまない）
             handJustExpandedRef.current = true;
             return;
         }
 
         // If already expanded, update selected card (also always allowed)
-        setSelectedCard({ card, owner: 'PLAYER' });
+        setSelectedCard({ card, owner: 'PLAYER', source: 'HAND' });
 
         // Only allow drag (to play) on player's turn
         if (gameState.activePlayerId !== currentPlayerId) return;
@@ -5126,8 +5172,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             sourceInstanceId: card.instanceId,
             startX: rect.left + rect.width / 2, // Center of Card in screen coords
             startY: rect.top + rect.height / 2, // Center of Card in screen coords
-            currentX: e.clientX,
-            currentY: e.clientY,
+            currentX: clientX,
+            currentY: clientY,
             offsetX: 0,
             offsetY: 0,
             canDrag: true // Already expanded, allow drag
@@ -5137,10 +5183,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         dragStateRef.current = info;
     };
 
-    // Board Drag (Attack)
+    // Board Drag (Attack) - supports both mouse and touch
     // CRITICAL: Use instanceId to find the actual board index, since visualPlayerBoard may have different indices
-    const handleBoardMouseDown = (e: React.MouseEvent, visualIndex: number, instanceId?: string) => {
+    const handleBoardMouseDown = (e: React.MouseEvent | React.TouchEvent, visualIndex: number, instanceId?: string) => {
         e.stopPropagation();
+
+        // Get clientX/clientY from mouse or touch event
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
         // Use fresh state for validation to fix evolution-attack sync issues
         const currentState = gameStateRef.current;
@@ -5159,8 +5209,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             return;
         }
 
-        // Inspect - set selected card
-        if (currentCard) setSelectedCard({ card: currentCard, owner: 'PLAYER' });
+        // Inspect - set selected card (場のカードなのでsource: 'BOARD')
+        if (currentCard) setSelectedCard({ card: currentCard, owner: 'PLAYER', source: 'BOARD' });
 
         // Block attack drag while pendingEffects are being processed
         if (currentState.pendingEffects && currentState.pendingEffects.length > 0) {
@@ -5177,10 +5227,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 sourceIndex: actualIndex, // Use actual board index, not visual index
                 sourceInstanceId: (currentCard as any).instanceId, // Use fresh instanceId
                 startX: startGameCoords.x,
-
                 startY: startGameCoords.y,
-                currentX: e.clientX,
-                currentY: e.clientY,
+                currentX: clientX,
+                currentY: clientY,
                 offsetX: 0,
                 offsetY: 0
             };
@@ -5189,10 +5238,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
     };
 
-    // Evolve Drag
-    const handleEvolveMouseDown = (e: React.MouseEvent, useSepFlag: boolean = false) => {
+    // Evolve Drag - supports both mouse and touch
+    const handleEvolveMouseDown = (e: React.MouseEvent | React.TouchEvent, useSepFlag: boolean = false) => {
         if (gameState.activePlayerId !== currentPlayerId) return;
         e.stopPropagation();
+
+        // Get clientX/clientY from mouse or touch event
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
         // Block evolve while pendingEffects are being processed
         const currentState = gameStateRef.current;
@@ -5215,10 +5268,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const newState = {
             sourceType: 'EVOLVE' as const,
             sourceIndex: 0, // Dummy index
-            startX: e.clientX,
-            startY: e.clientY,
-            currentX: e.clientX,
-            currentY: e.clientY,
+            startX: clientX,
+            startY: clientY,
+            currentX: clientX,
+            currentY: clientY,
             offsetX: 0,
             offsetY: 0,
             useSep: useSepFlag
@@ -5339,8 +5392,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     }, [isStampSelectorOpen, sendStamp]);
 
     // Global Drag Listeners (Window Level) - OPTIMIZED w/ REF
+    // Supports both mouse and touch events for mobile
     useEffect(() => {
-        const handleGlobalMouseMove = (e: MouseEvent) => {
+        const handleGlobalMove = (clientX: number, clientY: number, isTouch: boolean = false) => {
             if (!dragStateRef.current) return;
 
             // Only update current coords if allowed to drag or if it's board/evolve
@@ -5350,21 +5404,79 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // Update with raw screen coordinates
             dragStateRef.current = {
                 ...dragStateRef.current,
-                currentX: e.clientX,
-                currentY: e.clientY
+                currentX: clientX,
+                currentY: clientY
             };
 
             // Sync state for React Render
-            setDragState(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
+            setDragState(prev => prev ? { ...prev, currentX: clientX, currentY: clientY } : null);
 
-            // Update Hover Target logic could go here if needed, but usually handled by mouseEnter on elements
-            // For now, elements update `hoveredTarget` state via onMouseEnter
+            // For touch events, detect target element under touch point (mobile doesn't have mouseenter/leave)
+            if (isTouch && (sourceType === 'BOARD' || sourceType === 'EVOLVE')) {
+                // Check opponent leader
+                const opponentLeaderEl = opponentLeaderRef.current;
+                if (opponentLeaderEl) {
+                    const rect = opponentLeaderEl.getBoundingClientRect();
+                    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                        setHoveredTarget({ type: 'LEADER', index: 0, playerId: opponentPlayerId });
+                        return;
+                    }
+                }
+
+                // Check opponent board followers
+                const currentState = gameStateRef.current;
+                const oppBoard = currentState.players[opponentPlayerId]?.board || [];
+                for (let i = 0; i < opponentBoardRefs.current.length; i++) {
+                    const el = opponentBoardRefs.current[i];
+                    if (el && oppBoard[i]) {
+                        const rect = el.getBoundingClientRect();
+                        if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                            setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: (oppBoard[i] as any)?.instanceId });
+                            return;
+                        }
+                    }
+                }
+
+                // Check player board followers (for evolve)
+                if (sourceType === 'EVOLVE') {
+                    const myBoard = currentState.players[currentPlayerId]?.board || [];
+                    for (let i = 0; i < playerBoardRefs.current.length; i++) {
+                        const el = playerBoardRefs.current[i];
+                        if (el && myBoard[i]) {
+                            const rect = el.getBoundingClientRect();
+                            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                                setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: (myBoard[i] as any)?.instanceId });
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // No target under touch point
+                setHoveredTarget(null);
+            }
+        };
+
+        const handleGlobalMouseMove = (e: MouseEvent) => {
+            handleGlobalMove(e.clientX, e.clientY);
+        };
+
+        const handleGlobalTouchMove = (e: TouchEvent) => {
+            if (e.touches.length > 0) {
+                // Prevent scrolling while dragging
+                if (dragStateRef.current) {
+                    e.preventDefault();
+                }
+                handleGlobalMove(e.touches[0].clientX, e.touches[0].clientY, true);
+            }
         };
 
         window.addEventListener('mousemove', handleGlobalMouseMove);
+        window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
 
         return () => {
             window.removeEventListener('mousemove', handleGlobalMouseMove);
+            window.removeEventListener('touchmove', handleGlobalTouchMove);
         };
     }, []);
 
@@ -5710,8 +5822,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             setHoveredTarget(null);
         };
 
+        const handleGlobalTouchEnd = () => {
+            handleGlobalMouseUp();
+        };
+
         window.addEventListener('mouseup', handleGlobalMouseUp);
-        return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+        window.addEventListener('touchend', handleGlobalTouchEnd);
+        return () => {
+            window.removeEventListener('mouseup', handleGlobalMouseUp);
+            window.removeEventListener('touchend', handleGlobalTouchEnd);
+        };
     }, [opponentPlayerId, currentPlayerId, isHandExpanded, scale]); // Added scale to dependencies
 
     // Background click to close expanded hand OR Cancel Targeting
@@ -6334,7 +6454,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     if (gameMode === 'JOIN' && !gameSynced) {
         return (
             <div style={{
-                height: '100vh',
+                height: '100dvh',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -6382,7 +6502,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         <div className="game-screen-wrapper"
             style={{
                 width: '100vw',
-                height: '100vh',
+                height: '100dvh',
                 overflow: 'hidden',
                 background: '#000',
                 position: 'relative'
@@ -6465,6 +6585,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     @keyframes leaderDamageCapOverlay {
                         0%, 100% { opacity: 0.15; }
                         50% { opacity: 0.45; }
+                    }
+                    /* EP/SEP pulse animations for usable state - box-shadow only, no transform override */
+                    @keyframes epPulse {
+                        0%, 100% {
+                            box-shadow: 0 0 12px #ffd700, 0 0 25px rgba(255,215,0,0.6);
+                        }
+                        50% {
+                            box-shadow: 0 0 20px #ffd700, 0 0 40px rgba(255,215,0,0.8), 0 0 55px rgba(255,180,0,0.5);
+                        }
+                    }
+                    @keyframes sepPulse {
+                        0%, 100% {
+                            box-shadow: 0 0 12px #b794f4, 0 0 25px rgba(159,122,234,0.6);
+                        }
+                        50% {
+                            box-shadow: 0 0 20px #b794f4, 0 0 40px rgba(159,122,234,0.8), 0 0 55px rgba(180,0,255,0.5);
+                        }
                     }
                 `}</style>
 
@@ -6573,55 +6710,57 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
 
                 {/* --- Left Sidebar: Card Info & Menu (Responsive width) --- */}
-                <div className={shake ? 'shake-target' : ''} style={{ width: 340 * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: `${20 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <div className={shake ? 'shake-target' : ''} style={{ width: (isMobile ? 280 : 340) * scale, borderRight: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', padding: isMobile ? `${10 * scale}px ${12 * scale}px` : `${20 * scale}px ${20 * scale}px ${20 * scale}px`, display: 'flex', flexDirection: 'column', zIndex: 20, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                     {/* Menu Button */}
-                    <div style={{ marginBottom: 12 * scale }}>
-                        <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 5 }}>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0', marginBottom: 6 * scale }}></div>
-                            <div style={{ width: 30 * scale, height: 3 * scale, background: '#cbd5e0' }}></div>
+                    <div style={{ marginBottom: (isMobile ? 6 : 12) * scale }}>
+                        <button onClick={() => setShowMenu(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: isMobile ? 3 : 5 }}>
+                            <div style={{ width: (isMobile ? 22 : 30) * scale, height: (isMobile ? 2 : 3) * scale, background: '#cbd5e0', marginBottom: (isMobile ? 4 : 6) * scale }}></div>
+                            <div style={{ width: (isMobile ? 22 : 30) * scale, height: (isMobile ? 2 : 3) * scale, background: '#cbd5e0', marginBottom: (isMobile ? 4 : 6) * scale }}></div>
+                            <div style={{ width: (isMobile ? 22 : 30) * scale, height: (isMobile ? 2 : 3) * scale, background: '#cbd5e0' }}></div>
                         </button>
                     </div>
 
-                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: 8, marginTop: 0, marginBottom: 0, flexShrink: 0 }}>カード情報</h3>
+                    <h3 style={{ color: '#a0aec0', borderBottom: '1px solid #4a5568', paddingBottom: (isMobile ? 4 : 8) * scale, marginTop: 0, marginBottom: 0, flexShrink: 0, fontSize: isMobile ? `${0.85 * scale}rem` : undefined }}>カード情報</h3>
                     {selectedCard ? (
-                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                        <div style={{ marginTop: (isMobile ? 4 : 10) * scale, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
                             {/* Scrollable content area */}
                             <div style={{ flex: 1, overflow: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                                 {/* Main Card Info */}
                                 <div style={{ flexShrink: 0 }}>
                                     {/* Art Only */}
                                     <div style={{
-                                        width: '100%', aspectRatio: '1/1', marginBottom: 12,
+                                        width: '100%', aspectRatio: '1/1', marginBottom: (isMobile ? 6 : 12) * scale,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        maxHeight: '35vh'
+                                        ...(isMobile ? { maxHeight: '28vh' } : {})
                                     }}>
-                                        <Card card={selectedCard.card} style={{ width: '100%', height: '100%', maxHeight: '35vh' }} variant="art-only" />
+                                        <Card card={selectedCard.card} style={{ width: '100%', height: '100%', ...(isMobile ? { maxHeight: '28vh' } : {}) }} variant="art-only" />
                                     </div>
 
                                     {/* Name - dynamic font size based on length */}
                                     <div style={{
-                                        fontSize: selectedCard.card.name.length > 12 ? '1.1rem' : selectedCard.card.name.length > 8 ? '1.2rem' : '1.4rem',
+                                        fontSize: isMobile
+                                            ? `${(selectedCard.card.name.length > 12 ? 0.9 : selectedCard.card.name.length > 8 ? 1.0 : 1.1) * scale}rem`
+                                            : `${selectedCard.card.name.length > 12 ? 1.1 : selectedCard.card.name.length > 8 ? 1.2 : 1.4}rem`,
                                         fontWeight: 'bold',
-                                        marginBottom: 6,
+                                        marginBottom: (isMobile ? 4 : 6) * scale,
                                         textAlign: 'center'
                                     }}>
                                         {selectedCard.card.name}
                                     </div>
 
                                     {/* Stats Row: Cost + Attack/Health */}
-                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 15, marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: (isMobile ? 10 : 15) * scale, marginBottom: (isMobile ? 6 : 10) * scale }}>
                                         {/* Cost - Green Circle */}
                                         <div style={{
-                                            width: 32,
-                                            height: 32,
+                                            width: 24 * scale,
+                                            height: 24 * scale,
                                             borderRadius: '50%',
                                             background: 'radial-gradient(circle at 30% 30%, #68d391, #276749)',
-                                            border: '2px solid #fff',
+                                            border: '1px solid #fff',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            fontSize: '1.1rem',
+                                            fontSize: `${0.85 * scale}rem`,
                                             fontWeight: 900,
                                             color: 'white',
                                             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
@@ -6631,22 +6770,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         </div>
                                         {/* Attack - only for followers */}
                                         {selectedCard.card.type === 'FOLLOWER' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 * scale }}>
+                                                <svg width={18 * scale} height={18 * scale} viewBox="0 0 24 24" fill="none">
                                                     <polygon points="12,2 22,22 2,22" fill="#63b3ed" stroke="none" />
                                                 </svg>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4299e1' }}>
+                                                <span style={{ fontSize: `${0.95 * scale}rem`, fontWeight: 'bold', color: '#4299e1' }}>
                                                     {'currentAttack' in selectedCard.card ? (selectedCard.card as any).currentAttack : selectedCard.card.attack}
                                                 </span>
                                             </div>
                                         )}
                                         {/* Health - only for followers */}
                                         {selectedCard.card.type === 'FOLLOWER' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="#f56565">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 * scale }}>
+                                                <svg width={18 * scale} height={18 * scale} viewBox="0 0 24 24" fill="#f56565">
                                                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                                                 </svg>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#f56565' }}>
+                                                <span style={{ fontSize: `${0.95 * scale}rem`, fontWeight: 'bold', color: '#f56565' }}>
                                                     {'currentHealth' in selectedCard.card ? (selectedCard.card as any).currentHealth : selectedCard.card.health}
                                                 </span>
                                             </div>
@@ -6655,12 +6794,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                     {/* Description - dynamic font size based on length */}
                                     <div style={{
-                                        fontSize: (selectedCard.card.description?.length || 0) > 150 ? '0.75rem' : (selectedCard.card.description?.length || 0) > 100 ? '0.85rem' : '0.95rem',
+                                        fontSize: `${((selectedCard.card.description?.length || 0) > 150 ? 0.7 : (selectedCard.card.description?.length || 0) > 100 ? 0.8 : 0.9) * scale}rem`,
                                         color: '#cbd5e0',
-                                        lineHeight: '1.5',
+                                        lineHeight: '1.4',
                                         whiteSpace: 'pre-wrap',
                                         borderTop: '1px solid #4a5568',
-                                        paddingTop: 8
+                                        paddingTop: 4 * scale
                                     }}>
                                         {renderDescriptionWithCardLinks(selectedCard.card.description)}
                                     </div>
@@ -6670,14 +6809,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 {selectedCard.card.flavorText && (
                                     <div style={{
                                         marginTop: 'auto',
-                                        paddingTop: 15,
-                                        paddingBottom: 10,
+                                        paddingTop: 8 * scale,
+                                        paddingBottom: 4 * scale,
                                         flexShrink: 0
                                     }}>
                                         <div style={{
-                                            fontSize: (selectedCard.card.flavorText?.length || 0) > 100 ? '0.65rem' : '0.75rem',
+                                            fontSize: `${((selectedCard.card.flavorText?.length || 0) > 100 ? 0.6 : 0.7) * scale}rem`,
                                             color: 'rgba(160, 174, 192, 0.6)',
-                                            lineHeight: '1.4',
+                                            lineHeight: '1.3',
                                             fontStyle: 'italic',
                                             whiteSpace: 'pre-wrap',
                                             textAlign: 'right',
@@ -6689,7 +6828,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             </div>
                         </div>
                     ) : (
-                        <div style={{ marginTop: 20, color: '#718096', fontStyle: 'italic', flex: 1 }}>カードを選択して詳細を表示</div>
+                        <div style={{ marginTop: 10 * scale, color: '#718096', fontStyle: 'italic', flex: 1, fontSize: `${0.7 * scale}rem` }}>カードを選択して詳細を表示</div>
                     )}
                 </div>
 
@@ -6733,16 +6872,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         )}
                         {/* Opponent HP - Mirrored Player Position (Screen Left relative to center) */}
                         <div style={{
-                            position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
+                            position: 'absolute', bottom: 0, left: '50%', transform: `translateX(-50%) translateX(${-140 * scale}px)`,
                             width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
-                            border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10,
+                            border: `${Math.max(2, 3 * scale)}px solid #fff`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: `${1.2 * scale}rem`, fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10,
                             boxShadow: '0 4px 6px rgba(0,0,0,0.4)'
                         }}>{opponent.hp}</div>
 
                         {/* Opponent EP - Circular Frame */}
                         <div style={{
-                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${-80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
                             opacity: isOpponentEvolveUnlocked ? 1 : 0.5, filter: isOpponentEvolveUnlocked ? 'none' : 'grayscale(0.8)'
@@ -6762,7 +6901,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         {/* Opponent SEP - Circular Frame */}
                         <div style={{
-                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                            position: 'absolute', bottom: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
                             opacity: isOpponentSuperEvolveUnlocked ? 1 : 0.5, filter: isOpponentSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)'
@@ -6866,19 +7005,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
 
                     {/* Opponent Hand & Graveyard Count - Top Right (墓地の近くに手札を配置) */}
-                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 10, zIndex: 50, pointerEvents: 'none' }}>
+                    <div style={{ position: 'absolute', top: 20 * scale, right: 20 * scale, display: 'flex', alignItems: 'center', gap: 8, zIndex: 50, pointerEvents: 'none' }}>
                         {/* Opponent Hand Icon - Stacked Cards (自分の手札アイコンと同じスタイル) */}
-                        <div style={{ position: 'relative', width: 32, height: 40 }}>
-                            <div style={{ position: 'absolute', inset: 0, background: '#4a192c', borderRadius: 3, border: '1px solid #742a3a', transform: 'rotate(-15deg) translate(-4px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#3d1525', borderRadius: 3, border: '1px solid #742a3a', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#2d1a20', borderRadius: 3, border: '1px solid #8b3a4a', transform: 'rotate(5deg)' }} />
+                        <div style={{ position: 'relative', width: 24, height: 30 }}>
+                            <div style={{ position: 'absolute', inset: 0, background: '#4a192c', borderRadius: 2, border: '1px solid #742a3a', transform: 'rotate(-15deg) translate(-3px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#3d1525', borderRadius: 2, border: '1px solid #742a3a', transform: 'rotate(-5deg) translate(-1px, 0)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: '#2d1a20', borderRadius: 2, border: '1px solid #8b3a4a', transform: 'rotate(5deg)' }} />
                         </div>
                         <div style={{
                             background: 'linear-gradient(135deg, rgba(74, 25, 44, 0.8), rgba(45, 26, 32, 0.9))',
-                            padding: '4px 10px',
-                            borderRadius: 6,
+                            padding: '3px 8px',
+                            borderRadius: 5,
                             color: '#f0b8c4',
-                            fontSize: '0.85rem',
+                            fontSize: '0.64rem',
                             fontWeight: 'bold',
                             border: '1px solid rgba(116, 42, 58, 0.5)',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
@@ -6886,19 +7025,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             手札 {opponent.hand.length}
                         </div>
                         {/* Opponent Graveyard Count */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 6 }}>
                             <div style={{
-                                fontSize: '1.2rem',
+                                fontSize: '0.9rem',
                                 filter: 'drop-shadow(0 0 2px rgba(128, 90, 213, 0.6)) grayscale(30%)'
                             }}>
                                 💀
                             </div>
                             <div style={{
                                 background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.7), rgba(76, 29, 149, 0.8))',
-                                padding: '4px 10px',
-                                borderRadius: 6,
+                                padding: '3px 8px',
+                                borderRadius: 5,
                                 color: '#c4b5fd',
-                                fontSize: '0.85rem',
+                                fontSize: '0.64rem',
                                 fontWeight: 'bold',
                                 border: '1px solid rgba(167, 139, 250, 0.4)',
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
@@ -6961,7 +7100,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                 setHoveredTarget(null);
                                             }
                                         }}
-                                        onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId, c?.instanceId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT' }) } }}
+                                        onClick={(e) => { e.stopPropagation(); if (targetingState) { if (!c) return; handleTargetClick('FOLLOWER', i, opponentPlayerId, c?.instanceId); } else { c && setSelectedCard({ card: c, owner: 'OPPONENT', source: 'BOARD' }) } }}
                                         style={{
                                             position: 'absolute',
                                             left: '50%',
@@ -6996,7 +7135,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     backfaceVisibility: 'hidden',
                                                     WebkitBackfaceVisibility: 'hidden'
                                                 }}>
-                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
+                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} scale={scale} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (hoveredTarget?.type === 'FOLLOWER' && hoveredTarget.index === i && dragState?.sourceType === 'BOARD') ? '0 0 20px #f56565' : (dragState?.sourceType === 'BOARD' ? '0 0 20px #f6e05e' : undefined) }} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }} />}
                                                 </div>
                                                 {/* Back - Sleeve (opponent's cards use opponent's class sleeve) */}
                                                 {c && (
@@ -7111,6 +7250,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     <div key={c?.instanceId || `empty-plr-${i}`}
                                         ref={el => playerBoardRefs.current[i] = el}
                                         onMouseDown={(e) => handleBoardMouseDown(e, i, c?.instanceId)}
+                                        onTouchStart={(e) => handleBoardMouseDown(e, i, c?.instanceId)}
                                         onClick={(e) => e.stopPropagation()} // Prevent background click from validating selection
                                         onMouseEnter={() => {
                                             // Only set hover target during drag operations (not on mouse-over)
@@ -7162,7 +7302,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                                     backfaceVisibility: 'hidden',
                                                     WebkitBackfaceVisibility: 'hidden'
                                                 }}>
-                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
+                                                    {c ? <Card card={c} turnCount={gameState.turnCount} className={c.isDying ? 'card-dying' : ''} scale={scale} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, opacity: 1 /* opacity handled by parent */, filter: (c as any).isDying ? 'grayscale(0.5) brightness(2)' : 'none', boxShadow: (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId && hoveredTarget?.type === 'FOLLOWER') ? '0 0 30px #f56565' : (dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? '0 20px 30px rgba(0,0,0,0.6)' : undefined), pointerEvents: dragState?.sourceType === 'BOARD' && dragState.sourceInstanceId === c?.instanceId ? 'none' : 'auto' }} isSelected={selectedCard?.card === c} isOnBoard={true} isSpecialSummoning={summonedCardIds.has((c as any).instanceId)} isMyTurn={gameState.activePlayerId === currentPlayerId} /> : <div style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8 }} />}
                                                 </div>
                                                 {/* Back - Sleeve (only for player's cards) */}
                                                 {c && (
@@ -7261,7 +7401,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     {/* ========================================== */}
                     {/* RIGHT SIDE CONTROLS - Centered vertically (UPSIZED 2X) */}
                     {/* ========================================== */}
-                    <div style={{ position: 'absolute', right: 30 * scale, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 30 * scale, zIndex: 50 }}>
+                    <div style={{ position: 'absolute', right: 30 * scale, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30 * scale, zIndex: 50 }}>
                         {/* Current Turn Display */}
                         <div style={{ textAlign: 'center' }}>
                             <div style={{
@@ -7348,11 +7488,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 }}
                             />
                             {isEndingTurn ? (
-                                <span style={{ position: 'relative', zIndex: 1 }}>処理中...</span>
+                                <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>処理中...</span>
                             ) : (
                                 <>
-                                    <span style={{ position: 'relative', zIndex: 1 }}>ターン</span>
-                                    <span style={{ position: 'relative', zIndex: 1 }}>終了</span>
+                                    <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>ターン</span>
+                                    <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap' }}>終了</span>
                                 </>
                             )}
                         </button>
@@ -7452,43 +7592,290 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     </div>
 
                     {/* ========================================== */}
-                    {/* BATTLE LOG & HELP BUTTON - Centered */}
+                    {/* LEFT SIDE UI CONTAINER - Help, BattleLog, Hand/Graveyard Count, Play Button */}
                     {/* ========================================== */}
-                    {/* Help Button - Above Battle Log (fixed position above log's max height) */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
-                        style={{
+                    {isMobile ? (
+                        /* Mobile: Keep original absolute positioning */
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
+                                style={{
+                                    position: 'absolute',
+                                    left: 15 * scale,
+                                    top: 120 * scale,
+                                    width: 64 * scale,
+                                    height: 64 * scale,
+                                    minWidth: 64 * scale,
+                                    maxWidth: 64 * scale,
+                                    minHeight: 64 * scale,
+                                    maxHeight: 64 * scale,
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
+                                    border: '3px solid #63b3ed',
+                                    color: '#63b3ed',
+                                    fontSize: `${1.8 * scale}rem`,
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    padding: 0,
+                                    zIndex: 16,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                                    transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.transform = 'scale(1.1)';
+                                    e.currentTarget.style.boxShadow = '0 0 15px rgba(99, 179, 237, 0.5)';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
+                                }}
+                            >
+                                ?
+                            </button>
+                            <BattleLog logs={gameState.logs || []} onCardNameClick={handleCardNameClickFromLog} scale={scale} isMobile={isMobile} />
+                        </>
+                    ) : (
+                        /* PC: Unified container with flexbox layout */
+                        <div style={{
                             position: 'absolute',
                             left: 15,
-                            top: 'calc(45% - 160px)', // バトルログ上端（45% - maxHeight/2 ≈ 45% - 100px）より60px上
-                            width: 36,
-                            height: 36,
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
-                            border: '2px solid #63b3ed',
-                            color: '#63b3ed',
-                            fontSize: '1.2rem',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: 8,
                             zIndex: 16,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                            transition: 'all 0.2s ease',
-                        }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.transform = 'scale(1.1)';
-                            e.currentTarget.style.boxShadow = '0 0 15px rgba(99, 179, 237, 0.5)';
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-                        }}
-                    >
-                        ?
-                    </button>
-                    <BattleLog logs={gameState.logs || []} onCardNameClick={handleCardNameClickFromLog} scale={scale} />
+                            pointerEvents: 'none'
+                        }}>
+                            {/* Help Button */}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
+                                    border: '2px solid #63b3ed',
+                                    color: '#63b3ed',
+                                    fontSize: '1.2rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: 0,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                                    transition: 'all 0.2s ease',
+                                    pointerEvents: 'auto'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.transform = 'scale(1.1)';
+                                    e.currentTarget.style.boxShadow = '0 0 15px rgba(99, 179, 237, 0.5)';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+                                }}
+                            >
+                                ?
+                            </button>
+
+                            {/* Battle Log - Inline instead of absolute */}
+                            <div
+                                style={{
+                                    width: Math.max(180, 220 * scale),
+                                    maxHeight: Math.max(200, 280 * scale),
+                                    overflowY: 'auto',
+                                    background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
+                                    color: '#fff',
+                                    fontSize: `${Math.max(0.65, 0.75 * scale)}rem`,
+                                    padding: `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
+                                    borderLeft: '3px solid #63b3ed',
+                                    pointerEvents: 'auto',
+                                    scrollbarWidth: 'thin',
+                                }}
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={e => e.stopPropagation()}
+                                ref={(el) => {
+                                    if (el) el.scrollTop = el.scrollHeight;
+                                }}
+                            >
+                                <div style={{
+                                    fontWeight: 'bold', marginBottom: 4 * scale, color: '#a0aec0',
+                                    borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 2,
+                                    fontSize: `${Math.max(0.55, 0.65 * scale)}rem`, textTransform: 'uppercase', letterSpacing: 1
+                                }}>
+                                    BATTLE LOG
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 * scale }}>
+                                    {(gameState.logs || []).map((log, i) => (
+                                        <div key={i} style={{
+                                            opacity: 0.9,
+                                            lineHeight: '1.4',
+                                            textShadow: '0 1px 2px black',
+                                            animation: 'fadeIn 0.3s ease-out'
+                                        }}>
+                                            {log}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Hand Count & Graveyard Count */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none' }}>
+                                {/* Hand Icon - Stacked Cards */}
+                                <div style={{ position: 'relative', width: 32, height: 40 }}>
+                                    <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
+                                    <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
+                                    <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
+                                </div>
+                                <div style={{ background: 'rgba(0,0,0,0.7)', padding: '4px 12px', borderRadius: 8, color: '#e2e8f0', fontSize: '0.9rem', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
+                                    手札 {player.hand.length}
+                                </div>
+                                {/* Graveyard Count */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+                                    <div style={{ fontSize: '1.2rem', filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))' }}>
+                                        💀
+                                    </div>
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
+                                        padding: '4px 12px',
+                                        borderRadius: 8,
+                                        color: '#e2e8f0',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 'bold',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
+                                        border: '1px solid rgba(167, 139, 250, 0.5)',
+                                        position: 'relative'
+                                    }}>
+                                        墓地 {player.graveyard.length}
+                                        {/* Necromance Effect */}
+                                        {necromanceEffects.filter(e => e.playerId === currentPlayerId).map(effect => (
+                                            <div
+                                                key={effect.key}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: -30,
+                                                    left: '50%',
+                                                    transform: 'translateX(-50%)',
+                                                    color: '#d946ef',
+                                                    fontSize: '1.5rem',
+                                                    fontWeight: 'bold',
+                                                    textShadow: '0 0 10px #d946ef, 0 0 20px #a855f7, 0 0 30px #7c3aed',
+                                                    animation: 'necromanceFloat 1.5s ease-out forwards',
+                                                    pointerEvents: 'none',
+                                                    whiteSpace: 'nowrap'
+                                                }}
+                                            >
+                                                -{effect.amount}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Play Button (only shown when HAND card selected) */}
+                            {selectedCard && selectedCard.owner === 'PLAYER' && selectedCard.source === 'HAND' && isHandExpanded && (() => {
+                                const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
+                                const buttonGap = 6;
+                                const buttonWidth = (logWidth - buttonGap) / 2;
+                                const canPlay = player.pp >= selectedCard.card.cost;
+                                return (
+                                    <button
+                                        disabled={!canPlay}
+                                        onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
+                                        className={canPlay ? 'play-button-active' : ''}
+                                        style={{
+                                            width: buttonWidth,
+                                            background: canPlay ? 'linear-gradient(to bottom, #48bb78, #38a169)' : '#718096',
+                                            color: 'white', border: '2px solid rgba(255,255,255,0.2)',
+                                            padding: '8px 4px', borderRadius: 12,
+                                            fontSize: '0.85rem', fontWeight: 'bold', cursor: canPlay ? 'pointer' : 'not-allowed',
+                                            boxShadow: canPlay ? '0 0 15px rgba(72, 187, 120, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                            transition: 'all 0.3s ease',
+                                            pointerEvents: 'auto'
+                                        }}
+                                        onMouseDown={e => e.stopPropagation()}
+                                    >
+                                        プレイ
+                                        <div style={{ fontSize: '0.6rem', opacity: 0.8, marginTop: 2 }}>pp {selectedCard.card.cost}</div>
+                                    </button>
+                                );
+                            })()}
+
+                            {/* Evolution Buttons (only shown when BOARD card selected) */}
+                            {selectedCard && selectedCard.owner === 'PLAYER' && selectedCard.source === 'BOARD' && (() => {
+                                const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
+                                const buttonGap = 6;
+                                const buttonWidth = (logWidth - buttonGap) / 2;
+                                const selectedBoardCard = selectedCard.card;
+                                const isAlreadyEvolved = selectedBoardCard?.hasEvolved;
+                                const canEvolveNow = !isAlreadyEvolved && canEvolveUI;
+                                const canSuperEvolveNow = !isAlreadyEvolved && canSuperEvolveUI;
+
+                                // 選択したカードのボード上のインデックスを取得
+                                const selectedInstanceId = selectedBoardCard?.instanceId;
+                                const boardIndex = player.board.findIndex(c => c && (c as any).instanceId === selectedInstanceId);
+                                const visualIndex = player.board.slice(0, boardIndex + 1).filter(c => c).length - 1;
+
+                                const handleEvolveButtonClick = (useSep: boolean) => {
+                                    if (boardIndex < 0) return;
+                                    handleEvolveWithAnimation(visualIndex >= 0 ? visualIndex : boardIndex, useSep, undefined, selectedInstanceId);
+                                };
+
+                                return (
+                                    <div style={{ display: 'flex', gap: buttonGap, pointerEvents: 'auto' }} onMouseDown={e => e.stopPropagation()}>
+                                        {/* 進化ボタン */}
+                                        <button
+                                            disabled={!canEvolveNow}
+                                            onClick={(e) => { e.stopPropagation(); handleEvolveButtonClick(false); }}
+                                            style={{
+                                                width: buttonWidth,
+                                                background: canEvolveNow ? 'linear-gradient(to bottom, #faf089, #d69e2e)' : '#718096',
+                                                color: canEvolveNow ? '#1a202c' : 'white',
+                                                border: '2px solid rgba(255,255,255,0.2)',
+                                                padding: '8px 4px', borderRadius: 12,
+                                                fontSize: '0.85rem', fontWeight: 'bold',
+                                                cursor: canEvolveNow ? 'pointer' : 'not-allowed',
+                                                boxShadow: canEvolveNow ? '0 0 15px rgba(250, 240, 137, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                                textShadow: canEvolveNow ? '0 1px 1px rgba(255,255,255,0.3)' : '0 1px 2px rgba(0,0,0,0.5)',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                        >
+                                            進化
+                                            <div style={{ fontSize: '0.6rem', opacity: 0.8, marginTop: 2 }}>EP</div>
+                                        </button>
+                                        {/* 超進化ボタン */}
+                                        <button
+                                            disabled={!canSuperEvolveNow}
+                                            onClick={(e) => { e.stopPropagation(); handleEvolveButtonClick(true); }}
+                                            style={{
+                                                width: buttonWidth,
+                                                background: canSuperEvolveNow ? 'linear-gradient(to bottom, #b794f4, #805ad5)' : '#718096',
+                                                color: 'white',
+                                                border: '2px solid rgba(255,255,255,0.2)',
+                                                padding: '8px 4px', borderRadius: 12,
+                                                fontSize: '0.85rem', fontWeight: 'bold',
+                                                cursor: canSuperEvolveNow ? 'pointer' : 'not-allowed',
+                                                boxShadow: canSuperEvolveNow ? '0 0 15px rgba(183, 148, 244, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                        >
+                                            超進化
+                                            <div style={{ fontSize: '0.6rem', opacity: 0.8, marginTop: 2 }}>SEP</div>
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
 
                     {/* Coin Toss Overlay */}
                     {(coinTossPhase === 'TOSSING' || coinTossPhase === 'RESULT') && (
@@ -7569,13 +7956,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             animation: 'fadeIn 0.2s ease-out'
                         }}>
                             <div style={{
-                                fontSize: '5rem', fontWeight: 900,
+                                fontSize: `${3.5 * scale}rem`, fontWeight: 900,
                                 fontFamily: 'Tamanegi, sans-serif',
                                 background: 'linear-gradient(135deg, #ffd700, #ff6b6b, #ffd700)',
                                 WebkitBackgroundClip: 'text',
                                 WebkitTextFillColor: 'transparent',
                                 textShadow: 'none',
-                                filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.8)) drop-shadow(0 0 40px rgba(255,107,107,0.5))',
+                                filter: `drop-shadow(0 0 ${15 * scale}px rgba(255,215,0,0.8)) drop-shadow(0 0 ${30 * scale}px rgba(255,107,107,0.5))`,
                                 animation: 'gameStartPop 0.8s ease-out',
                                 letterSpacing: '0.2em'
                             }}>
@@ -7632,21 +8019,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         {/* Player HP - Top Left (Center - 140px) */}
                         <div style={{
-                            position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%) translateX(-140px)',
+                            position: 'absolute', top: 0, left: '50%', transform: `translateX(-50%) translateX(${-140 * scale}px)`,
                             width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
-                            border: '3px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '1.6rem', fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
+                            border: `${Math.max(2, 3 * scale)}px solid #fff`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: `${1.2 * scale}rem`, fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
                             boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10
                         }}>{player.hp}</div>
 
                         {/* Player EP - Circular Frame */}
-                        <div onMouseDown={(e) => handleEvolveMouseDown(e, false)} style={{
-                            position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(-80px)',
+                        <div onMouseDown={(e) => handleEvolveMouseDown(e, false)} onTouchStart={(e) => handleEvolveMouseDown(e, false)} style={{
+                            position: 'absolute', top: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${-80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: canEvolveUI ? 'rgba(255,235,100,0.2)' : 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10,
                             opacity: isEvolveUnlocked ? 1 : 0.5, filter: isEvolveUnlocked ? 'none' : 'grayscale(0.8)',
-                            transition: 'opacity 0.3s, filter 0.3s'
+                            transition: 'opacity 0.3s, filter 0.3s, background 0.3s',
+                            boxShadow: canEvolveUI ? '0 0 12px #ffd700, 0 0 25px rgba(255,215,0,0.5)' : 'none',
+                            animation: canEvolveUI ? 'epPulse 1.5s ease-in-out infinite' : 'none'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
                                 {Array(2).fill(0).map((_, i) => {
@@ -7655,28 +8044,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     let glowStyle = 'none';
                                     if (hasEP && isEvolveUnlocked) {
                                         glowStyle = canEvolveUI
-                                            ? '0 0 12px #ecc94b, 0 0 25px #ecc94b, 0 0 35px #ecc94b'
+                                            ? '0 0 10px #fff59d, 0 0 20px #ffd700, 0 0 30px #ecc94b'
                                             : '0 0 8px #ecc94b, 0 0 15px #ecc94b';
                                     }
                                     return <div key={i} style={{
                                         width: 12 * scale, height: 12 * scale, borderRadius: '50%',
-                                        background: hasEP ? '#ecc94b' : '#2d3748',
+                                        background: hasEP ? (canEvolveUI ? '#fff59d' : '#ecc94b') : '#2d3748',
                                         boxShadow: glowStyle,
                                         border: '2px solid rgba(0,0,0,0.5)',
-                                        transition: 'box-shadow 0.3s'
+                                        transition: 'box-shadow 0.3s, background 0.3s'
                                     }} />;
                                 })}
                             </div>
                         </div>
 
                         {/* Player SEP - Circular Frame */}
-                        <div onMouseDown={(e) => handleEvolveMouseDown(e, true)} style={{
-                            position: 'absolute', top: 10 * scale, left: '50%', transform: 'translateX(-50%) translateX(80px)',
+                        <div onMouseDown={(e) => handleEvolveMouseDown(e, true)} onTouchStart={(e) => handleEvolveMouseDown(e, true)} style={{
+                            position: 'absolute', top: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
-                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: canSuperEvolveUI ? 'rgba(200,160,255,0.2)' : 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             zIndex: 10, cursor: canSuperEvolveUI ? 'grab' : 'default',
                             opacity: isSuperEvolveUnlocked ? 1 : 0.5, filter: isSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)',
-                            transition: 'opacity 0.3s, filter 0.3s'
+                            transition: 'opacity 0.3s, filter 0.3s, background 0.3s',
+                            boxShadow: canSuperEvolveUI ? '0 0 12px #b794f4, 0 0 25px rgba(159,122,234,0.5)' : 'none',
+                            animation: canSuperEvolveUI ? 'sepPulse 1.5s ease-in-out infinite' : 'none'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
                                 {Array(2).fill(0).map((_, i) => {
@@ -7685,15 +8076,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     let glowStyle = 'none';
                                     if (hasSEP && isSuperEvolveUnlocked) {
                                         glowStyle = canSuperEvolveUI
-                                            ? '0 0 12px #9f7aea, 0 0 25px #9f7aea, 0 0 35px #9f7aea'
+                                            ? '0 0 10px #d6bcfa, 0 0 20px #b794f4, 0 0 30px #9f7aea'
                                             : '0 0 8px #9f7aea, 0 0 15px #9f7aea';
                                     }
                                     return <div key={i} style={{
                                         width: 12 * scale, height: 12 * scale, borderRadius: '50%',
-                                        background: hasSEP ? '#9f7aea' : '#2d3748',
+                                        background: hasSEP ? (canSuperEvolveUI ? '#d6bcfa' : '#9f7aea') : '#2d3748',
                                         boxShadow: glowStyle,
                                         border: '2px solid rgba(0,0,0,0.5)',
-                                        transition: 'box-shadow 0.3s'
+                                        transition: 'box-shadow 0.3s, background 0.3s'
                                     }} />;
                                 })}
                             </div>
@@ -7818,19 +8209,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                             setSelectedHandIndex(i === selectedHandIndex ? null : i);
                                         }
                                     }}
+                                    onTouchStart={(e) => {
+                                        // Touch to select/lift (same as mouse)
+                                        handleHandMouseDown(e, i);
+                                        if (isHandExpanded) {
+                                            setSelectedHandIndex(i === selectedHandIndex ? null : i);
+                                        }
+                                    }}
                                     style={{
                                         position: 'absolute',
                                         // The container is centered (left: 0, width: 100%, justifyContent: center)
                                         // So offsetX=0 means center of screen.
                                         left: '50%',
                                         bottom: 5 * scale, // Slightly higher to avoid cut-off
-                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.05) translateY(-15px)' : (isHandExpanded ? 'translateY(-5px)' : '')}`,
+                                        // Mobile: smaller translateY on selection to avoid overlapping leader UI
+                                        transform: `translateX(calc(-50% + ${offsetX}px)) translateY(${translateY}px) rotate(${rotate}deg) ${dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'scale(1.05) translateY(-10px)' : (isHandExpanded ? 'translateY(-3px)' : '')}`,
                                         transition: cancellingDragIndex === i
                                             ? 'all 0.3s ease-in' // Ease-in for falling animation
                                             : (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 'none' : 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'),
                                         zIndex: dragState?.sourceType === 'HAND' && dragState.sourceIndex === i ? 1000 : i + 100,
-                                        width: CARD_WIDTH * scale,
-                                        height: CARD_HEIGHT * scale,
+                                        // Mobile: larger cards (80x115) for better visibility
+                                        width: (isMobile ? 80 : CARD_WIDTH) * scale,
+                                        height: (isMobile ? 115 : CARD_HEIGHT) * scale,
                                         pointerEvents: 'auto',
                                         cursor: isPlayable ? 'grab' : 'not-allowed'
                                     }}
@@ -7841,9 +8241,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         turnCount={gameState.turnCount}
                                         isMyTurn={gameState.activePlayerId === currentPlayerId}
                                         isPlayable={isPlayable} // Make sure Green Glow shows!
+                                        scale={scale}
+                                        variant={isMobile ? 'mobile-hand' : 'normal'}
                                         style={{
-                                            width: CARD_WIDTH * scale,
-                                            height: CARD_HEIGHT * scale,
+                                            width: isMobile ? 80 * scale : CARD_WIDTH * scale,
+                                            height: isMobile ? 115 * scale : CARD_HEIGHT * scale,
                                             boxShadow: (dragState?.sourceType === 'HAND' && dragState.sourceIndex === i) ? '0 0 40px rgba(49, 130, 206, 0.8)' : (isPlayable ? '0 0 15px rgba(40, 180, 100, 0.6)' : 'none')
                                         }}
                                     />
@@ -7852,97 +8254,170 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         })}
                     </div>
 
-                    {/* Play Button - Left side, below hand count badge */}
-                    {selectedCard && selectedCard.owner === 'PLAYER' && isHandExpanded && (
-                        <div style={{ position: 'absolute', left: 15, bottom: 155 * scale, zIndex: 600, pointerEvents: 'auto' }}>
-                            <button
-                                disabled={player.pp < selectedCard.card.cost}
-                                onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
-                                className={player.pp >= selectedCard.card.cost ? 'play-button-active' : ''}
-                                style={{
-                                    background: player.pp >= selectedCard.card.cost ? 'linear-gradient(to bottom, #48bb78, #38a169)' : '#718096',
-                                    color: 'white', border: '2px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: 20,
-                                    fontSize: '1rem', fontWeight: 'bold', cursor: player.pp >= selectedCard.card.cost ? 'pointer' : 'not-allowed',
-                                    boxShadow: player.pp >= selectedCard.card.cost ? '0 0 20px rgba(72, 187, 120, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                                    transition: 'all 0.3s ease'
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                            >
-                                プレイ
-                                <div style={{ fontSize: '0.7rem', opacity: 0.8, marginTop: 2 }}>pp {selectedCard.card.cost}</div>
-                            </button>
-                            <style>{`
-                            @keyframes playGlowPulse {
-                                0% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.4); }
-                                50% { box-shadow: 0 0 25px rgba(72, 187, 120, 0.8); }
-                                100% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.4); }
-                            }
-                            .play-button-active {
-                                animation: playGlowPulse 2s infinite ease-in-out;
-                            }
-                        `}</style>
+                    {/* Hand Count Badge & Graveyard Count - Mobile only (PC uses unified container) */}
+                    {isMobile && (
+                        <div style={{ position: 'absolute', bottom: 200 * scale, left: 15 * scale, display: 'flex', alignItems: 'center', gap: 10 * scale, zIndex: 601, pointerEvents: 'none' }}>
+                            {/* Hand Icon - Stacked Cards */}
+                            <div style={{ position: 'relative', width: 50 * scale, height: 62 * scale }}>
+                                <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 6 * scale, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
+                                <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 6 * scale, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
+                                <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 6 * scale, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
+                            </div>
+                            <div style={{ background: 'rgba(0,0,0,0.7)', padding: `${6 * scale}px ${16 * scale}px`, borderRadius: 10 * scale, color: '#e2e8f0', fontSize: `${1.32 * scale}rem`, fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
+                                手札 {player.hand.length}
+                            </div>
+                            {/* Graveyard Count - 墓地枚数表示 (手札の右に配置) */}
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: 6 * scale,
+                                marginLeft: 10 * scale
+                            }}>
+                                <div style={{
+                                    fontSize: `${1.87 * scale}rem`,
+                                    filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
+                                }}>
+                                    💀
+                                </div>
+                                <div style={{
+                                    background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
+                                    padding: `${6 * scale}px ${16 * scale}px`,
+                                    borderRadius: 10 * scale,
+                                    color: '#e2e8f0',
+                                    fontSize: `${1.32 * scale}rem`,
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
+                                    border: '1px solid rgba(167, 139, 250, 0.5)',
+                                    position: 'relative'
+                                }}>
+                                    墓地 {player.graveyard.length}
+                                    {/* Necromance Effect - Purple -X animation */}
+                                    {necromanceEffects.filter(e => e.playerId === currentPlayerId).map(effect => (
+                                        <div
+                                            key={effect.key}
+                                            style={{
+                                                position: 'absolute',
+                                                top: -30,
+                                                left: '50%',
+                                                transform: 'translateX(-50%)',
+                                                color: '#d946ef',
+                                                fontSize: '1.5rem',
+                                                fontWeight: 'bold',
+                                                textShadow: '0 0 10px #d946ef, 0 0 20px #a855f7, 0 0 30px #7c3aed',
+                                                animation: 'necromanceFloat 1.5s ease-out forwards',
+                                                pointerEvents: 'none',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            -{effect.amount}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     )}
 
-                    {/* Hand Count Badge & Graveyard Count - Far Left near boundary */}
-                    <div style={{ position: 'absolute', bottom: Math.max(180, 220 * scale), left: 15 * scale, display: 'flex', alignItems: 'center', gap: 8 * scale, zIndex: 601, pointerEvents: 'none' }}>
-                        {/* Hand Icon - Stacked Cards */}
-                        <div style={{ position: 'relative', width: 32 * scale, height: 40 * scale }}>
-                            <div style={{ position: 'absolute', inset: 0, background: '#4a5568', borderRadius: 4 * scale, border: '1px solid #718096', transform: 'rotate(-15deg) translate(-5px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#2d3748', borderRadius: 4 * scale, border: '1px solid #718096', transform: 'rotate(-5deg) translate(-2px, 0)' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: '#1a202c', borderRadius: 4 * scale, border: '1px solid #cbd5e0', transform: 'rotate(5deg)' }} />
-                        </div>
-                        <div style={{ background: 'rgba(0,0,0,0.7)', padding: `${4 * scale}px ${10 * scale}px`, borderRadius: 6 * scale, color: '#e2e8f0', fontSize: `${0.85 * scale}rem`, fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
-                            手札 {player.hand.length}
-                        </div>
-                        {/* Graveyard Count - 墓地枚数表示 (手札の右に配置) */}
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: 4 * scale,
-                            marginLeft: 6 * scale
-                        }}>
-                            <div style={{
-                                fontSize: `${1.2 * scale}rem`,
-                                filter: 'drop-shadow(0 0 3px rgba(128, 90, 213, 0.8))'
-                            }}>
-                                💀
+                    {/* Play Button - Mobile only (PC uses unified container) - HAND cards only */}
+                    {isMobile && selectedCard && selectedCard.owner === 'PLAYER' && selectedCard.source === 'HAND' && isHandExpanded && (() => {
+                        const logWidth = Math.max(140, 180 * scale);
+                        const buttonGap = 4 * scale;
+                        const buttonWidth = (logWidth - buttonGap) / 2;
+                        const canPlay = player.pp >= selectedCard.card.cost;
+                        return (
+                            <div style={{ position: 'absolute', left: 15 * scale, bottom: 135 * scale, zIndex: 600, pointerEvents: 'auto' }}>
+                                <button
+                                    disabled={!canPlay}
+                                    onClick={(e) => { e.stopPropagation(); handleUseButtonClick(); }}
+                                    className={canPlay ? 'play-button-active' : ''}
+                                    style={{
+                                        width: buttonWidth,
+                                        background: canPlay ? 'linear-gradient(to bottom, #48bb78, #38a169)' : '#718096',
+                                        color: 'white', border: '2px solid rgba(255,255,255,0.2)',
+                                        padding: `${5 * scale}px ${3 * scale}px`, borderRadius: 10 * scale,
+                                        fontSize: `${0.7 * scale}rem`, fontWeight: 'bold', cursor: canPlay ? 'pointer' : 'not-allowed',
+                                        boxShadow: canPlay ? '0 0 12px rgba(72, 187, 120, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    onMouseDown={e => e.stopPropagation()}
+                                >
+                                    プレイ
+                                    <div style={{ fontSize: `${0.5 * scale}rem`, opacity: 0.8, marginTop: 1 }}>pp {selectedCard.card.cost}</div>
+                                </button>
+                                <style>{`
+                                @keyframes playGlowPulse {
+                                    0% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.4); }
+                                    50% { box-shadow: 0 0 25px rgba(72, 187, 120, 0.8); }
+                                    100% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.4); }
+                                }
+                                .play-button-active {
+                                    animation: playGlowPulse 2s infinite ease-in-out;
+                                }
+                            `}</style>
                             </div>
-                            <div style={{
-                                background: 'linear-gradient(135deg, rgba(128, 90, 213, 0.8), rgba(76, 29, 149, 0.9))',
-                                padding: `${4 * scale}px ${10 * scale}px`,
-                                borderRadius: 6 * scale,
-                                color: '#e2e8f0',
-                                fontSize: `${0.85 * scale}rem`,
-                                fontWeight: 'bold',
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)',
-                                border: '1px solid rgba(167, 139, 250, 0.5)',
-                                position: 'relative'
-                            }}>
-                                墓地 {player.graveyard.length}
-                                {/* Necromance Effect - Purple -X animation */}
-                                {necromanceEffects.filter(e => e.playerId === currentPlayerId).map(effect => (
-                                    <div
-                                        key={effect.key}
-                                        style={{
-                                            position: 'absolute',
-                                            top: -30,
-                                            left: '50%',
-                                            transform: 'translateX(-50%)',
-                                            color: '#d946ef',
-                                            fontSize: '1.5rem',
-                                            fontWeight: 'bold',
-                                            textShadow: '0 0 10px #d946ef, 0 0 20px #a855f7, 0 0 30px #7c3aed',
-                                            animation: 'necromanceFloat 1.5s ease-out forwards',
-                                            pointerEvents: 'none',
-                                            whiteSpace: 'nowrap'
-                                        }}
-                                    >
-                                        -{effect.amount}
-                                    </div>
-                                ))}
+                        );
+                    })()}
+
+                    {/* Evolution Buttons - Mobile only (PC uses unified container) - BOARD cards only */}
+                    {isMobile && selectedCard && selectedCard.owner === 'PLAYER' && selectedCard.source === 'BOARD' && (() => {
+                        const logWidth = Math.max(140, 180 * scale);
+                        const buttonGap = 4 * scale;
+                        const buttonWidth = (logWidth - buttonGap) / 2;
+                        const selectedBoardCard = selectedCard.card;
+                        const isAlreadyEvolved = selectedBoardCard?.hasEvolved;
+                        const canEvolveNow = !isAlreadyEvolved && canEvolveUI;
+                        const canSuperEvolveNow = !isAlreadyEvolved && canSuperEvolveUI;
+
+                        const selectedInstanceId = selectedBoardCard?.instanceId;
+                        const boardIndex = player.board.findIndex(c => c && (c as any).instanceId === selectedInstanceId);
+                        const visualIndex = player.board.slice(0, boardIndex + 1).filter(c => c).length - 1;
+
+                        const handleEvolveButtonClick = (useSep: boolean) => {
+                            if (boardIndex < 0) return;
+                            handleEvolveWithAnimation(visualIndex >= 0 ? visualIndex : boardIndex, useSep, undefined, selectedInstanceId);
+                        };
+
+                        return (
+                            <div style={{ position: 'absolute', left: 15 * scale, bottom: 135 * scale, zIndex: 600, pointerEvents: 'auto', display: 'flex', gap: buttonGap }} onMouseDown={e => e.stopPropagation()}>
+                                <button
+                                    disabled={!canEvolveNow}
+                                    onClick={(e) => { e.stopPropagation(); handleEvolveButtonClick(false); }}
+                                    style={{
+                                        width: buttonWidth,
+                                        background: canEvolveNow ? 'linear-gradient(to bottom, #faf089, #d69e2e)' : '#718096',
+                                        color: canEvolveNow ? '#1a202c' : 'white',
+                                        border: '2px solid rgba(255,255,255,0.2)',
+                                        padding: `${5 * scale}px ${3 * scale}px`, borderRadius: 10 * scale,
+                                        fontSize: `${0.7 * scale}rem`, fontWeight: 'bold',
+                                        cursor: canEvolveNow ? 'pointer' : 'not-allowed',
+                                        boxShadow: canEvolveNow ? '0 0 12px rgba(250, 240, 137, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                        textShadow: canEvolveNow ? '0 1px 1px rgba(255,255,255,0.3)' : '0 1px 2px rgba(0,0,0,0.5)',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                >
+                                    進化
+                                    <div style={{ fontSize: `${0.5 * scale}rem`, opacity: 0.8, marginTop: 1 }}>EP</div>
+                                </button>
+                                <button
+                                    disabled={!canSuperEvolveNow}
+                                    onClick={(e) => { e.stopPropagation(); handleEvolveButtonClick(true); }}
+                                    style={{
+                                        width: buttonWidth,
+                                        background: canSuperEvolveNow ? 'linear-gradient(to bottom, #b794f4, #805ad5)' : '#718096',
+                                        color: 'white',
+                                        border: '2px solid rgba(255,255,255,0.2)',
+                                        padding: `${5 * scale}px ${3 * scale}px`, borderRadius: 10 * scale,
+                                        fontSize: `${0.7 * scale}rem`, fontWeight: 'bold',
+                                        cursor: canSuperEvolveNow ? 'pointer' : 'not-allowed',
+                                        boxShadow: canSuperEvolveNow ? '0 0 12px rgba(183, 148, 244, 0.6)' : '0 4px 10px rgba(0,0,0,0.5)',
+                                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                >
+                                    超進化
+                                    <div style={{ fontSize: `${0.5 * scale}rem`, opacity: 0.8, marginTop: 1 }}>SEP</div>
+                                </button>
                             </div>
-                        </div>
-                    </div>
+                        );
+                    })()}
 
                     {/* Draw Animation Overlay - Show all cards simultaneously with X offset (with sleeve image) */}
                     {
@@ -8005,7 +8480,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 {/* FLOATING DAMAGE TEXT */}
                 {
                     damageNumbers.map(d => (
-                        <DamageText key={d.id} value={d.value} x={d.x} y={d.y} color={d.color} onComplete={() => setDamageNumbers(prev => prev.filter(p => p.id !== d.id))} />
+                        <DamageText key={d.id} value={d.value} x={d.x} y={d.y} color={d.color} scale={scale} onComplete={() => setDamageNumbers(prev => prev.filter(p => p.id !== d.id))} />
                     ))
                 }
 
@@ -8417,7 +8892,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             top: 0,
                             left: 0,
                             width: '100vw',
-                            height: '100vh',
+                            height: '100dvh',
                             pointerEvents: 'none',
                             zIndex: 99999
                         }}
@@ -8609,7 +9084,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 <div
                                     className="play-card-front"
                                 >
-                                    <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' } as React.CSSProperties} />
+                                    <Card card={playingCardAnim.card} isOnBoard={true} suppressPassives={true} scale={scale} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale, boxShadow: '0 0 50px rgba(255,215,0,0.8)' } as React.CSSProperties} />
                                 </div>
                                 {/* Back Face - Sleeve Image */}
                                 <div
@@ -8671,7 +9146,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             opacity: animCard.status === 'FLY' ? 0.3 : 1, // Fade out as it reaches hand
                             animation: animCard.status === 'APPEAR' ? 'cardAppear 0.8s ease-out' : undefined
                         }}>
-                            <Card card={animCard.card as any} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }} />
+                            <Card card={animCard.card as any} scale={scale} style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }} />
                         </div>
                     ))
                 }
@@ -8704,6 +9179,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 y={effect.y}
                                 onComplete={() => setActiveEffects(prev => prev.filter(e => e.key !== effect.key))}
                                 audioSettings={audioSettings}
+                                scale={scale}
                             />
                         )
                     ))
@@ -8746,31 +9222,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         animation: 'notificationFade 2.5s forwards'
                     }}>
                         <div style={{
-                            padding: '30px 140px',
+                            padding: `${20 * scale}px ${90 * scale}px`,
                             background: 'rgba(0, 0, 0, 0.75)',
                             backdropFilter: 'blur(16px)',
-                            borderTop: turnNotification === 'EVOLVE_READY' ? '4px solid rgba(255, 215, 0, 0.7)' : '4px solid rgba(180, 0, 255, 0.7)',
-                            borderBottom: turnNotification === 'EVOLVE_READY' ? '4px solid rgba(255, 215, 0, 0.7)' : '4px solid rgba(180, 0, 255, 0.7)',
+                            borderTop: `${3 * scale}px solid ${turnNotification === 'EVOLVE_READY' ? 'rgba(255, 215, 0, 0.7)' : 'rgba(180, 0, 255, 0.7)'}`,
+                            borderBottom: `${3 * scale}px solid ${turnNotification === 'EVOLVE_READY' ? 'rgba(255, 215, 0, 0.7)' : 'rgba(180, 0, 255, 0.7)'}`,
                             boxShadow: turnNotification === 'EVOLVE_READY'
-                                ? '0 0 70px rgba(255, 180, 0, 0.5), inset 0 0 40px rgba(255, 215, 0, 0.2)'
-                                : '0 0 70px rgba(180, 0, 255, 0.5), inset 0 0 40px rgba(180, 0, 255, 0.2)',
+                                ? `0 0 ${50 * scale}px rgba(255, 180, 0, 0.5), inset 0 0 ${30 * scale}px rgba(255, 215, 0, 0.2)`
+                                : `0 0 ${50 * scale}px rgba(180, 0, 255, 0.5), inset 0 0 ${30 * scale}px rgba(180, 0, 255, 0.2)`,
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderRadius: '4px'
+                            borderRadius: `${4 * scale}px`
                         }}>
                             <span style={{
-                                fontSize: '8rem', // Larger font
+                                fontSize: `${5 * scale}rem`,
                                 fontWeight: '900',
                                 fontFamily: '"YuMincho", "Hiragino Mincho ProN", "MS Mincho", serif',
                                 color: '#fff',
-                                letterSpacing: '1.2rem',
+                                letterSpacing: `${0.8 * scale}rem`,
                                 whiteSpace: 'nowrap',
                                 textShadow: turnNotification === 'EVOLVE_READY'
-                                    ? '0 0 20px rgba(255, 215, 0, 1), 0 0 40px rgba(255, 180, 0, 0.8), 3px 3px 6px rgba(0,0,0,0.9)'
-                                    : '0 0 20px rgba(180, 0, 255, 1), 0 0 40px rgba(140, 0, 255, 0.8), 3px 3px 6px rgba(0,0,0,0.9)',
-                                WebkitTextStroke: turnNotification === 'EVOLVE_READY' ? '2px #ffd700' : '2px #b400ff'
+                                    ? `0 0 ${15 * scale}px rgba(255, 215, 0, 1), 0 0 ${30 * scale}px rgba(255, 180, 0, 0.8), ${2 * scale}px ${2 * scale}px ${4 * scale}px rgba(0,0,0,0.9)`
+                                    : `0 0 ${15 * scale}px rgba(180, 0, 255, 1), 0 0 ${30 * scale}px rgba(140, 0, 255, 0.8), ${2 * scale}px ${2 * scale}px ${4 * scale}px rgba(0,0,0,0.9)`,
+                                WebkitTextStroke: turnNotification === 'EVOLVE_READY' ? `${1.5 * scale}px #ffd700` : `${1.5 * scale}px #b400ff`
                             }}>
                                 {turnNotification === 'EVOLVE_READY' ? '進化可能' : '超進化可能'}
                             </span>

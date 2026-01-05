@@ -59,7 +59,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
 
     return (
         <div className="screen title-screen" style={{
-            height: '100vh',
+            height: '100dvh',
             width: '100vw',
             display: 'flex',
             flexDirection: 'column',

@@ -16,7 +16,7 @@ interface CardProps {
     style?: React.CSSProperties;
     isSelected?: boolean;
     isPlayable?: boolean;
-    variant?: 'normal' | 'art-only';
+    variant?: 'normal' | 'art-only' | 'mobile-hand';
     canAttack?: boolean; // For manual override if needed
     isOnBoard?: boolean; // New prop to distinguish Board vs Hand context
     isSpecialSummoning?: boolean; // Special summon animation trigger
@@ -24,9 +24,10 @@ interface CardProps {
     className?: string; // For custom animations
     suppressPassives?: boolean; // Explicitly hide passive effects (for play animation etc)
     isMyTurn?: boolean; // Current player's turn?
+    scale?: number; // Scale factor for responsive sizing (default: 1)
 }
 
-export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className, suppressPassives, isMyTurn }) => {
+export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, isPlayable, variant = 'normal', turnCount, isOnBoard, isSpecialSummoning, className, suppressPassives, isMyTurn, scale = 1 }) => {
     // Determine stats to show
     const attack = 'currentAttack' in card ? (card as any).currentAttack : card.attack;
     const health = 'currentHealth' in card ? (card as any).currentHealth : card.health;
@@ -141,6 +142,100 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
         );
     }
 
+    // --- Mobile Hand Variant (For Mobile Hand - No Name, Stats Vertical on Left) ---
+    if (variant === 'mobile-hand') {
+        const isSpell = card.type === 'SPELL';
+        const topRadius = isSpell ? 16 : 6;
+        // Larger icons to utilize full card height (3 icons + gaps must fit in ~115px card)
+        const iconSize = 28 * scale;
+        const fontSize = 0.85 * scale;
+        // For Follower cards: 3 icons + 2 gaps = 28*3 + 6*2 = 96px fits well in 115px card
+        // For Spell cards: 1 icon = 28px, plenty of space
+
+        return (
+            <div
+                className={`card mobile-hand ${className || ''}`}
+                style={{
+                    width: 80, height: 115, // Larger size for better visibility
+                    ...style,
+                    position: 'relative',
+                    cursor: onClick ? 'pointer' : 'default',
+                    transform: isSelected ? 'translateY(-8px)' : style?.transform,
+                    boxShadow: glowColor || style?.boxShadow,
+                    border: borderColor || (isPlayable ? '2px solid #48bb78' : undefined),
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    background: '#1a202c',
+                    overflow: 'hidden',
+                    borderRadius: `${topRadius}px ${topRadius}px 6px 6px`,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                }}
+                onClick={onClick}
+            >
+                {/* Full-bleed Image */}
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', borderRadius: `${topRadius}px ${topRadius}px 6px 6px` }}>
+                    {displayImageUrl ? (
+                        <img src={displayImageUrl} alt={card.name} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#4a5568', color: '#a0aec0', fontSize: '0.6rem' }}>
+                            {card.type}
+                        </div>
+                    )}
+                </div>
+
+                {/* Stats Column - Left Side, Vertical: Cost, Attack, Health */}
+                <div style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: 4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    zIndex: 10
+                }}>
+                    {/* Cost - thin border */}
+                    <div style={{
+                        width: iconSize, height: iconSize, borderRadius: '50%',
+                        background: '#48bb78', border: '1px solid rgba(255,255,255,0.8)',
+                        color: 'white', fontSize: `${fontSize}rem`, fontWeight: 900,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.6)'
+                    }}>
+                        {card.cost}
+                    </div>
+
+                    {/* Attack (Followers only) */}
+                    {card.type === 'FOLLOWER' && (
+                        <div style={{
+                            width: iconSize, height: iconSize,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            position: 'relative'
+                        }}>
+                            <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}>
+                                <polygon points="12,2 22,22 2,22" fill="#4299e1" stroke="rgba(255,255,255,0.8)" strokeWidth="1" strokeLinejoin="round" />
+                            </svg>
+                            <span style={{ zIndex: 1, color: isAttackBuffed ? '#faf089' : 'white', fontWeight: 'bold', fontSize: `${fontSize}rem`, textShadow: '0 1px 2px black' }}>{attack}</span>
+                        </div>
+                    )}
+
+                    {/* Health (Followers only) */}
+                    {card.type === 'FOLLOWER' && (
+                        <div style={{
+                            width: iconSize, height: iconSize,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            position: 'relative'
+                        }}>
+                            <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" style={{ position: 'absolute', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}>
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#c53030" stroke="rgba(255,255,255,0.8)" strokeWidth="1" />
+                            </svg>
+                            <span style={{ zIndex: 1, color: isHealthBuffed ? '#faf089' : isDamaged ? '#fc8181' : 'white', fontWeight: 'bold', fontSize: `${fontSize}rem`, textShadow: '0 1px 2px black' }}>{health}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     // スペルカードは手札表示時に上側の角を丸くする
     const isSpellInHand = card.type === 'SPELL' && !isOnBoard;
     const spellTopRadius = isSpellInHand ? 20 : 8;
@@ -218,10 +313,10 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 {/* 2b. Overlaid Cost (Not Clipped) - Valid only when NOT on Board */}
                 {!isOnBoard && (
                     <div style={{
-                        position: 'absolute', top: 2, left: 2,
-                        width: 24, height: 24, borderRadius: '50%',
-                        background: '#48bb78', border: '2px solid #fff',
-                        color: 'white', fontSize: '0.9rem', fontWeight: 900,
+                        position: 'absolute', top: 2 * scale, left: 2 * scale,
+                        width: 24 * scale, height: 24 * scale, borderRadius: '50%',
+                        background: '#48bb78', border: `${Math.max(1, 2 * scale)}px solid #fff`,
+                        color: 'white', fontSize: `${0.9 * scale}rem`, fontWeight: 900,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.3)',
                         zIndex: 10
@@ -236,12 +331,12 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         {/* Attack */}
                         <div style={{
                             position: 'absolute',
-                            bottom: isOnBoard ? 2 : 40,
-                            left: 2,
-                            width: 32, height: 32, zIndex: 10,
+                            bottom: isOnBoard ? 2 * scale : 40 * scale,
+                            left: 2 * scale,
+                            width: 32 * scale, height: 32 * scale, zIndex: 10,
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' }}>
+                            <svg width={40 * scale} height={40 * scale} viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' }}>
                                 <defs>
                                     <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                                         <stop offset="0%" stopColor="#63b3ed" />
@@ -250,19 +345,19 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                 </defs>
                                 <polygon points="12,2 22,22 2,22" fill="url(#blueGrad)" stroke="white" strokeWidth="1" strokeLinejoin="round" />
                             </svg>
-                            <span style={{ zIndex: 11, color: isAttackBuffed ? '#faf089' : 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{attack}</span>
+                            <span style={{ zIndex: 11, color: isAttackBuffed ? '#faf089' : 'white', fontWeight: 'bold', fontSize: `${1.2 * scale}rem`, textShadow: '0 2px 2px black' }}>{attack}</span>
                         </div>
 
                         {/* Health */}
                         <div style={{
                             position: 'absolute',
-                            bottom: 2,
-                            right: isOnBoard ? 2 : 'auto',
-                            left: isOnBoard ? 'auto' : 2,
-                            width: 32, height: 32, zIndex: 10,
+                            bottom: 2 * scale,
+                            right: isOnBoard ? 2 * scale : 'auto',
+                            left: isOnBoard ? 'auto' : 2 * scale,
+                            width: 32 * scale, height: 32 * scale, zIndex: 10,
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                            <svg width="36" height="36" viewBox="0 0 24 24" style={{ position: 'absolute', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' }}>
+                            <svg width={36 * scale} height={36 * scale} viewBox="0 0 24 24" style={{ position: 'absolute', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' }}>
                                 <defs>
                                     <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                                         <stop offset="0%" stopColor="#f56565" />
@@ -271,7 +366,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                 </defs>
                                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="url(#redGrad)" stroke="white" strokeWidth="1.5" />
                             </svg>
-                            <span style={{ zIndex: 11, color: isHealthBuffed ? '#faf089' : isDamaged ? '#fc8181' : 'white', fontWeight: 'bold', fontSize: '1.2rem', textShadow: '0 2px 2px black' }}>{health}</span>
+                            <span style={{ zIndex: 11, color: isHealthBuffed ? '#faf089' : isDamaged ? '#fc8181' : 'white', fontWeight: 'bold', fontSize: `${1.2 * scale}rem`, textShadow: '0 2px 2px black' }}>{health}</span>
                         </div>
                     </>
                 )}
@@ -285,7 +380,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 {isOnBoard && (
                     <div style={{
                         position: 'absolute',
-                        top: -15, left: -15, right: -15, bottom: -15,
+                        top: -6 * scale, left: -6 * scale, right: -6 * scale, bottom: -6 * scale,
                         zIndex: 50,
                         pointerEvents: 'none',
                         opacity: (isWard && !suppressPassives) ? 1 : 0,
@@ -299,7 +394,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             <svg viewBox="0 0 100 120" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
                                 <defs>
                                     <filter id="wardGlow" x="-50%" y="-50%" width="200%" height="200%">
-                                        <feGaussianBlur stdDeviation="3" result="blur" />
+                                        <feGaussianBlur stdDeviation="2" result="blur" />
                                         <feMerge>
                                             <feMergeNode in="blur" />
                                             <feMergeNode in="SourceGraphic" />
@@ -307,7 +402,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                     </filter>
                                 </defs>
                                 <path d="M50 2 L96 20 V60 C96 90 50 116 50 116 C50 116 4 90 4 60 V20 Z"
-                                    fill="rgba(255, 255, 255, 0.15)" stroke="#ECC94B" strokeWidth="4" filter="url(#wardGlow)" />
+                                    fill="rgba(255, 255, 255, 0.12)" stroke="#ECC94B" strokeWidth="3" filter="url(#wardGlow)" />
                             </svg>
                         </div>
                     </div>
@@ -317,7 +412,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 {isOnBoard && (
                     <div style={{
                         position: 'absolute',
-                        top: -12, left: -12, right: -12, bottom: -12,
+                        top: -5 * scale, left: -5 * scale, right: -5 * scale, bottom: -5 * scale,
                         zIndex: 21,
                         pointerEvents: 'none',
                         opacity: (hasBarrier && !playSummonAnim && !suppressPassives) ? 1 : 0,
@@ -328,7 +423,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             position: 'absolute',
                             top: 0, left: 0, right: 0, bottom: 0,
                             borderRadius: '50%',
-                            background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.15) 0%, transparent 60%)',
+                            background: 'radial-gradient(ellipse at center, rgba(99, 179, 237, 0.12) 0%, transparent 60%)',
                             animation: 'barrierGlowLoop 3s infinite ease-in-out'
                         }} />
                         {/* Main barrier line - crisp and visible */}
@@ -336,8 +431,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             position: 'absolute',
                             top: 0, left: 0, right: 0, bottom: 0,
                             borderRadius: '50%',
-                            border: '2.5px solid rgba(99, 179, 237, 0.9)',
-                            boxShadow: '0 0 8px rgba(66, 153, 225, 0.6), inset 0 0 10px rgba(99, 179, 237, 0.2)',
+                            border: `${Math.max(1.5, 2 * scale)}px solid rgba(99, 179, 237, 0.9)`,
+                            boxShadow: '0 0 6px rgba(66, 153, 225, 0.5), inset 0 0 8px rgba(99, 179, 237, 0.15)',
                             animation: 'barrierPulseLoop 3s infinite ease-in-out'
                         }} />
                     </div>
@@ -347,7 +442,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                 {isOnBoard && (
                     <div style={{
                         position: 'absolute',
-                        top: -15, left: -15, right: -15, bottom: -15,
+                        top: -6 * scale, left: -6 * scale, right: -6 * scale, bottom: -6 * scale,
                         zIndex: 22,
                         pointerEvents: 'none',
                         display: 'flex',
@@ -365,7 +460,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
                                 <defs>
                                     <filter id="auraGlow" x="-50%" y="-50%" width="200%" height="200%">
-                                        <feGaussianBlur stdDeviation="2" result="blur" />
+                                        <feGaussianBlur stdDeviation="1.5" result="blur" />
                                         <feMerge>
                                             <feMergeNode in="blur" />
                                             <feMergeNode in="SourceGraphic" />
@@ -373,7 +468,7 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                                     </filter>
                                 </defs>
                                 <path d="M40 5 L60 5 L60 30 L95 30 L95 45 L60 45 L60 95 L40 95 L40 45 L5 45 L5 30 L40 30 Z"
-                                    fill="rgba(255, 204, 0, 0.25)" stroke="#f6ad55" strokeWidth="3" filter="url(#auraGlow)" />
+                                    fill="rgba(255, 204, 0, 0.2)" stroke="#f6ad55" strokeWidth="2.5" filter="url(#auraGlow)" />
                             </svg>
                         </div>
                     </div>
@@ -391,14 +486,14 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         opacity: (isStealth && !playSummonAnim && !suppressPassives) ? 1 : 0,
                         transition: 'opacity 0.2s ease-in-out'
                     }}>
-                        {/* Central Inky Circle (Black) - Stronger */}
+                        {/* Central Inky Circle (Black) - Adjusted blur for scale */}
                         <div style={{
                             position: 'absolute',
                             top: '50%', left: '50%',
-                            width: '140%', height: '140%',
+                            width: '120%', height: '120%',
                             transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 30%, rgba(0, 0, 0, 0.3) 60%, transparent 80%)',
-                            filter: 'blur(15px)',
+                            background: 'radial-gradient(circle, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.6) 30%, rgba(0, 0, 0, 0.2) 60%, transparent 80%)',
+                            filter: 'blur(10px)',
                             animation: 'stealthInkMove 3s infinite ease-in-out',
                             mixBlendMode: 'multiply'
                         }} />
@@ -409,8 +504,8 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                             top: '50%', left: '50%',
                             width: '100%', height: '100%',
                             transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(20, 20, 30, 0.9) 0%, rgba(10, 10, 20, 0.5) 40%, transparent 70%)',
-                            filter: 'blur(10px)',
+                            background: 'radial-gradient(circle, rgba(20, 20, 30, 0.85) 0%, rgba(10, 10, 20, 0.4) 40%, transparent 70%)',
+                            filter: 'blur(8px)',
                             animation: 'stealthInkPulse 1.5s infinite ease-in-out',
                             mixBlendMode: 'multiply'
                         }} />
@@ -419,19 +514,19 @@ export const Card: React.FC<CardProps> = ({ card, onClick, style, isSelected, is
                         <div style={{
                             position: 'absolute',
                             top: '50%', left: '50%',
-                            width: '80%', height: '80%',
+                            width: '70%', height: '70%',
                             transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, rgba(200, 200, 200, 0.3) 30%, transparent 60%)',
-                            filter: 'blur(12px)',
+                            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.4) 0%, rgba(200, 200, 200, 0.25) 30%, transparent 60%)',
+                            filter: 'blur(8px)',
                             animation: 'stealthMistMove 4s infinite ease-in-out',
                             mixBlendMode: 'screen'
                         }} />
 
-                        {/* Outer Edge Glow - Stronger pulsing */}
+                        {/* Outer Edge Glow - Reduced shadow spread */}
                         <div style={{
                             position: 'absolute',
                             top: 0, left: 0, right: 0, bottom: 0,
-                            boxShadow: 'inset 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7)',
+                            boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 0, 0, 0.6)',
                             animation: 'stealthPulse 1.5s infinite ease-in-out'
                         }} />
                     </div>

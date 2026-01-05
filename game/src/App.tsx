@@ -47,6 +47,32 @@ const loadAudioSettings = (): AudioSettings => {
 type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'GAME';
 type GameMode = 'CPU' | 'HOST' | 'JOIN';
 
+// Portrait mode detection hook
+const useIsPortrait = () => {
+    const [isPortrait, setIsPortrait] = useState(false);
+
+    useEffect(() => {
+        const checkOrientation = () => {
+            // Only check on mobile devices (screen width < 1024 in portrait mode or touch device)
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isPortraitOrientation = window.innerHeight > window.innerWidth;
+            setIsPortrait(isMobile && isPortraitOrientation);
+        };
+
+        checkOrientation();
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+
+        return () => {
+            window.removeEventListener('resize', checkOrientation);
+            window.removeEventListener('orientationchange', checkOrientation);
+        };
+    }, []);
+
+    return isPortrait;
+};
+
+
 function App() {
     const [currentScreen, setCurrentScreen] = useState<Screen>('TITLE');
     const [selectedClass, setSelectedClass] = useState<ClassType>('SENKA');
@@ -54,6 +80,9 @@ function App() {
     const [roomId, setRoomId] = useState<string>('');
     const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
     const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('NORMAL');
+
+    // Portrait mode detection
+    const isPortrait = useIsPortrait();
 
     // Shared network adapter for online play
     const networkAdapterRef = useRef<NetworkAdapter | null>(null);
@@ -175,6 +204,57 @@ function App() {
 
     return (
         <div className="app-container">
+            {/* Portrait mode overlay - asks user to rotate device */}
+            {isPortrait && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100dvh',
+                    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 99999,
+                    color: 'white',
+                    textAlign: 'center',
+                    padding: 20
+                }}>
+                    {/* Rotate icon */}
+                    <div style={{
+                        fontSize: '4rem',
+                        marginBottom: 20,
+                        animation: 'rotatePhone 2s ease-in-out infinite'
+                    }}>
+                        📱
+                    </div>
+                    <h2 style={{
+                        fontSize: '1.5rem',
+                        fontWeight: 'bold',
+                        marginBottom: 10,
+                        textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                    }}>
+                        横画面でプレイしてください
+                    </h2>
+                    <p style={{
+                        fontSize: '1rem',
+                        opacity: 0.8,
+                        maxWidth: 280
+                    }}>
+                        端末を横向きに回転させてください
+                    </p>
+                    <style>{`
+                        @keyframes rotatePhone {
+                            0%, 100% { transform: rotate(0deg); }
+                            25% { transform: rotate(-30deg); }
+                            75% { transform: rotate(30deg); }
+                        }
+                    `}</style>
+                </div>
+            )}
+
             {currentScreen === 'TITLE' && (
                 <TitleScreen
                     onStartConfig={handleTitleConfig}

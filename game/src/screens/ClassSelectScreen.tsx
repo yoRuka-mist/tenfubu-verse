@@ -59,7 +59,7 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
 
     return (
         <div className="screen" style={{
-            height: '100vh',
+            height: '100dvh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',

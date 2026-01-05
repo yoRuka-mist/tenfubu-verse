@@ -135,7 +135,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
     return (
         <div className="screen lobby-screen" style={{
-            height: '100vh',
+            height: '100dvh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
