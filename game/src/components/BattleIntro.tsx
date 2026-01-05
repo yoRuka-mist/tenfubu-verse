@@ -122,13 +122,13 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
             />
 
             {/* 自分のリーダー（左側） */}
-            {phaseIndex >= 1 && (
+            {phaseIndex >= 0 && (
                 <div
                     style={{
                         position: 'absolute',
-                        left: '15%',
+                        left: '25%',
                         top: '50%',
-                        transform: `translate(-50%, -50%) ${phaseIndex >= 1 ? 'translateX(0)' : 'translateX(-200%)'}`,
+                        transform: `translate(-50%, -50%) translateX(${phaseIndex >= 1 ? '0' : '-150%'})`,
                         transition: 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -139,12 +139,10 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {/* リーダー画像 */}
                     <div
                         style={{
-                            width: 240 * scale,
-                            height: 240 * scale,
-                            borderRadius: '50%',
+                            width: 600 * scale,
+                            height: 600 * scale,
                             overflow: 'hidden',
-                            border: `4px solid ${isFirstPlayer ? '#48bb78' : '#f6ad55'}`,
-                            boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
+                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${isFirstPlayer ? 'rgba(72, 187, 120, 0.3)' : 'rgba(246, 173, 85, 0.3)'}`,
                         }}
                     >
                         <img
@@ -158,18 +156,18 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {phaseIndex >= 2 && (
                         <div
                             style={{
-                                marginTop: 20 * scale,
-                                padding: `${8 * scale}px ${24 * scale}px`,
-                                background: 'rgba(0,0,0,0.8)',
-                                borderRadius: 20 * scale,
-                                border: '2px solid rgba(255,255,255,0.3)',
+                                marginTop: 30 * scale,
+                                padding: `${16 * scale}px ${40 * scale}px`,
+                                background: 'rgba(0,0,0,0.9)',
+                                borderRadius: 30 * scale,
+                                border: '3px solid rgba(255,255,255,0.4)',
                                 animation: 'nameplateSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
                             }}
                         >
                             <div
                                 style={{
                                     color: 'white',
-                                    fontSize: 1.2 * scale + 'rem',
+                                    fontSize: 2.5 * scale + 'rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
                                     whiteSpace: 'nowrap',
@@ -185,18 +183,18 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -30 * scale,
-                                padding: `${6 * scale}px ${16 * scale}px`,
+                                top: -60 * scale,
+                                padding: `${12 * scale}px ${32 * scale}px`,
                                 background: isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
-                                borderRadius: 12 * scale,
-                                border: '2px solid white',
+                                borderRadius: 20 * scale,
+                                border: '3px solid white',
                                 animation: 'turnOrderFadeIn 1s ease-out',
                             }}
                         >
                             <div
                                 style={{
                                     color: 'white',
-                                    fontSize: 1 * scale + 'rem',
+                                    fontSize: 2 * scale + 'rem',
                                     fontWeight: 'bold',
                                 }}
                             >
@@ -208,13 +206,13 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
             )}
 
             {/* 相手のリーダー（右側） */}
-            {phaseIndex >= 1 && (
+            {phaseIndex >= 0 && (
                 <div
                     style={{
                         position: 'absolute',
-                        right: '15%',
+                        right: '25%',
                         top: '50%',
-                        transform: `translate(50%, -50%) ${phaseIndex >= 1 ? 'translateX(0)' : 'translateX(200%)'}`,
+                        transform: `translate(50%, -50%) translateX(${phaseIndex >= 1 ? '0' : '150%'})`,
                         transition: 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -225,12 +223,10 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {/* リーダー画像 */}
                     <div
                         style={{
-                            width: 240 * scale,
-                            height: 240 * scale,
-                            borderRadius: '50%',
+                            width: 600 * scale,
+                            height: 600 * scale,
                             overflow: 'hidden',
-                            border: `4px solid ${!isFirstPlayer ? '#48bb78' : '#f6ad55'}`,
-                            boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
+                            boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 40px ${!isFirstPlayer ? 'rgba(72, 187, 120, 0.3)' : 'rgba(246, 173, 85, 0.3)'}`,
                         }}
                     >
                         <img
@@ -244,18 +240,18 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                     {phaseIndex >= 2 && (
                         <div
                             style={{
-                                marginTop: 20 * scale,
-                                padding: `${8 * scale}px ${24 * scale}px`,
-                                background: 'rgba(0,0,0,0.8)',
-                                borderRadius: 20 * scale,
-                                border: '2px solid rgba(255,255,255,0.3)',
+                                marginTop: 30 * scale,
+                                padding: `${16 * scale}px ${40 * scale}px`,
+                                background: 'rgba(0,0,0,0.9)',
+                                borderRadius: 30 * scale,
+                                border: '3px solid rgba(255,255,255,0.4)',
                                 animation: 'nameplateSlideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
                             }}
                         >
                             <div
                                 style={{
                                     color: 'white',
-                                    fontSize: 1.2 * scale + 'rem',
+                                    fontSize: 2.5 * scale + 'rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
                                     whiteSpace: 'nowrap',
@@ -271,18 +267,18 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                         <div
                             style={{
                                 position: 'absolute',
-                                top: -30 * scale,
-                                padding: `${6 * scale}px ${16 * scale}px`,
+                                top: -60 * scale,
+                                padding: `${12 * scale}px ${32 * scale}px`,
                                 background: !isFirstPlayer ? 'rgba(72, 187, 120, 0.9)' : 'rgba(246, 173, 85, 0.9)',
-                                borderRadius: 12 * scale,
-                                border: '2px solid white',
+                                borderRadius: 20 * scale,
+                                border: '3px solid white',
                                 animation: 'turnOrderFadeIn 1s ease-out',
                             }}
                         >
                             <div
                                 style={{
                                     color: 'white',
-                                    fontSize: 1 * scale + 'rem',
+                                    fontSize: 2 * scale + 'rem',
                                     fontWeight: 'bold',
                                 }}
                             >
