@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
 import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_DEFINITIONS, getStampImagePath, getStampSE } from '../core/engine';
-import { ClassType, Player, Card as CardModel, StampId, StampDisplay } from '../core/types';
+import { ClassType, Player, Card as CardModel, StampId, StampDisplay, GameState } from '../core/types';
 import { Card } from '../components/Card';
 import { BattleIntro } from '../components/BattleIntro';
 import { BattleOutro, OutroPhase } from '../components/BattleOutro';
@@ -128,6 +128,7 @@ interface GameScreenProps {
     networkConnected?: boolean;
     opponentClass?: ClassType; // For online play: opponent's class selection
     aiDifficulty?: 'EASY' | 'NORMAL' | 'HARD'; // AI difficulty for CPU mode
+    playerName: string; // Player's display name
 }
 
 
@@ -2121,7 +2122,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[]) => {
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL' }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName }) => {
     // For online play, use the adapter passed from LobbyScreen
     // Only use useGameNetwork hook for CPU mode (where it returns nothing)
     // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
@@ -2178,12 +2179,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Game state initialization
     // HOST initializes the game, JOIN waits for INIT_GAME message
     const [gameState, dispatch] = useReducer(gameReducer, null, () => {
+        const opponentDefaultName = gameMode === 'CPU' ? 'CPU' : '対戦相手';
         if (gameMode === 'JOIN') {
             // JOIN: Create empty placeholder state, will be replaced by SYNC_STATE
-            return initializeGame('ENEMY', opponentClass, 'You', playerClass);
+            return initializeGame(opponentDefaultName, opponentClass, playerName, playerClass);
         }
         // HOST or CPU: Initialize normally (HOST is p1)
-        return initializeGame('You', playerClass, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', opponentClass);
+        return initializeGame(playerName, playerClass, opponentDefaultName, opponentClass);
     });
 
     // Track if game has been synced (for JOIN)
@@ -3660,7 +3662,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         // 5. Suppress immediate diff detection by clearing and then resetting the Ref
-        const freshState = initializeGame('You', deckToUse, opponentType === 'ONLINE' ? 'ENEMY' : 'CPU', newOpponentClass);
+        const opponentDefaultName = opponentType === 'ONLINE' ? '対戦相手' : 'CPU';
+        const freshState = initializeGame(playerName, deckToUse, opponentDefaultName, newOpponentClass);
         prevPlayersRef.current = freshState.players;
         prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
 
@@ -3864,10 +3867,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const handleMessage = (msg: any) => {
             console.log('[GameScreen] Received message:', msg.type, msg);
 
+            // HANDSHAKE: Receive opponent's name and update GameState
+            if (msg.type === 'HANDSHAKE') {
+                const rawName = msg.payload?.name;
+                // Validate and sanitize received name (max 12 chars, trim, fallback to default)
+                const sanitizedName = typeof rawName === 'string'
+                    ? rawName.trim().slice(0, 12) || '対戦相手'
+                    : '対戦相手';
+                console.log('[GameScreen] Received HANDSHAKE from opponent:', sanitizedName);
+                const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                dispatch({
+                    type: 'UPDATE_PLAYER_NAME',
+                    payload: {
+                        playerId: targetPlayerId,
+                        name: sanitizedName
+                    }
+                });
+                return;
+            }
+
             // INIT_GAME: JOIN receives initial game state from HOST
             if (msg.type === 'INIT_GAME') {
                 console.log('[GameScreen] JOIN: Received initial game state from HOST');
-                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
+
+                // Re-apply local player name after SYNC_STATE (fixes JOIN-side name overwrite)
+                dispatch({
+                    type: 'UPDATE_PLAYER_NAME',
+                    payload: { playerId: 'p2', name: playerName }
+                });
+
                 setGameSynced(true);
 
                 // Show coin toss result for JOIN (JOIN is p2, so check who goes first)
@@ -3891,7 +3920,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             // JOIN relies on this for pendingEffects resolution to avoid RNG desync
             if (msg.type === 'GAME_STATE') {
                 console.log('[GameScreen] JOIN: Received GAME_STATE sync from HOST');
-                dispatch({ type: 'SYNC_STATE', payload: msg.payload } as any);
+                dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
                 // Reset processing flags since state is now synced from HOST
                 setIsProcessingEffect(false);
                 isProcessingEffectRef.current = false;
@@ -4169,6 +4198,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         };
 
         adapter.onMessage(handleMessage);
+
+        // Send HANDSHAKE to opponent with player name (for online play only)
+        if (gameMode !== 'CPU') {
+            adapter.send({
+                type: 'HANDSHAKE',
+                payload: { name: playerName, class: playerClass }
+            });
+            console.log('[GameScreen] Sent HANDSHAKE:', playerName, playerClass);
+        }
 
         adapter.onClose(() => {
             alert('相手との接続が切断されました。\nタイトルに戻ります。');

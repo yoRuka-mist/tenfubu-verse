@@ -3319,3 +3319,68 @@ game/public/stamps/
   - 7805-7869行目: 進化ボタンUI（PC版、BOARD専用）
   - 8312-8344行目: プレイボタン（モバイル、HAND専用）
   - 8347-8408行目: 進化ボタンUI（モバイル版、BOARD専用）
+
+---
+
+## 修正日
+2026年1月5日
+
+## 修正内容
+
+### プレイヤー名入力機能 + バトルログ名前表示修正
+- **対象ファイル**: 
+  - `game/src/App.tsx`
+  - `game/src/screens/ClassSelectScreen.tsx`
+  - `game/src/screens/GameScreen.tsx`
+  - `game/src/core/types.ts`
+  - `game/src/core/engine.ts`
+
+#### 1. App.tsx
+- playerName stateを追加（localStorage永続化）
+- ClassSelectScreenにplayerName, onPlayerNameChange propsを追加
+- GameScreenにplayerName propsを追加（空の場合は「プレイヤー」をデフォルト値）
+
+#### 2. ClassSelectScreen.tsx
+- Props型にplayerName, onPlayerNameChangeを追加
+- タイトル下にプレイヤー名入力フィールドを追加
+  - type="text", maxLength=12, placeholder="名前を入力"
+  - ダークテーマに合わせたスタイル
+
+#### 3. GameScreen.tsx
+- Props型にplayerNameを追加
+- initializeGame呼び出し箇所を修正
+  - CPU対戦: 相手は「CPU」
+  - オンライン対戦: 相手はデフォルト「対戦相手」（HANDSHAKE受信後に更新）
+- HANDSHAKE送受信を実装
+  - 接続確立時に自分のplayerNameを送信
+  - 受信時にdispatch({ type: 'UPDATE_PLAYER_NAME' })で相手の名前を更新
+
+#### 4. types.ts
+- GameActionにUPDATE_PLAYER_NAMEを追加
+
+#### 5. engine.ts
+- UPDATE_PLAYER_NAMEアクションのハンドラを追加
+
+## 構造の記録（更新）
+- `game/src/App.tsx`
+  - 84-87行目: playerName state（localStorage永続化）
+  - 277-281行目: ClassSelectScreenへのprops
+  - 304行目: GameScreenへのprops
+
+- `game/src/screens/ClassSelectScreen.tsx`
+  - 27-28行目: playerName, onPlayerNameChange props型
+  - 76-112行目: プレイヤー名入力UI
+
+- `game/src/screens/GameScreen.tsx`
+  - 129行目: playerName props型
+  - 2047行目: propsにplayerNameを追加
+  - 2103-2111行目: initializeGame呼び出し修正
+  - 3524-3526行目: リマッチ時のinitializeGame修正
+  - 3694-3705行目: HANDSHAKE受信処理
+  - 3987-3993行目: HANDSHAKE送信処理
+
+- `game/src/core/types.ts`
+  - 151行目: UPDATE_PLAYER_NAME GameAction追加
+
+- `game/src/core/engine.ts`
+  - 3251-3265行目: UPDATE_PLAYER_NAMEハンドラ

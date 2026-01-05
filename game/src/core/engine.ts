@@ -3275,6 +3275,27 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             return action.payload;
         }
 
+        // プレイヤー名の更新（オンライン対戦でHANDSHAKE受信時）
+        case 'UPDATE_PLAYER_NAME': {
+            const { playerId, name } = action.payload;
+            console.log('[Engine] UPDATE_PLAYER_NAME:', playerId, name);
+            // Defensive check: ensure player exists
+            if (!state.players[playerId]) {
+                console.warn('[Engine] UPDATE_PLAYER_NAME: Unknown playerId:', playerId);
+                return state;
+            }
+            return {
+                ...state,
+                players: {
+                    ...state.players,
+                    [playerId]: {
+                        ...state.players[playerId],
+                        name: name
+                    }
+                }
+            };
+        }
+
         // エクストラPPの有効化/無効化
         case 'TOGGLE_EXTRA_PP': {
             const playerId = action.playerId;

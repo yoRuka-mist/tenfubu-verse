@@ -24,6 +24,8 @@ interface ClassSelectScreenProps {
     gameMode?: 'CPU' | 'HOST' | 'JOIN';
     aiDifficulty?: AIDifficulty;
     onDifficultyChange?: (difficulty: AIDifficulty) => void;
+    playerName: string;
+    onPlayerNameChange: (name: string) => void;
 }
 
 export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
@@ -31,7 +33,9 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
     onBack,
     gameMode = 'CPU',
     aiDifficulty = 'NORMAL',
-    onDifficultyChange
+    onDifficultyChange,
+    playerName,
+    onPlayerNameChange
 }) => {
     // Responsive scaling (same approach as GameScreen)
     const [scale, setScale] = useState(1);
@@ -67,7 +71,45 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
             background: '#1a1a2e',
             color: 'white'
         }}>
-            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${3 * scale}rem` }}>クラスを選択</h2>
+            <h2 style={{ fontSize: `${titleSize}rem`, marginBottom: `${1.5 * scale}rem` }}>クラスを選択</h2>
+
+            {/* Player Name Input */}
+            <div style={{
+                marginBottom: `${2 * scale}rem`,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: `${0.5 * scale}rem`
+            }}>
+                <label style={{
+                    fontSize: `${1 * scale}rem`,
+                    opacity: 0.8,
+                    fontFamily: 'Tamanegi, sans-serif'
+                }}>
+                    プレイヤー名
+                </label>
+                <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => onPlayerNameChange(e.target.value)}
+                    maxLength={12}
+                    placeholder="名前を入力"
+                    style={{
+                        padding: `${8 * scale}px ${16 * scale}px`,
+                        fontSize: `${1 * scale}rem`,
+                        background: '#2d3748',
+                        border: '2px solid #4a5568',
+                        borderRadius: 8 * scale,
+                        color: 'white',
+                        outline: 'none',
+                        width: 200 * scale,
+                        textAlign: 'center',
+                        fontFamily: 'Tamanegi, sans-serif'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#63b3ed'}
+                    onBlur={(e) => e.target.style.borderColor = '#4a5568'}
+                />
+            </div>
 
             <div style={{ display: 'flex', gap: `${gap}rem`, marginBottom: `${3 * scale}rem` }}>
                 {/* Senka Class */}
