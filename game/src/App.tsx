@@ -81,6 +81,11 @@ function App() {
     const [opponentClass, setOpponentClass] = useState<ClassType | undefined>(undefined);
     const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('NORMAL');
 
+    // Player name state (persisted to localStorage)
+    const [playerName, setPlayerName] = useState<string>(() => {
+        return localStorage.getItem('playerName') || '';
+    });
+
     // Portrait mode detection
     const isPortrait = useIsPortrait();
 
@@ -269,6 +274,11 @@ function App() {
                     gameMode={gameMode}
                     aiDifficulty={aiDifficulty}
                     onDifficultyChange={setAiDifficulty}
+                    playerName={playerName}
+                    onPlayerNameChange={(name: string) => {
+                        setPlayerName(name);
+                        localStorage.setItem('playerName', name);
+                    }}
                 />
             )}
             {currentScreen === 'LOBBY' && (
@@ -291,6 +301,7 @@ function App() {
                     networkConnected={networkConnected}
                     opponentClass={opponentClass}
                     aiDifficulty={aiDifficulty}
+                    playerName={playerName || 'プレイヤー'}
                 />
             )}
         </div>

@@ -147,7 +147,8 @@ export type GameAction =
     | { type: 'CONCEDE'; playerId: string }
     | { type: 'SYNC_STATE'; payload: GameState }
     | { type: 'REINIT_GAME'; payload: { p1Class: ClassType; p2Class: ClassType } }
-    | { type: 'TOGGLE_EXTRA_PP'; playerId: string }; // エクストラPPの有効化/無効化
+    | { type: 'TOGGLE_EXTRA_PP'; playerId: string } // エクストラPPの有効化/無効化
+    | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; name: string } }; // プレイヤー名の更新
 
 // ===== スタンプ機能 =====
 
