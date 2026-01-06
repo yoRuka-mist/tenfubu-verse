@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_CARDS } from '../core/engine';
-import { Card } from '../core/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
