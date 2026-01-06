@@ -1,5 +1,5 @@
 import { database } from './config';
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get, set, update, runTransaction } from 'firebase/database';
 import { ClassType } from '../core/types';
 import { PlayerData, ClassRating, createInitialClassRating, RatingCalculationResult } from './rating';
 
@@ -66,6 +66,7 @@ export const getAllClassRatings = async (
 };
 
 // レーティング更新（試合結果反映）
+// Firebase Transactionを使用してレース条件を回避
 export const updateRatingAfterMatch = async (
     playerId: string,
     playerClass: ClassType,
@@ -75,16 +76,19 @@ export const updateRatingAfterMatch = async (
     const ratingRef = ref(database, `players/${playerId}/ratings/${playerClass}`);
     const playerRef = ref(database, `players/${playerId}`);
 
-    const currentRating = await getClassRating(playerId, playerClass);
+    // Transactionで原子的に更新
+    await runTransaction(ratingRef, (currentData) => {
+        const current = currentData || createInitialClassRating();
 
-    const updatedRating: ClassRating = {
-        rating: result.newRating,
-        winStreak: result.newWinStreak,
-        totalMatches: currentRating.totalMatches + 1,
-        wins: currentRating.wins + (isWin ? 1 : 0),
-        losses: currentRating.losses + (isWin ? 0 : 1),
-    };
+        return {
+            rating: result.newRating,
+            winStreak: result.newWinStreak,
+            totalMatches: current.totalMatches + 1,
+            wins: current.wins + (isWin ? 1 : 0),
+            losses: current.losses + (isWin ? 0 : 1),
+        };
+    });
 
-    await set(ratingRef, updatedRating);
+    // lastMatchAt の更新
     await update(playerRef, { lastMatchAt: Date.now() });
 };

@@ -65,12 +65,27 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
         return () => window.removeEventListener('resize', updateScale);
     }, []);
 
-    // 検索時間のカウントアップ
+    // 検索時間のカウントアップ + タイムアウト処理
     useEffect(() => {
         if (status !== 'searching') return;
 
         const interval = setInterval(() => {
-            setSearchTime(prev => prev + 1);
+            setSearchTime(prev => {
+                const newTime = prev + 1;
+                // 60秒でタイムアウト
+                if (newTime >= 60) {
+                    setStatus('error');
+                    setStatusMessage('マッチングがタイムアウトしました');
+                    matchmakingManager.cancelMatchmaking();
+                    if (connectionRef.current) {
+                        connectionRef.current.close();
+                    }
+                    if (peerRef.current) {
+                        peerRef.current.destroy();
+                    }
+                }
+                return newTime;
+            });
         }, 1000);
 
         return () => clearInterval(interval);

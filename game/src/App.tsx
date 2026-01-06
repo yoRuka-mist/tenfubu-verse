@@ -3,11 +3,9 @@ import { TitleScreen } from './screens/TitleScreen';
 import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MatchmakingScreen } from './screens/MatchmakingScreen';
-import { MatchTypeSelectScreen } from './screens/MatchTypeSelectScreen';
 import { GameScreen } from './screens/GameScreen';
 import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
-import { MatchType } from './firebase/matchmaking';
 import { signInAnonymousUser, onAuthStateChange } from './firebase/auth';
 import { getOrCreatePlayerData } from './firebase/playerData';
 
@@ -49,7 +47,7 @@ const loadAudioSettings = (): AudioSettings => {
     }
 };
 
-type Screen = 'TITLE' | 'CLASS_SELECT' | 'MATCH_TYPE_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME';
+type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME';
 type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
 
 // Portrait mode detection hook
@@ -181,7 +179,7 @@ function App() {
 
         if (!audioSettings.bgmEnabled) {
             audio.pause();
-        } else if (audio.paused && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'MATCH_TYPE_SELECT')) {
+        } else if (audio.paused && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT')) {
             audio.play().catch(() => {});
         }
     }, [audioSettings.bgm, audioSettings.bgmEnabled, currentScreen]);
@@ -191,7 +189,7 @@ function App() {
         const audio = titleBgmRef.current;
         if (!audio) return;
 
-        if (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'MATCH_TYPE_SELECT' || currentScreen === 'LOBBY') {
+        if (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'LOBBY') {
             // Play title BGM on title, class select, match type select, and lobby screens if enabled
             if (audio.paused && audioSettings.bgmEnabled) {
                 audio.play().catch(() => {
@@ -209,7 +207,7 @@ function App() {
     useEffect(() => {
         const handleClick = () => {
             const audio = titleBgmRef.current;
-            if (audio && audio.paused && audioSettings.bgmEnabled && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'MATCH_TYPE_SELECT' || currentScreen === 'LOBBY')) {
+            if (audio && audio.paused && audioSettings.bgmEnabled && (currentScreen === 'TITLE' || currentScreen === 'CLASS_SELECT' || currentScreen === 'LOBBY')) {
                 audio.play().catch(() => {});
             }
         };
@@ -237,21 +235,6 @@ function App() {
             // HOST/JOIN → ロビー画面へ
             setCurrentScreen('LOBBY');
         }
-    };
-
-    // マッチタイプ選択後のハンドラ
-    const handleMatchTypeSelect = (matchType: MatchType) => {
-        if (matchType === 'casual') {
-            setGameMode('CASUAL_MATCH');
-        } else {
-            setGameMode('RANKED_MATCH');
-        }
-        setCurrentScreen('MATCHMAKING');
-    };
-
-    // クラス選択画面に戻る
-    const backToClassSelect = () => {
-        setCurrentScreen('CLASS_SELECT');
     };
 
     const handleLobbyGameStart = (adapter: NetworkAdapter, oppClass?: ClassType) => {
@@ -390,14 +373,6 @@ function App() {
                         localStorage.setItem('timerEnabled', JSON.stringify(enabled));
                     }}
                     playerId={playerId}
-                />
-            )}
-            {currentScreen === 'MATCH_TYPE_SELECT' && (
-                <MatchTypeSelectScreen
-                    playerClass={selectedClass}
-                    playerId={playerId}
-                    onSelectMatchType={handleMatchTypeSelect}
-                    onBack={backToClassSelect}
                 />
             )}
             {currentScreen === 'LOBBY' && (
