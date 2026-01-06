@@ -238,7 +238,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                             });
                         }
                     },
-                    matchType === 'ranked' ? playerId ?? undefined : undefined,
+                    matchType === 'ranked' && playerId ? playerId : undefined,
                     matchType === 'ranked' ? currentMyRating : undefined
                 );
 

@@ -94,14 +94,15 @@ export class MatchmakingManager {
             this.myEntryRef = newEntryRef;
             this.myId = newEntryRef.key!;
 
+            // playerId/ratingがnull/undefinedの場合は省略（Firebaseはundefined/nullを許容しない）
             const playerData: WaitingPlayer = {
                 id: this.myId,
                 peerId,
                 playerName,
                 playerClass,
                 matchType,
-                playerId,
-                rating,
+                ...(playerId != null && { playerId }),
+                ...(rating != null && { rating }),
                 timestamp: Date.now()
             };
 
