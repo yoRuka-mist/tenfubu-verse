@@ -8422,6 +8422,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 onTimeUp={handleTimerTimeUp}
                                 timerEnabled={timerEnabled}
                                 isGameOver={!!gameState.winnerId}
+                                isPaused={showBattleIntro}
                                 scale={scale}
                                 buttonSize={160}
                                 timerDuration={60}

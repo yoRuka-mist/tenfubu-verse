@@ -7,6 +7,7 @@ interface TurnTimerProps {
     onTimeUp: () => void;        // タイムアップ時のコールバック（ターン終了を呼ぶ）
     timerEnabled: boolean;       // タイマー有効/無効
     isGameOver?: boolean;        // ゲーム終了フラグ（trueならタイマー停止）
+    isPaused?: boolean;          // 一時停止フラグ（BattleIntro中など、trueならタイマー停止・非表示）
     scale?: number;              // スケールファクター
     buttonSize?: number;         // ボタンサイズ（デフォルト160）
     timerDuration?: number;      // タイマー秒数（デフォルト60）
@@ -19,6 +20,7 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
     onTimeUp,
     timerEnabled,
     isGameOver = false,
+    isPaused = false,
     scale = 1,
     buttonSize = 160,
     timerDuration = 60
@@ -63,8 +65,8 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
 
     // タイマー動作（Date.now()ベースで精度向上、小数点以下も更新）
     useEffect(() => {
-        // タイマー無効 or 自分のターンでない or ゲーム終了の場合は停止
-        if (!timerEnabled || !isMyTurn || isGameOver) {
+        // タイマー無効 or 自分のターンでない or ゲーム終了 or 一時停止の場合は停止
+        if (!timerEnabled || !isMyTurn || isGameOver || isPaused) {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
@@ -116,10 +118,10 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
                 intervalRef.current = null;
             }
         };
-    }, [timerEnabled, isMyTurn, isGameOver, timerDuration]);
+    }, [timerEnabled, isMyTurn, isGameOver, isPaused, timerDuration]);
 
-    // タイマー無効時は何も表示しない
-    if (!timerEnabled) {
+    // タイマー無効時 or 一時停止中は何も表示しない
+    if (!timerEnabled || isPaused) {
         return null;
     }
 
