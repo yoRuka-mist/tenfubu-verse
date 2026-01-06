@@ -33,7 +33,7 @@ export const getStampSE = (stampId: StampId): string | null => {
 };
 
 // Mock cards for MVP
-const MOCK_CARDS: Card[] = [
+export const MOCK_CARDS: Card[] = [
     // Cards
 
     {
@@ -89,6 +89,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/ruiyu.png',
         evolvedImageUrl: '/cards/ruiyu_2.png',
         attackEffectType: 'BLUE_FIRE',
+        relatedCards: ['c_cyoriena'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -270,6 +271,7 @@ const MOCK_CARDS: Card[] = [
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
         passiveAbilities: ['AURA'],
+        relatedCards: ['c_tsubumaru', 'c_yunagi', 'c_nayuta'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -326,6 +328,7 @@ const MOCK_CARDS: Card[] = [
         tags: ['Knuckler'],
         passiveAbilities: ['RUSH', 'IMMUNE_TO_FOLLOWER_DAMAGE', 'GUTS_MY_TURN'],
         attackEffectType: 'ICE',
+        relatedCards: ['c_shieko'],
         triggers: [
             {
                 trigger: 'EVOLVE',
@@ -394,6 +397,7 @@ const MOCK_CARDS: Card[] = [
         attack: 4, health: 4,
         description: '進化時：「しあ」1体を出す。',
         imageUrl: '/cards/kyokune.jpg',
+        relatedCards: ['c_sia'],
         triggers: [
             {
                 trigger: 'EVOLVE',
@@ -463,6 +467,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/bucchi.png',
         evolvedImageUrl: '/cards/bucchi_2.png',
         attackEffectType: 'SLASH',
+        relatedCards: ['c_manary'],
         triggers: [{
             trigger: 'FANFARE',
             effects: [
@@ -643,6 +648,7 @@ const MOCK_CARDS: Card[] = [
         description: '「ユキ」1体と「ぽてち」1体を出す。',
         flavorText: 'その二人は狂っていた。',
         imageUrl: '/cards/tenfubuyabehutari.png',
+        relatedCards: ['c_yuki', 'c_potechi'],
         triggers: [{
             trigger: 'FANFARE',
             effects: [
@@ -669,6 +675,7 @@ const MOCK_CARDS: Card[] = [
         description: '「白ツバキ」と「しゑこ」を場に出す。それらは+1/+1される。1枚ドローする。',
         flavorText: '白ツバキ「さぁ！行きますよ、しゑこさん！」\nしゑこ「ちょwww おまwww」',
         imageUrl: '/cards/crazy_knucklers.png',
+        relatedCards: ['c_white_tsubaki', 'c_shieko'],
         triggers: [{
             trigger: 'FANFARE',
             effects: [
@@ -746,6 +753,7 @@ const MOCK_CARDS: Card[] = [
         imageUrl: '/cards/yuri.png',
         evolvedImageUrl: '/cards/yuri_2.png',
         attackEffectType: 'WATER',
+        relatedCards: ['TOKEN_SUIHYORYU'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -861,6 +869,7 @@ const MOCK_CARDS: Card[] = [
         evolvedImageUrl: '/cards/haruka_2.png',
         passiveAbilities: ['STEALTH'],
         attackEffectType: 'SLASH',
+        relatedCards: ['c_yuka', 'c_setsuna'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -914,6 +923,7 @@ const MOCK_CARDS: Card[] = [
         evolvedImageUrl: '/cards/yuka_2.png',
         passiveAbilities: ['WARD', 'AURA'],
         attackEffectType: 'SHOT',
+        relatedCards: ['c_setsuna'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -942,6 +952,7 @@ const MOCK_CARDS: Card[] = [
         description: '「刹那」を2体場に出す。1枚ドローする。',
         flavorText: '速さを突き詰め続けた者の領域',
         imageUrl: '/cards/hayakikoto.png',
+        relatedCards: ['c_setsuna'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -974,6 +985,7 @@ const MOCK_CARDS: Card[] = [
         description: 'ネクロマンス 4：「刹那」を1体場に出す。これを場が上限になるまで繰り返す。\n自分のフォロワーすべては+1/+0する。',
         flavorText: '夜の宴は続く。',
         imageUrl: '/cards/nightparade.png',
+        relatedCards: ['c_setsuna'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -1026,7 +1038,7 @@ export function calculateStateHash(state: GameState): string {
 }
 
 // --- 構築済みデッキ定義 ---
-const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+export const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_senka_knuckler', count: 3 },  // 盞華
     { cardId: 'c_yuki', count: 3 },             // ユキ
     { cardId: 'c_white_tsubaki', count: 3 },    // 白ツバキ
@@ -1047,7 +1059,7 @@ const SENKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_blue_tsubaki', count: 3 },     // 青ツバキ
 ];
 
-const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+export const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_azya', count: 3 },             // あじゃ
     { cardId: 'c_ruiyu', count: 2 },            // ルイ・ユー
     { cardId: 'c_y', count: 2 },                // Y
@@ -1067,7 +1079,7 @@ const AJA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_mono', count: 2 },             // Mono
 ];
 
-const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+export const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_yoruka', count: 3 },           // yoRuka
     { cardId: 'c_y', count: 3 },                // Y
     { cardId: 'c_haruka', count: 3 },           // 遙
