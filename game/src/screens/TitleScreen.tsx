@@ -13,7 +13,7 @@ const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
 interface TitleScreenProps {
-    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN', roomId?: string) => void;
+    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH', roomId?: string) => void;
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
 }
@@ -22,6 +22,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
     const [showSettings, setShowSettings] = useState(false);
+    const [showMatchTypeSelect, setShowMatchTypeSelect] = useState(false); // ランダムマッチのタイプ選択
+    const [showRoomMatchMenu, setShowRoomMatchMenu] = useState(false); // ルームマッチのサブメニュー
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -123,7 +125,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
 
                 {/* Menu Buttons - At very bottom */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    {!showJoinInput ? (
+                    {!showJoinInput && !showMatchTypeSelect && !showRoomMatchMenu ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * scale}rem`, width: buttonWidth }}>
                             <button
                                 onClick={() => onStartConfig('CPU')}
@@ -134,22 +136,148 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                                 ひとりで遊ぶ
                             </button>
 
+                            {/* ランダムマッチボタン */}
                             <button
-                                onClick={() => onStartConfig('HOST')}
-                                style={btnStyle}
-                                onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
+                                onClick={() => setShowMatchTypeSelect(true)}
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #4ade80',
+                                    background: 'rgba(74, 222, 128, 0.1)'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#4ade80'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(74, 222, 128, 0.1)'}
+                            >
+                                ランダムマッチ
+                            </button>
+
+                            {/* ルームマッチボタン */}
+                            <button
+                                onClick={() => setShowRoomMatchMenu(true)}
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #60a5fa',
+                                    background: 'rgba(96, 165, 250, 0.1)'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#60a5fa'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(96, 165, 250, 0.1)'}
+                            >
+                                ルームマッチ
+                            </button>
+                        </div>
+                    ) : showRoomMatchMenu ? (
+                        /* ルームマッチサブメニュー */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * scale}rem`, width: buttonWidth }}>
+                            <p style={{
+                                textAlign: 'center',
+                                fontSize: `${1.2 * scale}rem`,
+                                marginBottom: `${0.5 * scale}rem`,
+                                color: '#fff'
+                            }}>
+                                ルームマッチ
+                            </p>
+
+                            <button
+                                onClick={() => {
+                                    setShowRoomMatchMenu(false);
+                                    onStartConfig('HOST');
+                                }}
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #60a5fa'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#60a5fa'}
                                 onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                             >
                                 部屋を作る
                             </button>
 
                             <button
-                                onClick={() => setShowJoinInput(true)}
-                                style={btnStyle}
-                                onMouseOver={(e) => e.currentTarget.style.background = '#e94560'}
+                                onClick={() => {
+                                    setShowRoomMatchMenu(false);
+                                    setShowJoinInput(true);
+                                }}
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #60a5fa'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#60a5fa'}
                                 onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                             >
                                 部屋に入る
+                            </button>
+
+                            <button
+                                onClick={() => setShowRoomMatchMenu(false)}
+                                style={{ ...btnStyle, border: 'none', fontSize: `${1 * scale}rem`, color: '#888' }}
+                            >
+                                戻る
+                            </button>
+                        </div>
+                    ) : showMatchTypeSelect ? (
+                        /* マッチタイプ選択UI */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: `${1 * scale}rem`, width: buttonWidth }}>
+                            <p style={{
+                                textAlign: 'center',
+                                fontSize: `${1.2 * scale}rem`,
+                                marginBottom: `${0.5 * scale}rem`,
+                                color: '#fff'
+                            }}>
+                                マッチタイプを選択
+                            </p>
+
+                            {/* カジュアルマッチ */}
+                            <button
+                                onClick={() => {
+                                    setShowMatchTypeSelect(false);
+                                    onStartConfig('CASUAL_MATCH');
+                                }}
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #4ade80'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = '#4ade80'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                                カジュアル
+                            </button>
+                            <p style={{
+                                textAlign: 'center',
+                                fontSize: `${0.8 * scale}rem`,
+                                color: '#888',
+                                marginTop: `-${0.5 * scale}rem`,
+                                marginBottom: `${0.5 * scale}rem`
+                            }}>
+                                勝敗記録なし・気軽に対戦
+                            </p>
+
+                            {/* ランクマッチ（グレーアウト） */}
+                            <button
+                                disabled
+                                style={{
+                                    ...btnStyle,
+                                    border: '2px solid #666',
+                                    color: '#666',
+                                    cursor: 'not-allowed',
+                                    opacity: 0.5
+                                }}
+                            >
+                                ランクマッチ
+                            </button>
+                            <p style={{
+                                textAlign: 'center',
+                                fontSize: `${0.8 * scale}rem`,
+                                color: '#666',
+                                marginTop: `-${0.5 * scale}rem`,
+                                marginBottom: `${0.5 * scale}rem`
+                            }}>
+                                Coming Soon...
+                            </p>
+
+                            <button
+                                onClick={() => setShowMatchTypeSelect(false)}
+                                style={{ ...btnStyle, border: 'none', fontSize: `${1 * scale}rem`, color: '#888' }}
+                            >
+                                戻る
                             </button>
                         </div>
                     ) : (
@@ -185,7 +313,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                         </div>
                     )}
 
-                    <p style={{ marginTop: `${1.5 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 1.02 Beta</p>
+                    <p style={{ marginTop: `${1.5 * scale}rem`, opacity: 0.5, fontSize: `${0.8 * scale}rem` }}>Ver 1.03 Beta</p>
                 </div>
             </div>
 

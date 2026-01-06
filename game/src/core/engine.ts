@@ -825,7 +825,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yoruka', name: 'yoRuka', cost: 8, type: 'FOLLOWER',
         attack: 5, health: 5,
-        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 5：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
+        description: 'ファンファーレ：相手のフォロワー1体を破壊する。\nラストワード：ネクロマンス 8：「yoRuka」1体を場に出す。\n超進化時：相手のフォロワーランダム2体を破壊する。',
         flavorText: 'Yは滅びぬ。何度でも蘇るさ。',
         imageUrl: '/cards/yoRuka.png',
         evolvedImageUrl: '/cards/yoRuka_2.png',
@@ -840,7 +840,7 @@ const MOCK_CARDS: Card[] = [
             {
                 trigger: 'LAST_WORD',
                 effects: [
-                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 5 }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_yoruka', necromance: 8 }
                 ]
             },
             {
@@ -855,7 +855,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_haruka', name: '遙', cost: 7, type: 'FOLLOWER',
         attack: 2, health: 3,
-        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\n超進化時：「刹那」を1体場に出す。ネクロマンス 5：自分の他のフォロワーすべては+2/+0する。',
+        description: '[隠密]\nファンファーレ：「悠霞」を場に出す。それは[突進]を得る。「刹那」を1体場に出す。\nラストワード：墓地を4増やす。\n超進化時：「刹那」を1体場に出す。ネクロマンス 4：自分の他のフォロワーすべては+2/+0する。',
         flavorText: 'ファントムこそ完璧！',
         imageUrl: '/cards/haruka.png',
         evolvedImageUrl: '/cards/haruka_2.png',
@@ -870,10 +870,16 @@ const MOCK_CARDS: Card[] = [
                 ]
             },
             {
+                trigger: 'LAST_WORD',
+                effects: [
+                    { type: 'ADD_GRAVEYARD', value: 4 }
+                ]
+            },
+            {
                 trigger: 'SUPER_EVOLVE',
                 effects: [
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
-                    { type: 'BUFF_STATS', value: 2, value2: 0, targetType: 'ALL_OTHER_FOLLOWERS', necromance: 5 }
+                    { type: 'BUFF_STATS', value: 2, value2: 0, targetType: 'ALL_OTHER_FOLLOWERS', necromance: 4 }
                 ]
             }
         ]
@@ -882,7 +888,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_setsuna', name: '刹那', cost: 3, type: 'FOLLOWER',
         attack: 1, health: 1,
-        description: '[疾走] [必殺]\nラストワード：相手のランダムなフォロワーの攻撃力を-1する。墓地を1増やす。',
+        description: '[疾走] [必殺]\nラストワード：相手のランダムなフォロワーの攻撃力を-1する。墓地を2増やす。',
         flavorText: 'ファントムこそ正義！',
         imageUrl: '/cards/setsuna.png',
         evolvedImageUrl: '/cards/setsuna_2.png',
@@ -893,7 +899,7 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'LAST_WORD',
                 effects: [
                     { type: 'BUFF_STATS', value: -1, value2: 0, targetType: 'RANDOM_FOLLOWER' },
-                    { type: 'ADD_GRAVEYARD', value: 1 }
+                    { type: 'ADD_GRAVEYARD', value: 2 }
                 ]
             }
         ]
@@ -902,7 +908,7 @@ const MOCK_CARDS: Card[] = [
     {
         id: 'c_yuka', name: '悠霞', cost: 5, type: 'FOLLOWER',
         attack: 1, health: 6,
-        description: '[守護] [オーラ]\nファンファーレ：「刹那」を1体場に出す。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
+        description: '[守護] [オーラ]\nファンファーレ：「刹那」を1体場に出す。\nラストワード：墓地を3増やす。\n進化時：相手のランダムなフォロワー1体に3ダメージ。これを2回行う。',
         flavorText: 'ファントムこそ至高！',
         imageUrl: '/cards/yuka.png',
         evolvedImageUrl: '/cards/yuka_2.png',
@@ -913,6 +919,12 @@ const MOCK_CARDS: Card[] = [
                 trigger: 'FANFARE',
                 effects: [
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' }
+                ]
+            },
+            {
+                trigger: 'LAST_WORD',
+                effects: [
+                    { type: 'ADD_GRAVEYARD', value: 3 }
                 ]
             },
             {
@@ -927,16 +939,16 @@ const MOCK_CARDS: Card[] = [
     // --- 疾きこと風の如く ---
     {
         id: 's_hayakikoto', name: '疾きこと風の如く', cost: 4, type: 'SPELL',
-        description: 'カードを1枚引く。「刹那」を2体場に出す。',
+        description: '「刹那」を2体場に出す。1枚ドローする。',
         flavorText: '速さを突き詰め続けた者の領域',
         imageUrl: '/cards/hayakikoto.png',
         triggers: [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'DRAW', value: 1 },
                     { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
-                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' }
+                    { type: 'SUMMON_CARD', targetCardId: 'c_setsuna' },
+                    { type: 'DRAW', value: 1 }
                 ]
             }
         ]
@@ -944,14 +956,30 @@ const MOCK_CARDS: Card[] = [
     // --- 継承される力 ---
     {
         id: 's_keishou', name: '継承される力', cost: 9, type: 'SPELL',
-        description: '相手のフォロワー1体を破壊する。破壊したフォロワーを自分の手札に加え、そのコストを-9する。',
+        description: '相手のランダムなフォロワー1体を破壊する。破壊したフォロワーを自分の手札に加え、そのコストを-9する。',
         flavorText: 'かつての輝きは受け継がれ\n　静かに燃え上がる',
         imageUrl: '/cards/keisyopower.png',
         triggers: [
             {
                 trigger: 'FANFARE',
                 effects: [
-                    { type: 'DESTROY_AND_GENERATE', targetType: 'SELECT_FOLLOWER', value: -9 }
+                    { type: 'DESTROY_AND_GENERATE', targetType: 'RANDOM_ENEMY_FOLLOWER', value: -9 }
+                ]
+            }
+        ]
+    },
+    // --- ナイト・パレード ---
+    {
+        id: 's_night_parade', name: 'ナイト・パレード', cost: 10, type: 'SPELL',
+        description: 'ネクロマンス 4：「刹那」を1体場に出す。これを場が上限になるまで繰り返す。\n自分のフォロワーすべては+1/+0する。',
+        flavorText: '夜の宴は続く。',
+        imageUrl: '/cards/nightparade.png',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'SUMMON_CARD_FILL_BOARD', targetCardId: 'c_setsuna', necromance: 4 },
+                    { type: 'BUFF_STATS', value: 1, value2: 0, targetType: 'ALL_FOLLOWERS' }
                 ]
             }
         ]
@@ -1046,7 +1074,7 @@ const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_yuka', count: 3 },             // 悠霞
     { cardId: 'c_setsuna', count: 3 },          // 刹那
     { cardId: 's_hayakikoto', count: 3 },       // 疾きこと風の如く
-    { cardId: 's_keishou', count: 1 },          // 継承される力
+    { cardId: 's_night_parade', count: 1 },      // ナイト・パレード
     { cardId: 'c_kasuga', count: 1 },           // かすが
     { cardId: 'c_yunagi', count: 3 },           // ゆうなぎ
     { cardId: 'c_tsubumaru', count: 3 },        // つぶまる
@@ -1247,7 +1275,8 @@ function processSingleEffect(
     };
 
     // ネクロマンス処理: 墓地のカード枚数を消費
-    if (effect.necromance !== undefined && effect.necromance > 0) {
+    // SUMMON_CARD_FILL_BOARDは独自のループ内でネクロマンスを処理するためスキップ
+    if (effect.necromance !== undefined && effect.necromance > 0 && effect.type !== 'SUMMON_CARD_FILL_BOARD') {
         const player = newState.players[sourcePlayerId];
         if (player.graveyard.length < effect.necromance) {
             console.log(`[Engine] ネクロマンス失敗: 墓地${player.graveyard.length}枚 < 必要${effect.necromance}枚`);
@@ -1932,6 +1961,67 @@ function processSingleEffect(
             }
             break;
         }
+        case 'SUMMON_CARD_FILL_BOARD': {
+            // 場が上限になるまで繰り返し召喚（ネクロマンス 4で1体ずつ、墓地が足りなくなるまで）
+            const targetCardId = effect.targetCardId;
+            const template = MOCK_CARDS.find(c => c.id === targetCardId);
+            const necromanceCost = effect.necromance || 0;
+            if (template) {
+                const player = newState.players[sourcePlayerId];
+                let summoned = 0;
+                while (true) {
+                    const actualBoardCount = player.board.filter(c => c !== null).length;
+                    if (actualBoardCount >= 5) break; // 場が上限
+
+                    // ネクロマンスコストをチェック
+                    if (necromanceCost > 0 && player.graveyard.length < necromanceCost) {
+                        if (summoned === 0) {
+                            newState.logs.push(`墓地が足りず ${template.name} を召喚できなかった`);
+                        }
+                        break;
+                    }
+
+                    // ネクロマンスコストを消費
+                    if (necromanceCost > 0) {
+                        const consumed = player.graveyard.splice(-necromanceCost, necromanceCost);
+                        newState.logs.push(`ネクロマンス ${necromanceCost} 発動（${consumed.map(c => c.name).join(', ')} 消費）`);
+                    }
+
+                    const newCard: BoardCard = {
+                        ...template,
+                        instanceId: `token_${newState.rngSeed}_${Math.floor(rng() * 1000)}_${summoned}`,
+                        canAttack: template.passiveAbilities?.includes('STORM') || template.passiveAbilities?.includes('RUSH') || false,
+                        currentHealth: template.health || 1,
+                        maxHealth: template.health || 1,
+                        attack: template.attack || 0,
+                        currentAttack: template.attack || 0,
+                        attacksMade: 0,
+                        turnPlayed: newState.turnCount,
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER') ?? false,
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
+                        hadStealth: template.passiveAbilities?.includes('STEALTH') ?? false
+                    };
+
+                    // 盞華のオーラ効果: 場に盞華がいる場合、ナックラーに疾走を付与
+                    if (template.tags?.includes('Knuckler') && !newCard.passiveAbilities!.includes('STORM')) {
+                        const hasSenkaOnBoard = player.board.some(c => c?.name === '盞華');
+                        if (hasSenkaOnBoard) {
+                            newCard.passiveAbilities!.push('STORM');
+                            newCard.canAttack = true;
+                            newState.logs.push(`${template.name} は 盞華 の効果で疾走を得た！`);
+                        }
+                    }
+
+                    player.board.push(newCard);
+                    summoned++;
+                    newState.logs.push(`${player.name} は ${template.name} を場に出した`);
+                }
+                if (summoned > 0) {
+                    newState.logs.push(`計 ${summoned} 体の ${template.name} を召喚！`);
+                }
+            }
+            break;
+        }
         case 'DESTROY_AND_STEAL': {
             // 相手フォロワーを破壊して自分の場に出す（「継承される力」用）
             if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
@@ -1977,36 +2067,56 @@ function processSingleEffect(
         case 'DESTROY_AND_GENERATE': {
             // 相手フォロワーを破壊して手札に加える（コスト修正付き）
             // NOTE: 破壊なのでラストワードは発動する（奪取ではなく、破壊してコピーを手札に加える）
+
+            // ターゲット決定
+            let destroyTargetInfo: { card: BoardCard, player: Player, index: number } | null = null;
+
             if (effect.targetType === 'SELECT_FOLLOWER' && targetId) {
-                const targetInfo = getBoardCardById(targetId);
-                if (targetInfo) {
-                    const { card, player: targetOwner, index: idx } = targetInfo;
-                    const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === targetOwner) || opponentId;
+                destroyTargetInfo = getBoardCardById(targetId);
+            } else if (effect.targetType === 'RANDOM_ENEMY_FOLLOWER') {
+                // ランダムな相手フォロワーを選択
+                const oppBoard = newState.players[opponentId].board;
+                const validTargets = oppBoard
+                    .map((c, idx) => ({ card: c, index: idx }))
+                    .filter(t => t.card !== null) as { card: BoardCard, index: number }[];
+                if (validTargets.length > 0) {
+                    const randomIdx = Math.floor(rng() * validTargets.length);
+                    const selected = validTargets[randomIdx];
+                    destroyTargetInfo = {
+                        card: selected.card,
+                        player: newState.players[opponentId],
+                        index: selected.index
+                    };
+                }
+            }
 
-                    // ラストワード発動（破壊なので発動する）
-                    triggerLastWord(card, ownerId);
-                    targetOwner.graveyard.push(card);
-                    targetOwner.board[idx] = null;
-                    newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+            if (destroyTargetInfo) {
+                const { card, player: targetOwner, index: idx } = destroyTargetInfo;
+                const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === targetOwner) || opponentId;
 
-                    // 手札に加えるカードを作成（カード名で定義を検索）
-                    const myPlayer = newState.players[sourcePlayerId];
-                    const baseCardDef = getCardDefinition(card.name);
-                    if (baseCardDef) {
-                        // コスト減少を永続化するため、baseCostも減少後の値に設定
-                        const reducedCost = Math.max(0, baseCardDef.cost + (effect.value || 0));
-                        const generatedCard: Card = {
-                            ...baseCardDef,
-                            instanceId: `generated_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
-                            baseCost: reducedCost,
-                            cost: reducedCost,
-                            // NOTE: attackEffectTypeを明示的にコピー（元カード定義から継承）
-                            attackEffectType: baseCardDef.attackEffectType
-                        };
-                        myPlayer.hand.push(generatedCard);
-                        const costChange = effect.value || 0;
-                        newState.logs.push(`${myPlayer.name} は ${generatedCard.name} を手札に加えた（コスト${costChange >= 0 ? '+' : ''}${costChange}）`);
-                    }
+                // ラストワード発動（破壊なので発動する）
+                triggerLastWord(card, ownerId);
+                targetOwner.graveyard.push(card as BoardCard);
+                targetOwner.board[idx] = null;
+                newState.logs.push(`${card.name} は ${sourceCard.name} の効果で破壊されました`);
+
+                // 手札に加えるカードを作成（カード名で定義を検索）
+                const myPlayer = newState.players[sourcePlayerId];
+                const baseCardDef = getCardDefinition(card.name);
+                if (baseCardDef) {
+                    // コスト減少を永続化するため、baseCostも減少後の値に設定
+                    const reducedCost = Math.max(0, baseCardDef.cost + (effect.value || 0));
+                    const generatedCard: Card = {
+                        ...baseCardDef,
+                        instanceId: `generated_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
+                        baseCost: reducedCost,
+                        cost: reducedCost,
+                        // NOTE: attackEffectTypeを明示的にコピー（元カード定義から継承）
+                        attackEffectType: baseCardDef.attackEffectType
+                    };
+                    myPlayer.hand.push(generatedCard);
+                    const costChange = effect.value || 0;
+                    newState.logs.push(`${myPlayer.name} は ${generatedCard.name} を手札に加えた（コスト${costChange >= 0 ? '+' : ''}${costChange}）`);
                 }
             }
             break;
