@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { P2PAdapter } from './P2PAdapter';
 import { NetworkAdapter } from './types';
 
-export function useGameNetwork(mode: 'HOST' | 'JOIN' | 'CPU' | 'CASUAL_MATCH' | 'RANKED_MATCH', targetId?: string) {
+export function useGameNetwork(mode: 'HOST' | 'JOIN' | 'CPU' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', targetId?: string) {
     const [adapter, setAdapter] = useState<NetworkAdapter | null>(null);
     const [myId, setMyId] = useState<string>('');
     const [connected, setConnected] = useState(false);

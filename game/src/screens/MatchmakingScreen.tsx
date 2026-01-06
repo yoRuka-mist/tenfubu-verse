@@ -4,16 +4,29 @@ import { ClassType } from '../core/types';
 import { matchmakingManager, MatchResult, MatchmakingStatus, MatchType } from '../firebase/matchmaking';
 import { NetworkAdapter } from '../network/types';
 import { PeerJSAdapter } from '../network/PeerJSAdapter';
+import { getClassRating } from '../firebase/playerData';
+import { getRankFromRating, RANK_DISPLAY_NAMES, RankType } from '../firebase/rating';
 
 // Base dimensions for scaling
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
+// ランクの色
+const RANK_COLORS: Record<RankType, string> = {
+    BRONZE: '#cd7f32',
+    SILVER: '#c0c0c0',
+    GOLD: '#ffd700',
+    PLATINUM: '#e5e4e2',
+    DIAMOND: '#b9f2ff',
+    MASTER: '#ff4500',
+};
+
 interface MatchmakingScreenProps {
     matchType: MatchType;
     playerClass: ClassType;
     playerName: string;
-    onGameStart: (adapter: NetworkAdapter, opponentClass: ClassType, isHost: boolean) => void;
+    playerId: string | null;
+    onGameStart: (adapter: NetworkAdapter, opponentClass: ClassType, isHost: boolean, opponentPlayerId?: string, opponentRating?: number) => void;
     onCancel: () => void;
 }
 
@@ -21,6 +34,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
     matchType,
     playerClass,
     playerName,
+    playerId,
     onGameStart,
     onCancel
 }) => {
@@ -32,6 +46,10 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
     const matchResultRef = useRef<MatchResult | null>(null);
     const isHostRef = useRef(false);
     const isGameStartingRef = useRef(false); // ゲーム開始フラグ（cleanup時にPeer破棄をスキップするため）
+
+    // レーティング（ランクマッチ用）
+    const [myRating, setMyRating] = useState<number>(0);
+    const [opponentRating, setOpponentRating] = useState<number | undefined>(undefined);
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -61,9 +79,21 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
     // PeerJS初期化とマッチメイキング開始
     useEffect(() => {
         let isMounted = true;
+        let currentMyRating = 0; // 自分のレート（ランクマッチ用）
 
         const initMatchmaking = async () => {
             try {
+                // ランクマッチの場合、自分のレートを取得
+                if (matchType === 'ranked' && playerId) {
+                    try {
+                        const classRating = await getClassRating(playerId, playerClass);
+                        currentMyRating = classRating.rating;
+                        setMyRating(currentMyRating);
+                    } catch (error) {
+                        console.error('[Matchmaking] Failed to get rating:', error);
+                    }
+                }
+
                 // PeerJS初期化
                 const peer = new Peer({
                     debug: 1,
@@ -103,13 +133,20 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                                 conn.send({
                                     type: 'PLAYER_INFO',
                                     playerName,
-                                    playerClass
+                                    playerClass,
+                                    playerId: matchType === 'ranked' ? playerId : undefined,
+                                    rating: matchType === 'ranked' ? currentMyRating : undefined
                                 });
+
+                                // 相手のレートを保存
+                                if (isMounted && matchType === 'ranked') {
+                                    setOpponentRating(data.rating);
+                                }
 
                                 // ゲーム開始
                                 isGameStartingRef.current = true; // cleanup時にPeer破棄をスキップ
                                 const adapter = new PeerJSAdapter(peer, conn, true);
-                                onGameStart(adapter, data.playerClass, true);
+                                onGameStart(adapter, data.playerClass, true, data.playerId, data.rating);
                             }
                         });
                     });
@@ -157,16 +194,24 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                                 conn.send({
                                     type: 'PLAYER_INFO',
                                     playerName,
-                                    playerClass
+                                    playerClass,
+                                    playerId: matchType === 'ranked' ? playerId : undefined,
+                                    rating: matchType === 'ranked' ? currentMyRating : undefined
                                 });
 
                                 // 相手の情報を受信
                                 conn.on('data', (data: any) => {
                                     if (data.type === 'PLAYER_INFO') {
                                         console.log('[Matchmaking] Received player info:', data);
+
+                                        // 相手のレートを保存
+                                        if (isMounted && matchType === 'ranked') {
+                                            setOpponentRating(data.rating);
+                                        }
+
                                         isGameStartingRef.current = true; // cleanup時にPeer破棄をスキップ
                                         const adapter = new PeerJSAdapter(peer, conn, false);
-                                        onGameStart(adapter, data.playerClass, false);
+                                        onGameStart(adapter, data.playerClass, false, data.playerId, data.rating);
                                     }
                                 });
                             });
@@ -177,7 +222,9 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                                 setStatusMessage('接続に失敗しました');
                             });
                         }
-                    }
+                    },
+                    matchType === 'ranked' ? playerId ?? undefined : undefined,
+                    matchType === 'ranked' ? currentMyRating : undefined
                 );
 
             } catch (error) {
@@ -204,7 +251,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                 }
             }
         };
-    }, [matchType, playerClass, playerName, onGameStart]);
+    }, [matchType, playerClass, playerName, playerId, onGameStart]);
 
     const handleCancel = async () => {
         await matchmakingManager.cancelMatchmaking();
@@ -280,22 +327,69 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
             {/* プレイヤー情報 */}
             <div style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: `${1 * scale}rem`,
+                gap: `${0.5 * scale}rem`,
                 marginBottom: `${2 * scale}rem`,
                 padding: `${1 * scale}rem`,
                 background: 'rgba(255,255,255,0.1)',
                 borderRadius: 8 * scale
             }}>
-                <div style={{ fontSize: `${1 * scale}rem` }}>
-                    {playerName || 'プレイヤー'}
-                </div>
                 <div style={{
-                    fontSize: `${0.9 * scale}rem`,
-                    color: playerClass === 'SENKA' ? '#e94560' : '#45a2e9'
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: `${1 * scale}rem`,
                 }}>
-                    {playerClass === 'SENKA' ? '盞華' : playerClass === 'AJA' ? 'あじゃ' : 'よルカ'}
+                    <div style={{ fontSize: `${1 * scale}rem` }}>
+                        {playerName || 'プレイヤー'}
+                    </div>
+                    <div style={{
+                        fontSize: `${0.9 * scale}rem`,
+                        color: playerClass === 'SENKA' ? '#e94560' : playerClass === 'AJA' ? '#45a2e9' : '#a855f7'
+                    }}>
+                        {playerClass === 'SENKA' ? '盞華' : playerClass === 'AJA' ? 'あじゃ' : 'Y'}
+                    </div>
                 </div>
+                {/* ランクマッチ時のレート表示 */}
+                {matchType === 'ranked' && myRating > 0 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: `${0.5 * scale}rem`,
+                        fontSize: `${0.85 * scale}rem`,
+                        color: '#aaa',
+                    }}>
+                        <span style={{
+                            fontWeight: 'bold',
+                            color: RANK_COLORS[getRankFromRating(myRating)],
+                            fontFamily: 'Tamanegi, sans-serif',
+                        }}>
+                            {RANK_DISPLAY_NAMES[getRankFromRating(myRating)]}
+                        </span>
+                        <span style={{ fontFamily: 'Tamanegi, sans-serif' }}>
+                            {myRating}
+                        </span>
+                    </div>
+                )}
+                {/* マッチング完了時の相手レート表示 */}
+                {matchType === 'ranked' && status === 'matched' && opponentRating !== undefined && (
+                    <div style={{
+                        marginTop: `${0.5 * scale}rem`,
+                        padding: `${0.5 * scale}rem ${1 * scale}rem`,
+                        background: 'rgba(0, 0, 0, 0.3)',
+                        borderRadius: 4 * scale,
+                        fontSize: `${0.8 * scale}rem`,
+                        color: '#aaa',
+                    }}>
+                        対戦相手: <span style={{
+                            fontWeight: 'bold',
+                            color: RANK_COLORS[getRankFromRating(opponentRating)],
+                            fontFamily: 'Tamanegi, sans-serif',
+                        }}>
+                            {RANK_DISPLAY_NAMES[getRankFromRating(opponentRating)]}
+                        </span> {opponentRating}
+                    </div>
+                )}
             </div>
 
             {/* キャンセルボタン */}

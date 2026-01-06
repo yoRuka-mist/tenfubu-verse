@@ -10,6 +10,8 @@ export interface WaitingPlayer {
     playerName: string;
     playerClass: ClassType;
     matchType: MatchType;
+    playerId?: string;    // Firebase Auth UID (ランクマッチ用)
+    rating?: number;      // 現在のレート (ランクマッチ用)
     timestamp: number;
 }
 
@@ -18,6 +20,8 @@ export interface MatchResult {
     playerName: string;
     playerClass: ClassType;
     isHost: boolean;
+    playerId?: string;    // Firebase Auth UID (ランクマッチ用)
+    rating?: number;      // 現在のレート (ランクマッチ用)
 }
 
 // マッチング状態
@@ -38,7 +42,9 @@ export class MatchmakingManager {
         playerClass: ClassType,
         matchType: MatchType,
         onStatusChange: (status: MatchmakingStatus) => void,
-        onMatch: (result: MatchResult) => void
+        onMatch: (result: MatchResult) => void,
+        playerId?: string,  // Firebase Auth UID (ランクマッチ用)
+        rating?: number     // 現在のレート (ランクマッチ用)
     ): Promise<void> {
         this.myPeerId = peerId;
         this.hasMatched = false; // マッチングフラグをリセット
@@ -74,7 +80,9 @@ export class MatchmakingManager {
                     peerId: opponent.data.peerId,
                     playerName: opponent.data.playerName,
                     playerClass: opponent.data.playerClass,
-                    isHost: false // 後から来た方がJOIN側
+                    isHost: false, // 後から来た方がJOIN側
+                    playerId: opponent.data.playerId,
+                    rating: opponent.data.rating,
                 });
                 return;
             }
@@ -92,6 +100,8 @@ export class MatchmakingManager {
                 playerName,
                 playerClass,
                 matchType,
+                playerId,
+                rating,
                 timestamp: Date.now()
             };
 
@@ -167,7 +177,9 @@ export class MatchmakingManager {
                             peerId: opponent.data.peerId,
                             playerName: opponent.data.playerName,
                             playerClass: opponent.data.playerClass,
-                            isHost: true
+                            isHost: true,
+                            playerId: opponent.data.playerId,
+                            rating: opponent.data.rating,
                         });
                     }
                 }
