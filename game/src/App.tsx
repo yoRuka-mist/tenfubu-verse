@@ -152,6 +152,44 @@ function App() {
         setAudioSettings(prev => ({ ...prev, ...newSettings }));
     }, []);
 
+    // Lobby game start callback
+    const handleLobbyGameStart = useCallback((adapter: NetworkAdapter, oppClass?: ClassType) => {
+        networkAdapterRef.current = adapter;
+        setNetworkConnected(true);
+        if (oppClass) setOpponentClass(oppClass);
+        setCurrentScreen('GAME');
+    }, []);
+
+    // Matchmaking game start callback
+    const handleMatchmakingGameStart = useCallback((
+        adapter: NetworkAdapter,
+        oppClass: ClassType,
+        _isHost: boolean,
+        oppPlayerId?: string,
+        oppRating?: number
+    ) => {
+        networkAdapterRef.current = adapter;
+        setNetworkConnected(true);
+        setOpponentClass(oppClass);
+        setOpponentPlayerId(oppPlayerId);
+        setOpponentRating(oppRating);
+        setCurrentScreen('GAME');
+    }, []);
+
+    // Rematching callback
+    const handleRematching = useCallback((deckType: ClassType) => {
+        if (networkAdapterRef.current) {
+            networkAdapterRef.current.disconnect();
+            networkAdapterRef.current = null;
+        }
+        setNetworkConnected(false);
+        setOpponentClass(undefined);
+        setOpponentPlayerId(undefined);
+        setOpponentRating(undefined);
+        setSelectedClass(deckType);
+        setCurrentScreen('MATCHMAKING');
+    }, []);
+
     // Title BGM management (plays on TITLE and CLASS_SELECT screens)
     const titleBgmRef = useRef<HTMLAudioElement | null>(null);
     const titleBgmInitialized = useRef(false);
@@ -215,13 +253,13 @@ function App() {
         return () => document.removeEventListener('click', handleClick);
     }, [currentScreen, audioSettings.bgmEnabled]);
 
-    const handleTitleConfig = (mode: GameMode, id?: string) => {
+    const handleTitleConfig = useCallback((mode: GameMode, id?: string) => {
         setGameMode(mode);
         if (id) setRoomId(id);
         setCurrentScreen('CLASS_SELECT');
-    };
+    }, []);
 
-    const startGame = (cls: ClassType) => {
+    const startGame = useCallback((cls: ClassType) => {
         setSelectedClass(cls);
         // CPU mode: go directly to game
         // CASUAL_MATCH/RANKED_MATCH: go to matchmaking screen
@@ -235,34 +273,9 @@ function App() {
             // HOST/JOIN → ロビー画面へ
             setCurrentScreen('LOBBY');
         }
-    };
+    }, [gameMode]);
 
-    const handleLobbyGameStart = (adapter: NetworkAdapter, oppClass?: ClassType) => {
-        networkAdapterRef.current = adapter;
-        setNetworkConnected(true);
-        if (oppClass) setOpponentClass(oppClass);
-        setCurrentScreen('GAME');
-    };
-
-    // マッチメイキング成功時のハンドラ
-    const handleMatchmakingGameStart = (
-        adapter: NetworkAdapter,
-        oppClass: ClassType,
-        _isHost: boolean,
-        oppPlayerId?: string,
-        oppRating?: number
-    ) => {
-        networkAdapterRef.current = adapter;
-        setNetworkConnected(true);
-        setOpponentClass(oppClass);
-        setOpponentPlayerId(oppPlayerId);
-        setOpponentRating(oppRating);
-        // カジュアルマッチではタイマー強制ON
-        // Note: timerEnabled stateは変更せず、GameScreenに渡すときに強制的にtrueにする
-        setCurrentScreen('GAME');
-    };
-
-    const backToTitle = () => {
+    const backToTitle = useCallback(() => {
         // Disconnect network if connected
         if (networkAdapterRef.current) {
             networkAdapterRef.current.disconnect();
@@ -276,23 +289,7 @@ function App() {
         setOpponentClass(undefined);
         setOpponentPlayerId(undefined);
         setOpponentRating(undefined);
-    };
-
-    // ランダムマッチの再マッチング処理
-    const handleRematching = (deckType: ClassType) => {
-        // 現在の接続を切断
-        if (networkAdapterRef.current) {
-            networkAdapterRef.current.disconnect();
-            networkAdapterRef.current = null;
-        }
-        setNetworkConnected(false);
-        setOpponentClass(undefined);
-        setOpponentPlayerId(undefined);
-        setOpponentRating(undefined);
-        // 選択したクラスを設定してマッチメイキング画面へ
-        setSelectedClass(deckType);
-        setCurrentScreen('MATCHMAKING');
-    };
+    }, []);
 
     return (
         <div className="app-container">

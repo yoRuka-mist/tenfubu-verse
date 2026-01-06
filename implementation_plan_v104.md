@@ -9,7 +9,44 @@
 
 ## 実装タスク一覧
 
-### Phase 1: Firebase Auth 導入
+### Phase 1: Firebase Auth 導入 + ユーザーコード方式
+
+#### 概要: プレイヤー識別の仕組み
+
+```
+初回起動時
+    ↓
+Firebase Anonymous Auth で UID 発行
+    ↓
+UID から6文字のユーザーコードを生成（例: "A3F7K9"）
+    ↓
+ユーザーに表示 → メモしてもらう
+
+別端末/ブラウザからアクセス時
+    ↓
+タイトル画面「引き継ぎ」ボタン
+    ↓
+コード入力 → 既存アカウントと紐付け
+```
+
+#### Firebase データ構造
+
+```
+players/
+  {playerId}/
+    playerName: "ユーザー名"
+    userCode: "A3F7K9"    // 引き継ぎ用コード
+    createdAt: timestamp
+    lastMatchAt: timestamp
+    ratings/
+      TENFUBUKI/
+        rating: 0
+        winStreak: 0
+        ...
+
+userCodes/                 // 逆引き用インデックス
+  A3F7K9: "{playerId}"
+```
 
 #### Task 1-1: Firebase Anonymous Auth のセットアップ
 
@@ -53,6 +90,125 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
 - アプリ起動時に `signInAnonymousUser()` を呼び出し
 - `playerId` を state で管理
 - 認証完了までローディング表示
+
+#### Task 1-4: ユーザーコード生成・管理
+
+**対象ファイル**: `game/src/firebase/userCode.ts`（新規作成）
+
+```typescript
+import { database } from './config';
+import { ref, get, set } from 'firebase/database';
+
+// 6文字のランダムコードを生成（英大文字 + 数字）
+const generateUserCode = (): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 紛らわしい文字を除外（I,O,0,1）
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+// ユーザーコードの重複チェック
+const isCodeAvailable = async (code: string): Promise<boolean> => {
+  const codeRef = ref(database, `userCodes/${code}`);
+  const snapshot = await get(codeRef);
+  return !snapshot.exists();
+};
+
+// 一意のユーザーコードを生成
+export const createUniqueUserCode = async (): Promise<string> => {
+  let code: string;
+  let attempts = 0;
+  do {
+    code = generateUserCode();
+    attempts++;
+    if (attempts > 10) {
+      throw new Error('Failed to generate unique user code');
+    }
+  } while (!(await isCodeAvailable(code)));
+  return code;
+};
+
+// ユーザーコードを登録（playerIdと紐付け）
+export const registerUserCode = async (code: string, playerId: string): Promise<void> => {
+  const codeRef = ref(database, `userCodes/${code}`);
+  await set(codeRef, playerId);
+};
+
+// ユーザーコードからplayerIdを検索
+export const getPlayerIdByCode = async (code: string): Promise<string | null> => {
+  const codeRef = ref(database, `userCodes/${code.toUpperCase()}`);
+  const snapshot = await get(codeRef);
+  if (snapshot.exists()) {
+    return snapshot.val() as string;
+  }
+  return null;
+};
+```
+
+#### Task 1-5: 引き継ぎ画面
+
+**対象ファイル**: `game/src/screens/TransferScreen.tsx`（新規作成）
+
+**仕様**:
+- 6文字のコード入力フィールド
+- 「引き継ぎ」ボタン
+- エラーメッセージ表示（コードが見つからない場合）
+- 戻るボタン
+
+**Props**:
+```typescript
+interface TransferScreenProps {
+  onTransferSuccess: (playerId: string) => void;
+  onBack: () => void;
+}
+```
+
+**レイアウト**:
+```
+┌─────────────────────────────────────┐
+│  [戻る]                              │
+├─────────────────────────────────────┤
+│                                     │
+│         アカウント引き継ぎ            │
+│                                     │
+│     引き継ぎコードを入力してください     │
+│                                     │
+│         [ A 3 F 7 K 9 ]             │
+│                                     │
+│           [引き継ぎ]                 │
+│                                     │
+│     ※コードが見つかりません（エラー時）   │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+#### Task 1-6: 設定画面に引き継ぎ機能を追加
+
+**対象ファイル**: `game/src/screens/SettingsScreen.tsx`（既存 or 新規確認）
+
+**変更内容**:
+- 設定画面内に「引き継ぎ」ボタンを追加
+- ユーザーコード表示エリアを追加（現在のコードを確認できるように）
+- 「引き継ぎ」ボタン押下で引き継ぎ画面（TransferScreen）へ遷移
+
+**レイアウト例**:
+```
+┌─────────────────────────────────────┐
+│  設定                                │
+├─────────────────────────────────────┤
+│                                     │
+│  【アカウント】                        │
+│  あなたの引き継ぎコード: A3F7K9        │
+│  （メモしておいてください）             │
+│                                     │
+│           [引き継ぎ]                 │
+│                                     │
+│  【その他の設定項目...】               │
+│                                     │
+└─────────────────────────────────────┘
+```
 
 ---
 
@@ -647,21 +803,24 @@ interface GalleryRelatedCardScreenProps {
 - `game/src/firebase/auth.ts`
 - `game/src/firebase/rating.ts`
 - `game/src/firebase/playerData.ts`
+- `game/src/firebase/userCode.ts`（追加）
 - `game/src/screens/MatchTypeSelectScreen.tsx`
-- `game/src/screens/GalleryClassSelectScreen.tsx`（追加）
-- `game/src/screens/GalleryCardListScreen.tsx`（追加）
-- `game/src/screens/GalleryCardDetailScreen.tsx`（追加）
-- `game/src/screens/GalleryRelatedCardScreen.tsx`（追加）
+- `game/src/screens/TransferScreen.tsx`（追加）
+- `game/src/screens/GalleryClassSelectScreen.tsx`
+- `game/src/screens/GalleryCardListScreen.tsx`
+- `game/src/screens/GalleryCardDetailScreen.tsx`
+- `game/src/screens/GalleryRelatedCardScreen.tsx`
 
 ### 変更
 - `game/src/firebase/config.ts`
 - `game/src/firebase/matchmaking.ts`
+- `game/src/screens/SettingsScreen.tsx`（追加: 引き継ぎボタン、コード表示）
 - `game/src/screens/ClassSelectScreen.tsx`
 - `game/src/screens/MatchmakingScreen.tsx`
 - `game/src/screens/GameScreen.tsx`
 - `game/src/App.tsx`
-- `game/src/core/types.ts`（追加）
-- `game/src/core/engine.ts`（追加）
+- `game/src/core/types.ts`
+- `game/src/core/engine.ts`
 
 ---
 
