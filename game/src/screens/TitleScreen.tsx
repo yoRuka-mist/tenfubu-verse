@@ -20,9 +20,10 @@ interface TitleScreenProps {
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
+    onGalleryStart: () => void; // ギャラリー開始ハンドラー
 }
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSettings, onAudioSettingsChange, playerId: _playerId }) => {
+export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSettings, onAudioSettingsChange, playerId: _playerId, onGalleryStart }) => {
     // 画面フェーズ: 'title' = GAME START画面, 'home' = ホーム画面
     const [phase, setPhase] = useState<'title' | 'home'>('title');
     const [titleAnimating, setTitleAnimating] = useState(false);
@@ -699,15 +700,24 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                     {/* ギャラリー */}
                     {activeTab === 'gallery' && (
                         <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1 * scale}rem`, color: '#ec4899' }}>
+                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
                                 ギャラリー
                             </h2>
-                            <p style={{ fontSize: `${1 * scale}rem`, color: '#888', marginBottom: `${1 * scale}rem` }}>
-                                カードを閲覧し、ホームカードを設定できます
-                            </p>
-                            <p style={{ fontSize: `${0.8 * scale}rem`, color: '#666' }}>
-                                （機能は後日実装予定）
-                            </p>
+                            <button
+                                onClick={onGalleryStart}
+                                style={{
+                                    padding: `${1 * scale}rem ${3 * scale}rem`,
+                                    fontSize: `${1.2 * scale}rem`,
+                                    background: '#ec4899',
+                                    border: 'none',
+                                    borderRadius: 8 * scale,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                }}
+                            >
+                                ギャラリーを開く
+                            </button>
                         </div>
                     )}
 

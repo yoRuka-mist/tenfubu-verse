@@ -4,10 +4,15 @@ import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MatchmakingScreen } from './screens/MatchmakingScreen';
 import { GameScreen } from './screens/GameScreen';
+import { GalleryClassSelectScreen } from './screens/GalleryClassSelectScreen';
+import { GalleryCardListScreen } from './screens/GalleryCardListScreen';
+import { GalleryCardDetailScreen } from './screens/GalleryCardDetailScreen';
+import { GalleryRelatedCardScreen } from './screens/GalleryRelatedCardScreen';
 import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
 import { signInAnonymousUser, onAuthStateChange } from './firebase/auth';
 import { getOrCreatePlayerData } from './firebase/playerData';
+import { MOCK_CARDS } from './core/engine';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -47,7 +52,8 @@ const loadAudioSettings = (): AudioSettings => {
     }
 };
 
-type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME';
+type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME' |
+                'GALLERY_CLASS_SELECT' | 'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD';
 type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
 
 // Portrait mode detection hook
@@ -113,6 +119,11 @@ function App() {
 
     // Audio settings (shared across screens)
     const [audioSettings, setAudioSettings] = useState<AudioSettings>(loadAudioSettings);
+
+    // Gallery flow states
+    const [galleryClassType, setGalleryClassType] = useState<ClassType | null>(null);
+    const [galleryCardId, setGalleryCardId] = useState<string | null>(null);
+    const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
     // Firebase Auth: 認証処理
     useEffect(() => {
@@ -289,6 +300,50 @@ function App() {
         setOpponentClass(undefined);
         setOpponentPlayerId(undefined);
         setOpponentRating(undefined);
+        // Reset gallery state
+        setGalleryClassType(null);
+        setGalleryCardId(null);
+        setGalleryRelatedCardIds([]);
+    }, []);
+
+    // Gallery handlers
+    const handleGalleryStart = useCallback(() => {
+        setCurrentScreen('GALLERY_CLASS_SELECT');
+    }, []);
+
+    const handleGalleryClassSelect = useCallback((cls: ClassType) => {
+        setGalleryClassType(cls);
+        setCurrentScreen('GALLERY_CARD_LIST');
+    }, []);
+
+    const handleGalleryCardSelect = useCallback((cardId: string) => {
+        setGalleryCardId(cardId);
+        setCurrentScreen('GALLERY_CARD_DETAIL');
+    }, []);
+
+    const handleGalleryRelatedCardOpen = useCallback((parentCardId: string) => {
+        // MOCK_CARDSから親カードを取得
+        const parentCard = MOCK_CARDS.find(c => c.id === parentCardId);
+        if (parentCard && parentCard.relatedCards && parentCard.relatedCards.length > 0) {
+            setGalleryCardId(parentCardId);
+            setGalleryRelatedCardIds(parentCard.relatedCards);
+            setCurrentScreen('GALLERY_RELATED_CARD');
+        }
+    }, []);
+
+    const backFromGalleryCardList = useCallback(() => {
+        setGalleryClassType(null);
+        setCurrentScreen('GALLERY_CLASS_SELECT');
+    }, []);
+
+    const backFromGalleryCardDetail = useCallback(() => {
+        setGalleryCardId(null);
+        setCurrentScreen('GALLERY_CARD_LIST');
+    }, []);
+
+    const backFromGalleryRelatedCard = useCallback(() => {
+        setGalleryRelatedCardIds([]);
+        setCurrentScreen('GALLERY_CARD_DETAIL');
     }, []);
 
     return (
@@ -350,6 +405,7 @@ function App() {
                     audioSettings={audioSettings}
                     onAudioSettingsChange={updateAudioSettings}
                     playerId={playerId}
+                    onGalleryStart={handleGalleryStart}
                 />
             )}
             {currentScreen === 'CLASS_SELECT' && (
@@ -408,6 +464,33 @@ function App() {
                     playerId={playerId}
                     opponentPlayerId={opponentPlayerId}
                     opponentRating={opponentRating}
+                />
+            )}
+            {currentScreen === 'GALLERY_CLASS_SELECT' && (
+                <GalleryClassSelectScreen
+                    onSelectClass={handleGalleryClassSelect}
+                    onBack={backToTitle}
+                />
+            )}
+            {currentScreen === 'GALLERY_CARD_LIST' && galleryClassType && (
+                <GalleryCardListScreen
+                    classType={galleryClassType}
+                    onSelectCard={handleGalleryCardSelect}
+                    onBack={backFromGalleryCardList}
+                />
+            )}
+            {currentScreen === 'GALLERY_CARD_DETAIL' && galleryCardId && (
+                <GalleryCardDetailScreen
+                    cardId={galleryCardId}
+                    onOpenRelatedCard={handleGalleryRelatedCardOpen}
+                    onBack={backFromGalleryCardDetail}
+                />
+            )}
+            {currentScreen === 'GALLERY_RELATED_CARD' && galleryCardId && (
+                <GalleryRelatedCardScreen
+                    parentCardId={galleryCardId}
+                    relatedCardIds={galleryRelatedCardIds}
+                    onBack={backFromGalleryRelatedCard}
                 />
             )}
         </div>

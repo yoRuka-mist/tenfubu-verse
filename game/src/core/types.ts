@@ -68,6 +68,7 @@ export interface Card {
     imageUrl?: string;
     evolvedImageUrl?: string; // 進化後の画像URL
     flavorText?: string; // フレーバーテキスト（カードの世界観説明）
+    relatedCards?: string[]; // ギャラリー用：このカードが召喚/生成するカードのID配列
 
     // Instance ID for cards in hand/deck (runtime)
     instanceId?: string;
