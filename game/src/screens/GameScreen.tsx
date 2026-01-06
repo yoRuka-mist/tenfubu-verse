@@ -7,6 +7,7 @@ import { BattleOutro, OutroPhase } from '../components/BattleOutro';
 import { TurnTimer } from '../components/TurnTimer';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
+import { usePerformanceMode } from '../hooks/usePerformanceMode';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -933,9 +934,10 @@ interface EvolutionAnimationProps {
     useSep?: boolean;
     playSE?: (file: string, volume?: number) => void;
     scale: number; // Add scale prop
+    isLightMode?: boolean; // 4K軽量モード
 }
 
-const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE, scale }) => {
+const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE, scale, isLightMode = false }) => {
     const [rotateY, setRotateY] = React.useState(0);
     const [rotateZ, setRotateZ] = React.useState(0); // Z-axis tilt for evolution enhancement
     const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
@@ -1306,7 +1308,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             `}</style>
 
             {/* Charge Particles - Converging toward card center */}
-            {chargeParticles.map(p => (
+            {/* 軽量モード: パーティクル数を減らし、box-shadowとfilterを簡略化 */}
+            {(isLightMode ? chargeParticles.filter((_, i) => i % 2 === 0) : chargeParticles).map(p => (
                 <div
                     key={`charge-${p.id}`}
                     style={{
@@ -1318,8 +1321,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         height: p.size * scale,
                         borderRadius: '50%',
                         background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
-                        boxShadow: '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
-                        filter: 'blur(1px)',
+                        boxShadow: isLightMode ? '0 0 8px white' : '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
+                        filter: isLightMode ? undefined : 'blur(1px)',
                         animation: `chargeParticleIn-${p.id} ${p.duration}s ease-in ${p.delay}s forwards`,
                         transform: `rotate(${p.angle}deg) translateX(${p.dist * scale}px)`,
                         opacity: 0,
@@ -1329,6 +1332,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             ))}
 
             {/* Energy Rings (Hula Hoop Effect) - Visible during WHITE_FADE */}
+            {/* 軽量モード: box-shadowを簡略化 */}
             {phase === 'WHITE_FADE' && (
                 <div style={{
                     position: 'absolute',
@@ -1345,10 +1349,12 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         border: '8px solid rgba(255, 255, 255, 0.6)', // Thicker ring
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%) rotateX(75deg)',
-                        boxShadow: '0 0 30px rgba(255, 255, 255, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.8)', // Stronger glow
+                        boxShadow: isLightMode ? '0 0 15px rgba(255, 255, 255, 0.6)' : '0 0 30px rgba(255, 255, 255, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.8)', // Stronger glow
                         animation: 'ringSpin 2s linear infinite'
                     }} />
                     {/* Ring 2 - Outer with different angle */}
+                    {/* 軽量モードでは外側のリングを非表示 */}
+                    {!isLightMode && (
                     <div style={{
                         position: 'absolute',
                         top: '50%', left: '50%',
@@ -1358,7 +1364,7 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         transform: 'translate(-50%, -50%) rotateX(80deg) rotateY(10deg)',
                         boxShadow: '0 0 40px rgba(100, 200, 255, 0.5)', // Stronger glow
                         animation: 'ringSpinReverse 3s linear infinite'
-                    }} />
+                    }} />)}
                     <style>{`
                         @keyframes ringSpin {
                             0% { transform: translate(-50%, -50%) rotateX(75deg) rotate(0deg); opacity: 0; scale: 0.5; }
@@ -1375,7 +1381,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             )}
 
             {/* Burst Particles - Exploding outward on evolve (centered on card) */}
-            {burstParticles.map(p => (
+            {/* 軽量モード: パーティクル数を半分に、box-shadowを簡略化 */}
+            {(isLightMode ? burstParticles.filter((_, i) => i % 2 === 0) : burstParticles).map(p => (
                 <div
                     key={`burst-${p.id}`}
                     style={{
@@ -1389,9 +1396,9 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         background: useSep
                             ? `radial-gradient(circle, rgba(183, 148, 244, 1) 0%, rgba(159, 122, 234, 0.8) 50%, transparent 100%)`
                             : `radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(251, 211, 141, 0.8) 50%, transparent 100%)`,
-                        boxShadow: useSep
-                            ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)'
-                            : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)',
+                        boxShadow: isLightMode
+                            ? (useSep ? '0 0 8px #b794f4' : '0 0 8px #fbd38d')
+                            : (useSep ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)' : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)'),
                         animation: `burstParticleOut-${p.id} 0.4s ease-out ${p.delay}s forwards`,
                         pointerEvents: 'none'
                     }}
@@ -1410,6 +1417,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 transformStyle: 'preserve-3d'
             }}>
                 {/* Consolidated Background Glow - Optimized */}
+                {/* 軽量モード: filterのblurを削除し、背景グロー自体を非表示 */}
+                {!isLightMode && (
                 <div style={{
                     position: 'absolute',
                     left: '50%',
@@ -1425,16 +1434,18 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                     opacity: glowIntensity > 1 ? 1 : 0,
                     transition: 'opacity 0.4s'
                 }} />
+                )}
 
                 {/* Card */}
+                {/* 軽量モード: box-shadowを簡略化 */}
                 <div style={{
                     width: cardWidth,
                     height: cardHeight,
                     borderRadius: 16,
                     overflow: 'hidden',
-                    boxShadow: useSep
-                        ? `0 0 40px rgba(159, 122, 234, 0.7)`
-                        : `0 0 40px rgba(251, 211, 141, 0.7)`,
+                    boxShadow: isLightMode
+                        ? (useSep ? `0 0 20px rgba(159, 122, 234, 0.5)` : `0 0 20px rgba(251, 211, 141, 0.5)`)
+                        : (useSep ? `0 0 40px rgba(159, 122, 234, 0.7)` : `0 0 40px rgba(251, 211, 141, 0.7)`),
                     position: 'relative',
                     transformStyle: 'preserve-3d' // Required for backface-visibility to work
                 }}>
@@ -2209,6 +2220,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const scaleInfo = useScaleFactor();
     const { scale, toGameX, toGameY } = scaleInfo;
 
+    // パフォーマンスモード（4K等の高解像度時は軽量モード）
+    const { isLightMode } = usePerformanceMode();
+
     // Mobile detection for responsive UI
     const [isMobile, setIsMobile] = useState(false);
     useEffect(() => {
@@ -2287,6 +2301,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [showBattleIntro, setShowBattleIntro] = React.useState(
         isCasualOrRanked ? false : !isJoinSide // CASUAL_MATCH: wait for sync, otherwise: show immediately (except JOIN)
     );
+    const [boardFadeIn, setBoardFadeIn] = React.useState(false); // 盤面フェードイン制御（BattleIntro終了前に開始）
+    const [leaderUiFadeIn, setLeaderUiFadeIn] = React.useState(false); // リーダーUIのフェードイン制御
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
 
     // CASUAL_MATCH/RANKED_MATCH: Sync state for coordinated BattleIntro start
@@ -3887,6 +3903,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // BattleIntro completion callback - useRefで安定化
     const handleBattleIntroComplete = useCallback(() => {
         setShowBattleIntro(false);
+        setBoardFadeIn(false); // リセット（次回のBattleIntro用）
+        setLeaderUiFadeIn(true); // リーダーUIをフェードイン
         setCoinTossResult(isFirstPlayer ? 'FIRST' : 'SECOND');
 
         // If going second, swap turn order
@@ -7396,6 +7414,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     scale={scale}
                     onVsImpact={() => playSE('vs.mp3', 0.7)}
                     onCoinToss={() => playSE('coin.mp3', 0.7)}
+                    onImpact={() => playSE('gan.mp3', 0.7)}
+                    onOrbLand={() => playSE('gan.mp3', 0.8)}
+                    onFadeInBoard={() => setBoardFadeIn(true)}
+                    isMobile={isMobile}
                 />
             )}
 
@@ -7414,7 +7436,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    opacity: showBattleIntro ? 0 : 1,
+                    opacity: (showBattleIntro && !boardFadeIn) ? 0 : 1,
                     transition: 'opacity 0.5s ease-in'
                 }}
                 // REMOVED local onMouseMove/Up listeners to avoid conflict/lag
@@ -7843,7 +7865,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
                             border: `${Math.max(2, 3 * scale)}px solid #fff`, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: `${1.2 * scale}rem`, fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)', zIndex: 10,
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)'
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)',
+                            opacity: leaderUiFadeIn ? 1 : 0, transition: 'opacity 0.3s ease-in'
                         }}>{opponent.hp}</div>
 
                         {/* Opponent EP - Circular Frame */}
@@ -7851,7 +7874,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', bottom: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${-80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
-                            opacity: isOpponentEvolveUnlocked ? 1 : 0.5, filter: isOpponentEvolveUnlocked ? 'none' : 'grayscale(0.8)'
+                            opacity: leaderUiFadeIn ? (isOpponentEvolveUnlocked ? 1 : 0.5) : 0,
+                            filter: isOpponentEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s ease-in'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
                                 {Array(2).fill(0).map((_, i) => {
@@ -7871,7 +7896,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             position: 'absolute', bottom: 10 * scale, left: '50%', transform: `translateX(-50%) translateX(${80 * scale}px)`,
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
-                            opacity: isOpponentSuperEvolveUnlocked ? 1 : 0.5, filter: isOpponentSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)'
+                            opacity: leaderUiFadeIn ? (isOpponentSuperEvolveUnlocked ? 1 : 0.5) : 0,
+                            filter: isOpponentSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s ease-in'
                         }}>
                             <div style={{ display: 'flex', gap: 3 * scale }}>
                                 {Array(2).fill(0).map((_, i) => {
@@ -8980,7 +9007,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div ref={playerLeaderRef} style={{
                         position: 'absolute', bottom: -20 * scale, left: '50%', transform: 'translateX(-50%)', // Adjusted translateY
                         width: LEADER_SIZE * scale, height: LEADER_SIZE * scale, borderRadius: '50%',
-                        zIndex: 200
+                        zIndex: 200,
                     }}>
                         <div
                             onMouseDown={handleLeaderMouseDown}
@@ -9029,7 +9056,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             width: 55 * scale, height: 55 * scale, background: 'radial-gradient(circle at 30% 30%, #feb2b2, #c53030)', borderRadius: '50%',
                             border: `${Math.max(2, 3 * scale)}px solid #fff`, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: `${1.2 * scale}rem`, fontWeight: 900, color: 'white', textShadow: '0 2px 2px rgba(0,0,0,0.5)',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.4)', zIndex: 10,
+                            opacity: leaderUiFadeIn ? 1 : 0, transition: 'opacity 0.3s ease-in'
                         }}>{player.hp}</div>
 
                         {/* Player EP - Circular Frame */}
@@ -9038,8 +9066,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: canEvolveUI ? 'rgba(255,235,100,0.2)' : 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: canEvolveUI ? 'grab' : 'default', zIndex: 10,
-                            opacity: isEvolveUnlocked ? 1 : 0.5, filter: isEvolveUnlocked ? 'none' : 'grayscale(0.8)',
-                            transition: 'opacity 0.3s, filter 0.3s, background 0.3s',
+                            opacity: leaderUiFadeIn ? (isEvolveUnlocked ? 1 : 0.5) : 0,
+                            filter: isEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s ease-in, filter 0.3s, background 0.3s',
                             boxShadow: canEvolveUI ? '0 0 12px #ffd700, 0 0 25px rgba(255,215,0,0.5)' : 'none',
                             animation: canEvolveUI ? 'epPulse 1.5s ease-in-out infinite' : 'none'
                         }}>
@@ -9070,8 +9099,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             width: 45 * scale, height: 45 * scale, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)',
                             background: canSuperEvolveUI ? 'rgba(200,160,255,0.2)' : 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             zIndex: 10, cursor: canSuperEvolveUI ? 'grab' : 'default',
-                            opacity: isSuperEvolveUnlocked ? 1 : 0.5, filter: isSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)',
-                            transition: 'opacity 0.3s, filter 0.3s, background 0.3s',
+                            opacity: leaderUiFadeIn ? (isSuperEvolveUnlocked ? 1 : 0.5) : 0,
+                            filter: isSuperEvolveUnlocked ? 'none' : 'grayscale(0.8)',
+                            transition: 'opacity 0.3s ease-in, filter 0.3s, background 0.3s',
                             boxShadow: canSuperEvolveUI ? '0 0 12px #b794f4, 0 0 25px rgba(159,122,234,0.5)' : 'none',
                             animation: canSuperEvolveUI ? 'sepPulse 1.5s ease-in-out infinite' : 'none'
                         }}>
@@ -10205,6 +10235,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             useSep={evolveAnimation.useSep}
                             playSE={playSE}
                             scale={scale} // Pass scale
+                            isLightMode={isLightMode} // 4K軽量モード
                         />
                     )
                 }
