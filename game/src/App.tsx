@@ -131,6 +131,11 @@ function App() {
     const [galleryCardId, setGalleryCardId] = useState<string | null>(null);
     const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
+    // Home card state (persisted to localStorage)
+    const [_homeCardId, setHomeCardId] = useState<string | null>(() => {
+        return localStorage.getItem('homeCardId');
+    });
+
     // メールアドレスからユーザーIDを抽出
     const extractUserId = (email: string | null): string | null => {
         if (!email) return null;
@@ -390,6 +395,12 @@ function App() {
         setCurrentScreen('GALLERY_CARD_DETAIL');
     }, []);
 
+    // ホームカード設定ハンドラー
+    const handleSetHomeCard = useCallback((cardId: string) => {
+        setHomeCardId(cardId);
+        localStorage.setItem('homeCardId', cardId);
+    }, []);
+
     // アカウント関連のハンドラー
     const handleNavigateToRegister = useCallback(() => {
         setCurrentScreen('REGISTER');
@@ -604,6 +615,7 @@ function App() {
                     cardId={galleryCardId}
                     onOpenRelatedCard={handleGalleryRelatedCardOpen}
                     onBack={backFromGalleryCardDetail}
+                    onSetHomeCard={handleSetHomeCard}
                 />
             )}
             {currentScreen === 'GALLERY_RELATED_CARD' && galleryCardId && (

@@ -17,15 +17,18 @@ interface GalleryCardDetailScreenProps {
     cardId: string;
     onOpenRelatedCard: (cardId: string) => void;
     onBack: () => void;
+    onSetHomeCard?: (cardId: string) => void; // ホームカード設定用
 }
 
 export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = ({
     cardId,
     onOpenRelatedCard,
-    onBack
+    onBack,
+    onSetHomeCard
 }) => {
     // Responsive scaling
     const [scale, setScale] = useState(1);
+    const [isSettingHome, setIsSettingHome] = useState(false);
 
     useEffect(() => {
         const updateScale = () => {
@@ -71,12 +74,21 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
         : null;
 
     // イラストサイズ
-    const cardImageWidth = 250 * scale;
-    const cardImageHeight = 350 * scale;
-    const imageGap = 1.5 * scale;
+    const cardImageWidth = 200 * scale;
+    const cardImageHeight = 280 * scale;
+    const imageGap = 1 * scale;
 
     // グラデーション背景
     const gradientBg = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%)';
+
+    // ホームカード設定ハンドラー
+    const handleSetHomeCard = () => {
+        if (onSetHomeCard) {
+            onSetHomeCard(cardId);
+            setIsSettingHome(true);
+            setTimeout(() => setIsSettingHome(false), 1500);
+        }
+    };
 
     return (
         <div style={{
@@ -86,26 +98,24 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
             background: gradientBg,
             color: 'white',
             fontFamily: 'sans-serif',
-            overflow: 'auto'
+            overflow: 'auto',
+            paddingTop: `${20 * scale}px`
         }}>
-            {/* 戻るボタン（左上固定） */}
+            {/* 戻るボタン（左上、コンパクト化） */}
             <div style={{
-                position: 'sticky',
-                top: 0,
-                left: 0,
-                padding: `${20 * scale}px`,
-                zIndex: 100,
-                background: 'rgba(0, 0, 0, 0.5)',
-                backdropFilter: 'blur(10px)'
+                position: 'absolute',
+                top: `${15 * scale}px`,
+                left: `${15 * scale}px`,
+                zIndex: 100
             }}>
                 <button
                     onClick={onBack}
                     style={{
                         background: 'rgba(255, 255, 255, 0.1)',
-                        padding: `${10 * scale}px ${20 * scale}px`,
-                        fontSize: `${1 * scale}rem`,
+                        padding: `${8 * scale}px ${16 * scale}px`,
+                        fontSize: `${0.9 * scale}rem`,
                         border: '1px solid rgba(255, 255, 255, 0.3)',
-                        borderRadius: `${8 * scale}px`,
+                        borderRadius: `${6 * scale}px`,
                         color: 'white',
                         cursor: 'pointer',
                         fontFamily: 'sans-serif',
@@ -118,86 +128,90 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                 </button>
             </div>
 
-            {/* メインコンテンツ: 左右レイアウト */}
+            {/* メインコンテンツ: 左右レイアウト（イラスト優先） */}
             <div style={{
                 display: 'flex',
-                gap: `${3 * scale}rem`,
-                padding: `${30 * scale}px`,
+                gap: `${2 * scale}rem`,
+                padding: `${20 * scale}px ${30 * scale}px`,
                 flex: 1,
                 justifyContent: 'center',
                 alignItems: 'flex-start',
-                maxWidth: `${1100 * scale}px`,
+                maxWidth: `${1200 * scale}px`,
                 width: '100%',
                 margin: '0 auto'
             }}>
-                {/* 左側: イラスト表示エリア */}
+                {/* 左側: イラスト表示エリア（横2列配置） */}
                 <div style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
                     gap: `${imageGap}rem`,
                     flex: '0 0 auto'
                 }}>
                     {card.type === 'FOLLOWER' ? (
                         <>
                             {/* 通常イラスト */}
-                            <div style={{
-                                width: cardImageWidth,
-                                height: cardImageHeight,
-                                border: '2px solid rgba(255, 255, 255, 0.3)',
-                                borderRadius: `${12 * scale}px`,
-                                overflow: 'hidden',
-                                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
-                                background: 'rgba(0, 0, 0, 0.3)'
-                            }}>
-                                <img
-                                    src={normalImageUrl}
-                                    alt={`${card.name} 通常`}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover'
-                                    }}
-                                />
-                            </div>
-                            <div style={{
-                                fontSize: `${0.8 * scale}rem`,
-                                color: '#aaa',
-                                textAlign: 'center'
-                            }}>
-                                通常
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${0.5 * scale}rem` }}>
+                                <div style={{
+                                    width: cardImageWidth,
+                                    height: cardImageHeight,
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: `${12 * scale}px`,
+                                    overflow: 'hidden',
+                                    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+                                    background: 'rgba(0, 0, 0, 0.3)'
+                                }}>
+                                    <img
+                                        src={normalImageUrl}
+                                        alt={`${card.name} 通常`}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{
+                                    fontSize: `${0.75 * scale}rem`,
+                                    color: '#aaa',
+                                    textAlign: 'center'
+                                }}>
+                                    通常
+                                </div>
                             </div>
                             {/* 進化後イラスト */}
-                            <div style={{
-                                width: cardImageWidth,
-                                height: cardImageHeight,
-                                border: '2px solid rgba(255, 215, 0, 0.5)',
-                                borderRadius: `${12 * scale}px`,
-                                overflow: 'hidden',
-                                boxShadow: '0 8px 30px rgba(255, 215, 0, 0.3)',
-                                background: 'rgba(0, 0, 0, 0.3)'
-                            }}>
-                                <img
-                                    src={evolvedImageUrl || normalImageUrl}
-                                    alt={`${card.name} 進化後`}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover'
-                                    }}
-                                />
-                            </div>
-                            <div style={{
-                                fontSize: `${0.8 * scale}rem`,
-                                color: '#ffd700',
-                                textAlign: 'center'
-                            }}>
-                                進化後
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${0.5 * scale}rem` }}>
+                                <div style={{
+                                    width: cardImageWidth,
+                                    height: cardImageHeight,
+                                    border: '2px solid rgba(255, 215, 0, 0.5)',
+                                    borderRadius: `${12 * scale}px`,
+                                    overflow: 'hidden',
+                                    boxShadow: '0 8px 30px rgba(255, 215, 0, 0.3)',
+                                    background: 'rgba(0, 0, 0, 0.3)'
+                                }}>
+                                    <img
+                                        src={evolvedImageUrl || normalImageUrl}
+                                        alt={`${card.name} 進化後`}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{
+                                    fontSize: `${0.75 * scale}rem`,
+                                    color: '#ffd700',
+                                    textAlign: 'center'
+                                }}>
+                                    進化後
+                                </div>
                             </div>
                         </>
                     ) : (
                         // SPELL: 1枚のみ
-                        <>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${0.5 * scale}rem` }}>
                             <div style={{
                                 width: cardImageWidth,
                                 height: cardImageHeight,
@@ -217,27 +231,28 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                                     }}
                                 />
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
 
-                {/* 右側: カード情報エリア */}
+                {/* 右側: カード情報エリア（カラム幅縮小） */}
                 <div style={{
-                    flex: 1,
+                    flex: '1 1 auto',
+                    maxWidth: `${450 * scale}px`,
                     background: 'rgba(0, 0, 0, 0.5)',
-                    padding: `${30 * scale}px`,
+                    padding: `${25 * scale}px`,
                     borderRadius: `${12 * scale}px`,
                     border: '1px solid rgba(255, 255, 255, 0.2)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: `${20 * scale}px`,
-                    minHeight: `${500 * scale}px`,
-                    maxHeight: `${600 * scale}px`,
+                    gap: `${18 * scale}px`,
+                    minHeight: `${450 * scale}px`,
+                    maxHeight: `${550 * scale}px`,
                     overflowY: 'auto'
                 }}>
                     {/* カード名 */}
                     <h2 style={{
-                        fontSize: `${2 * scale}rem`,
+                        fontSize: `${1.8 * scale}rem`,
                         fontWeight: 'bold',
                         margin: 0,
                         color: '#fff',
@@ -249,8 +264,8 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                     {/* コスト・攻撃力・体力 */}
                     <div style={{
                         display: 'flex',
-                        gap: `${25 * scale}px`,
-                        fontSize: `${1.3 * scale}rem`,
+                        gap: `${20 * scale}px`,
+                        fontSize: `${1.2 * scale}rem`,
                         flexWrap: 'wrap'
                     }}>
                         <div style={{ color: '#ffd700' }}>
@@ -277,17 +292,17 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                     {/* 効果テキスト */}
                     <div>
                         <h3 style={{
-                            fontSize: `${1.2 * scale}rem`,
-                            margin: `0 0 ${10 * scale}px 0`,
+                            fontSize: `${1.1 * scale}rem`,
+                            margin: `0 0 ${8 * scale}px 0`,
                             color: '#aaa'
                         }}>
                             効果
                         </h3>
                         <p style={{
-                            fontSize: `${1.05 * scale}rem`,
+                            fontSize: `${1 * scale}rem`,
                             margin: 0,
                             whiteSpace: 'pre-wrap',
-                            lineHeight: 1.8,
+                            lineHeight: 1.7,
                             color: '#fff'
                         }}>
                             {card.description}
@@ -303,18 +318,18 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                             }} />
                             <div>
                                 <h3 style={{
-                                    fontSize: `${1.2 * scale}rem`,
-                                    margin: `0 0 ${10 * scale}px 0`,
+                                    fontSize: `${1.1 * scale}rem`,
+                                    margin: `0 0 ${8 * scale}px 0`,
                                     color: '#aaa'
                                 }}>
                                     フレーバーテキスト
                                 </h3>
                                 <p style={{
-                                    fontSize: `${1 * scale}rem`,
+                                    fontSize: `${0.95 * scale}rem`,
                                     margin: 0,
                                     fontStyle: 'italic',
                                     opacity: 0.7,
-                                    lineHeight: 1.8,
+                                    lineHeight: 1.7,
                                     whiteSpace: 'pre-wrap',
                                     color: '#ccc'
                                 }}>
@@ -324,48 +339,82 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                         </>
                     )}
 
-                    {/* 関連カードボタン */}
-                    {card.relatedCards && card.relatedCards.length > 0 && (
-                        <>
-                            <div style={{
-                                height: '1px',
-                                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
-                            }} />
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'flex-start'
-                            }}>
-                                <button
-                                    onClick={() => onOpenRelatedCard(cardId)}
-                                    style={{
-                                        padding: `${1 * scale}rem ${2 * scale}rem`,
-                                        background: '#4ade80',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: `${8 * scale}px`,
-                                        fontSize: `${1.1 * scale}rem`,
-                                        fontWeight: 'bold',
-                                        fontFamily: 'sans-serif',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.background = '#22c55e';
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(74, 222, 128, 0.4)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.background = '#4ade80';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(74, 222, 128, 0.3)';
-                                    }}
-                                >
-                                    関連カード ({card.relatedCards.length})
-                                </button>
-                            </div>
-                        </>
-                    )}
+                    {/* ボタンエリア */}
+                    <div style={{
+                        display: 'flex',
+                        gap: `${12 * scale}px`,
+                        flexWrap: 'wrap',
+                        marginTop: `${10 * scale}px`
+                    }}>
+                        {/* ホーム画面に設定ボタン */}
+                        <button
+                            onClick={handleSetHomeCard}
+                            disabled={isSettingHome}
+                            style={{
+                                padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
+                                background: isSettingHome ? '#10b981' : '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: `${8 * scale}px`,
+                                fontSize: `${1 * scale}rem`,
+                                fontWeight: 'bold',
+                                fontFamily: 'sans-serif',
+                                cursor: isSettingHome ? 'default' : 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: isSettingHome ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(59, 130, 246, 0.3)',
+                                flex: 1
+                            }}
+                            onMouseOver={(e) => {
+                                if (!isSettingHome) {
+                                    e.currentTarget.style.background = '#2563eb';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                if (!isSettingHome) {
+                                    e.currentTarget.style.background = '#3b82f6';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
+                                }
+                            }}
+                        >
+                            {isSettingHome ? '✓ 設定しました' : 'ホーム画面に設定'}
+                        </button>
+
+                        {/* 関連カードボタン */}
+                        {card.relatedCards && card.relatedCards.length > 0 && (
+                            <button
+                                onClick={() => onOpenRelatedCard(cardId)}
+                                style={{
+                                    padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
+                                    background: '#4ade80',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: `${8 * scale}px`,
+                                    fontSize: `${1 * scale}rem`,
+                                    fontWeight: 'bold',
+                                    fontFamily: 'sans-serif',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)',
+                                    flex: 1
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.background = '#22c55e';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(74, 222, 128, 0.4)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.background = '#4ade80';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(74, 222, 128, 0.3)';
+                                }}
+                            >
+                                関連カード ({card.relatedCards.length})
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

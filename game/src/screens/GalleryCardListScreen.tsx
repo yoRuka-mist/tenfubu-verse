@@ -183,19 +183,19 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                 alignItems: 'flex-start',
                 justifyContent: 'center'
             }}>
-                {/* 左側: リーダー表示 */}
+                {/* 左側: リーダー表示（左右にボタン配置） */}
                 <div style={{
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    gap: `${1 * scale}rem`
+                    gap: `${0.8 * scale}rem`
                 }}>
                     {/* 前のクラスボタン */}
                     <button
                         onClick={handlePrevClass}
                         style={{
-                            width: `${50 * scale}px`,
-                            height: `${50 * scale}px`,
+                            width: `${45 * scale}px`,
+                            height: `${45 * scale}px`,
                             background: 'rgba(0, 0, 0, 0.5)',
                             border: `2px solid ${classColor.primary}`,
                             borderRadius: '50%',
@@ -268,8 +268,8 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                     <button
                         onClick={handleNextClass}
                         style={{
-                            width: `${50 * scale}px`,
-                            height: `${50 * scale}px`,
+                            width: `${45 * scale}px`,
+                            height: `${45 * scale}px`,
                             background: 'rgba(0, 0, 0, 0.5)',
                             border: `2px solid ${classColor.primary}`,
                             borderRadius: '50%',

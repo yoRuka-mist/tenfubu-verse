@@ -56,7 +56,9 @@ export const GalleryClassSelectScreen: React.FC<GalleryClassSelectScreenProps> =
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            background: '#1a1a2e',
+            background: 'linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 50%, rgba(15, 52, 96, 0.9) 100%)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
             color: 'white',
             position: 'relative'
         }}>
