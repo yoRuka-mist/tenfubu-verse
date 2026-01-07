@@ -131,15 +131,17 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'flex-start',
             background: classColor.gradient,
             color: 'white',
             position: 'relative',
-            paddingBottom: `${40 * scale}px`
+            paddingTop: `${40 * scale}px`,
+            paddingBottom: `${120 * scale}px` // タブ分のスペース確保
         }}>
             {/* タイトル */}
             <h2 style={{
                 fontSize: `${titleSize}rem`,
-                marginTop: `${80 * scale}px`,
+                marginTop: `${20 * scale}px`,
                 marginBottom: `${20 * scale}px`,
                 fontFamily: 'sans-serif',
                 color: classColor.primary,

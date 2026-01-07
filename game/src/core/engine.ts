@@ -41,6 +41,7 @@ export const MOCK_CARDS: Card[] = [
         description: '「茶トラ猫の日向ぼっこ」「サバトラ猫の散歩」「キジトラ猫のごはん」を1枚ずつ手札に加える。',
         flavorText: 'ホカホカ～パンチ！！',
         imageUrl: '/cards/chatora_three_cats.png',
+        relatedCards: ['TOKEN_CHATORA', 'TOKEN_SABATORA', 'TOKEN_KIJITORA'],
         triggers: [{
             trigger: 'FANFARE', effects: [
                 { type: 'GENERATE_CARD', targetCardId: 'TOKEN_CHATORA' },
@@ -140,6 +141,7 @@ export const MOCK_CARDS: Card[] = [
         flavorText: 'ﾊﾑﾁｭﾜｧｰﾝ……ｵｩｲｪ……\nｳｫｳｳｫｳﾊﾑﾁｬｧﾝ……ｼｬﾌﾞｯ……\nﾊﾑﾊﾑﾊﾑﾁｬﾝ……ﾍﾞｲﾍﾞﾍﾞｲﾍﾞ……',
         imageUrl: '/cards/tsubumaru.png',
         evolvedImageUrl: '/cards/tsubumaru_2.png',
+        relatedCards: ['s_resignation_proxy'],
         passiveAbilities: ['WARD'],
         attackEffectType: 'SLASH',
         triggers: [
@@ -203,6 +205,7 @@ export const MOCK_CARDS: Card[] = [
         flavorText: '先日、｢私が将来農家やってる未来が想像できない｣と言われ\n彼女にフラれました。\n\n今年の白菜も美味しそうですね',
         imageUrl: '/cards/yunagi.png',
         evolvedImageUrl: '/cards/yunagi_2.png',
+        relatedCards: ['TOKEN_OOMORI_RICE'],
         attackEffectType: 'SLASH',
         triggers: [
             {
@@ -247,7 +250,7 @@ export const MOCK_CARDS: Card[] = [
     },
 
     // Ward Variants for Azya Summon
-    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護]\nファンファーレ：「米」1枚を手札に加える。', imageUrl: '/cards/yunagi.png', evolvedImageUrl: '/cards/yunagi_2.png', passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
+    { id: 'c_yunagi_ward', name: 'ゆうなぎ', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護]\nファンファーレ：「米」1枚を手札に加える。', imageUrl: '/cards/yunagi.png', evolvedImageUrl: '/cards/yunagi_2.png', relatedCards: ['TOKEN_RICE'], passiveAbilities: ['WARD'], triggers: [{ trigger: 'FANFARE', effects: [{ type: 'GENERATE_CARD', targetCardId: 'TOKEN_RICE' }] }] },
     {
         id: 'c_nayuta_ward', name: 'なゆた', cost: 4, type: 'FOLLOWER',
         attack: 3, health: 3,
@@ -547,6 +550,7 @@ export const MOCK_CARDS: Card[] = [
         flavorText: '有罪w',
         imageUrl: '/cards/sara.png',
         evolvedImageUrl: '/cards/sara_2.png',
+        relatedCards: ['TOKEN_SORRY_THE_END'],
         attackEffectType: 'SHOT',
         triggers: [
             {
@@ -795,6 +799,7 @@ export const MOCK_CARDS: Card[] = [
         flavorText: 'ポテチは週7回まで',
         imageUrl: '/cards/cyoriena.png',
         evolvedImageUrl: '/cards/cyoriena_2.png',
+        relatedCards: ['TOKEN_TSUBASA'],
         tags: ['Token'],
         passiveAbilities: ['WARD', 'BARRIER'],
         attackEffectType: 'RAY',

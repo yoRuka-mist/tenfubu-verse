@@ -231,14 +231,24 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                 width: '100%',
                 margin: '0 auto'
             }}>
-                {/* 左側: イラスト表示エリア（横2列配置） */}
+                {/* 左側: イラスト表示エリア + ボタン（固定幅） */}
                 <div style={{
                     display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    gap: `${imageGap}rem`,
-                    flex: '0 0 auto'
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: `${1 * scale}rem`,
+                    flex: '0 0 auto',
+                    width: `${(cardImageWidth * 2 + imageGap * 16)}px` // 固定幅（2枚分）
                 }}>
+                    {/* イラスト表示エリア（横2列配置または中央配置） */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        justifyContent: card.type === 'SPELL' ? 'center' : 'flex-start',
+                        gap: `${imageGap}rem`,
+                        width: '100%'
+                    }}>
                     {card.type === 'FOLLOWER' ? (
                         <>
                             {/* 通常イラスト */}
@@ -324,12 +334,93 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                             </div>
                         </div>
                     )}
+                    </div>
+
+                    {/* ボタンエリア（イラストの下） */}
+                    <div style={{
+                        display: 'flex',
+                        gap: `${12 * scale}px`,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                        justifyContent: 'center'
+                    }}>
+                        {/* ホーム画面に設定ボタン */}
+                        <button
+                            onClick={handleSetHomeCard}
+                            disabled={isSettingHome}
+                            style={{
+                                padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
+                                background: isSettingHome ? '#10b981' : '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: `${8 * scale}px`,
+                                fontSize: `${1 * scale}rem`,
+                                fontWeight: 'bold',
+                                fontFamily: 'sans-serif',
+                                cursor: isSettingHome ? 'default' : 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: isSettingHome ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(59, 130, 246, 0.3)',
+                                flex: 1,
+                                minWidth: `${150 * scale}px`
+                            }}
+                            onMouseOver={(e) => {
+                                if (!isSettingHome) {
+                                    e.currentTarget.style.background = '#2563eb';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                if (!isSettingHome) {
+                                    e.currentTarget.style.background = '#3b82f6';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
+                                }
+                            }}
+                        >
+                            {isSettingHome ? '✓ 設定しました' : 'ホーム画面に設定'}
+                        </button>
+
+                        {/* 関連カードボタン */}
+                        {card.relatedCards && card.relatedCards.length > 0 && (
+                            <button
+                                onClick={() => onOpenRelatedCard(cardId)}
+                                style={{
+                                    padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
+                                    background: '#4ade80',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: `${8 * scale}px`,
+                                    fontSize: `${1 * scale}rem`,
+                                    fontWeight: 'bold',
+                                    fontFamily: 'sans-serif',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)',
+                                    flex: 1,
+                                    minWidth: `${150 * scale}px`
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.background = '#22c55e';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(74, 222, 128, 0.4)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.background = '#4ade80';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(74, 222, 128, 0.3)';
+                                }}
+                            >
+                                関連カード ({card.relatedCards.length})
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {/* 右側: カード情報エリア（カラム幅縮小） */}
+                {/* 右側: カード情報エリア（固定幅） */}
                 <div style={{
-                    flex: '1 1 auto',
-                    maxWidth: `${450 * scale}px`,
+                    flex: '0 0 auto',
+                    width: `${450 * scale}px`,
                     background: 'rgba(0, 0, 0, 0.5)',
                     padding: `${25 * scale}px`,
                     borderRadius: `${12 * scale}px`,
@@ -429,83 +520,6 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                             </div>
                         </>
                     )}
-
-                    {/* ボタンエリア */}
-                    <div style={{
-                        display: 'flex',
-                        gap: `${12 * scale}px`,
-                        flexWrap: 'wrap',
-                        marginTop: `${10 * scale}px`
-                    }}>
-                        {/* ホーム画面に設定ボタン */}
-                        <button
-                            onClick={handleSetHomeCard}
-                            disabled={isSettingHome}
-                            style={{
-                                padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
-                                background: isSettingHome ? '#10b981' : '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: `${8 * scale}px`,
-                                fontSize: `${1 * scale}rem`,
-                                fontWeight: 'bold',
-                                fontFamily: 'sans-serif',
-                                cursor: isSettingHome ? 'default' : 'pointer',
-                                transition: 'all 0.2s',
-                                boxShadow: isSettingHome ? '0 4px 15px rgba(16, 185, 129, 0.3)' : '0 4px 15px rgba(59, 130, 246, 0.3)',
-                                flex: 1
-                            }}
-                            onMouseOver={(e) => {
-                                if (!isSettingHome) {
-                                    e.currentTarget.style.background = '#2563eb';
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
-                                }
-                            }}
-                            onMouseOut={(e) => {
-                                if (!isSettingHome) {
-                                    e.currentTarget.style.background = '#3b82f6';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(59, 130, 246, 0.3)';
-                                }
-                            }}
-                        >
-                            {isSettingHome ? '✓ 設定しました' : 'ホーム画面に設定'}
-                        </button>
-
-                        {/* 関連カードボタン */}
-                        {card.relatedCards && card.relatedCards.length > 0 && (
-                            <button
-                                onClick={() => onOpenRelatedCard(cardId)}
-                                style={{
-                                    padding: `${0.9 * scale}rem ${1.8 * scale}rem`,
-                                    background: '#4ade80',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: `${8 * scale}px`,
-                                    fontSize: `${1 * scale}rem`,
-                                    fontWeight: 'bold',
-                                    fontFamily: 'sans-serif',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)',
-                                    flex: 1
-                                }}
-                                onMouseOver={(e) => {
-                                    e.currentTarget.style.background = '#22c55e';
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(74, 222, 128, 0.4)';
-                                }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.background = '#4ade80';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(74, 222, 128, 0.3)';
-                                }}
-                            >
-                                関連カード ({card.relatedCards.length})
-                            </button>
-                        )}
-                    </div>
                 </div>
             </div>
         </div>

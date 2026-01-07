@@ -194,14 +194,23 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                     </button>
                 </div>
 
-                {/* 中央: イラスト表示エリア（横2列配置） */}
+                {/* 中央: イラスト表示エリア（横2列配置または中央配置、固定幅） */}
                 <div style={{
                     display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    gap: `${imageGap}rem`,
-                    flex: '0 0 auto'
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: `${1 * scale}rem`,
+                    flex: '0 0 auto',
+                    width: `${(cardImageWidth * 2 + imageGap * 16)}px` // 固定幅（2枚分）
                 }}>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        justifyContent: card.type === 'SPELL' ? 'center' : 'flex-start',
+                        gap: `${imageGap}rem`,
+                        width: '100%'
+                    }}>
                     {card.type === 'FOLLOWER' ? (
                         <>
                             {/* 通常イラスト */}
@@ -287,6 +296,7 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* 右矢印ボタン */}
@@ -305,10 +315,10 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                     </button>
                 </div>
 
-                {/* 右側: カード情報エリア（カラム幅縮小） */}
+                {/* 右側: カード情報エリア（固定幅） */}
                 <div style={{
-                    flex: '1 1 auto',
-                    maxWidth: `${450 * scale}px`,
+                    flex: '0 0 auto',
+                    width: `${450 * scale}px`,
                     background: 'rgba(0, 0, 0, 0.5)',
                     padding: `${25 * scale}px`,
                     borderRadius: `${12 * scale}px`,
