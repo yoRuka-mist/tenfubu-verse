@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AudioSettings, ClassType } from '../core/types';
+import { GalleryCardListScreen } from './GalleryCardListScreen';
+import { GalleryCardDetailScreen } from './GalleryCardDetailScreen';
+import { GalleryRelatedCardScreen } from './GalleryRelatedCardScreen';
+import { MOCK_CARDS } from '../core/engine';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -20,12 +24,15 @@ const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
 // メニュー項目の型
 type MenuTab = 'solo' | 'room' | 'random' | 'home' | 'ranking' | 'gallery' | 'settings';
 
+// ギャラリーのビューステート
+type GalleryView = 'class' | 'card-list' | 'card-detail' | 'related-card';
+
 interface TitleScreenProps {
     onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', roomId?: string) => void;
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
-    onGalleryClassSelect: (classType: ClassType) => void; // ギャラリークラス選択ハンドラー
+    onSetHomeCard?: (cardId: string) => void; // ホームカード設定用
     isAnonymous?: boolean; // ユーザーが匿名かどうか
     userId?: string | null; // ユーザーID
     onNavigateToRegister?: () => void; // アカウント登録画面への遷移
@@ -39,7 +46,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     audioSettings,
     onAudioSettingsChange,
     playerId: _playerId,
-    onGalleryClassSelect,
+    onSetHomeCard,
     isAnonymous = true,
     userId = null,
     onNavigateToRegister,
@@ -61,6 +68,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+    // ギャラリーの状態
+    const [galleryView, setGalleryView] = useState<GalleryView>('class');
+    const [selectedGalleryClass, setSelectedGalleryClass] = useState<ClassType | null>(null);
+    const [selectedGalleryCard, setSelectedGalleryCard] = useState<string | null>(null);
+    const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
     // お気に入りカードの状態
     const [homeCardId] = useState<string | null>(() => {
@@ -136,6 +149,46 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const handleLogoutCancel = () => {
         setShowLogoutConfirm(false);
     };
+
+    // ギャラリー関連のハンドラー
+    const handleGalleryClassSelect = (classType: ClassType) => {
+        setSelectedGalleryClass(classType);
+        setGalleryView('card-list');
+    };
+
+    const handleGalleryCardSelect = (cardId: string) => {
+        setSelectedGalleryCard(cardId);
+        setGalleryView('card-detail');
+    };
+
+    const handleGalleryRelatedCardOpen = (parentCardId: string) => {
+        const parentCard = MOCK_CARDS.find(c => c.id === parentCardId);
+        if (parentCard && parentCard.relatedCards && parentCard.relatedCards.length > 0) {
+            setSelectedGalleryCard(parentCardId);
+            setGalleryRelatedCardIds(parentCard.relatedCards);
+            setGalleryView('related-card');
+        }
+    };
+
+    const handleBackFromCardDetail = () => {
+        setSelectedGalleryCard(null);
+        setGalleryView('card-list');
+    };
+
+    const handleBackFromRelatedCard = () => {
+        setGalleryRelatedCardIds([]);
+        setGalleryView('card-detail');
+    };
+
+    // ギャラリータブが変更された時にリセット
+    useEffect(() => {
+        if (activeTab !== 'gallery') {
+            setGalleryView('class');
+            setSelectedGalleryClass(null);
+            setSelectedGalleryCard(null);
+            setGalleryRelatedCardIds([]);
+        }
+    }, [activeTab]);
 
     // Scaled sizes
     const titleFontSize = 9 * scale;
@@ -744,21 +797,23 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
                     {/* ギャラリー */}
                     {activeTab === 'gallery' && (
-                        <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
-                                ギャラリー - クラス選択
-                            </h2>
+                        <>
+                            {galleryView === 'class' && (
+                                <div style={{ textAlign: 'center' }}>
+                                    <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
+                                        ギャラリー - クラス選択
+                                    </h2>
 
-                            {/* Class Cards */}
-                            <div style={{
-                                display: 'flex',
-                                gap: `${1.2 * scale}rem`,
-                                justifyContent: 'center',
-                                marginBottom: `${1 * scale}rem`
-                            }}>
-                                {/* Senka Class */}
-                                <div
-                                    onClick={() => onGalleryClassSelect('SENKA')}
+                                    {/* Class Cards */}
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: `${1.2 * scale}rem`,
+                                        justifyContent: 'center',
+                                        marginBottom: `${1 * scale}rem`
+                                    }}>
+                                        {/* Senka Class */}
+                                        <div
+                                            onClick={() => handleGalleryClassSelect('SENKA')}
                                     style={{
                                         width: 200 * scale,
                                         height: 280 * scale,
@@ -815,7 +870,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
                                 {/* Aja Class */}
                                 <div
-                                    onClick={() => onGalleryClassSelect('AJA')}
+                                    onClick={() => handleGalleryClassSelect('AJA')}
                                     style={{
                                         width: 200 * scale,
                                         height: 280 * scale,
@@ -873,7 +928,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
                                 {/* Yoruka Class */}
                                 <div
-                                    onClick={() => onGalleryClassSelect('YORUKA')}
+                                    onClick={() => handleGalleryClassSelect('YORUKA')}
                                     style={{
                                         width: 200 * scale,
                                         height: 280 * scale,
@@ -928,7 +983,60 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                                </div>
+                            )}
+
+                            {galleryView === 'card-list' && selectedGalleryClass && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    overflow: 'auto'
+                                }}>
+                                    <GalleryCardListScreen
+                                        classType={selectedGalleryClass}
+                                        onSelectCard={handleGalleryCardSelect}
+                                    />
+                                </div>
+                            )}
+
+                            {galleryView === 'card-detail' && selectedGalleryCard && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    overflow: 'auto'
+                                }}>
+                                    <GalleryCardDetailScreen
+                                        cardId={selectedGalleryCard}
+                                        onOpenRelatedCard={handleGalleryRelatedCardOpen}
+                                        onBack={handleBackFromCardDetail}
+                                        onSetHomeCard={onSetHomeCard}
+                                    />
+                                </div>
+                            )}
+
+                            {galleryView === 'related-card' && selectedGalleryCard && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    overflow: 'auto'
+                                }}>
+                                    <GalleryRelatedCardScreen
+                                        parentCardId={selectedGalleryCard}
+                                        relatedCardIds={galleryRelatedCardIds}
+                                        onBack={handleBackFromRelatedCard}
+                                    />
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {/* 設定 */}

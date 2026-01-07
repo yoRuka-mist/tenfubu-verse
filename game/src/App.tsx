@@ -4,9 +4,6 @@ import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MatchmakingScreen } from './screens/MatchmakingScreen';
 import { GameScreen } from './screens/GameScreen';
-import { GalleryCardListScreen } from './screens/GalleryCardListScreen';
-import { GalleryCardDetailScreen } from './screens/GalleryCardDetailScreen';
-import { GalleryRelatedCardScreen } from './screens/GalleryRelatedCardScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
@@ -14,7 +11,6 @@ import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
 import { signInAnonymousUser, onAuthStateChange, logOut } from './firebase/auth';
 import { getOrCreatePlayerData } from './firebase/playerData';
-import { MOCK_CARDS } from './core/engine';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -55,7 +51,6 @@ const loadAudioSettings = (): AudioSettings => {
 };
 
 type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME' |
-                'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD' |
                 'REGISTER' | 'LOGIN' | 'PROFILE';
 type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
 
@@ -124,11 +119,6 @@ function App() {
 
     // Audio settings (shared across screens)
     const [audioSettings, setAudioSettings] = useState<AudioSettings>(loadAudioSettings);
-
-    // Gallery flow states
-    const [galleryClassType, setGalleryClassType] = useState<ClassType | null>(null);
-    const [galleryCardId, setGalleryCardId] = useState<string | null>(null);
-    const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
     // Home card state (persisted to localStorage)
     const [_homeCardId, setHomeCardId] = useState<string | null>(() => {
@@ -348,41 +338,6 @@ function App() {
         setOpponentClass(undefined);
         setOpponentPlayerId(undefined);
         setOpponentRating(undefined);
-        // Reset gallery state
-        setGalleryClassType(null);
-        setGalleryCardId(null);
-        setGalleryRelatedCardIds([]);
-    }, []);
-
-    // Gallery handlers
-    const handleGalleryClassSelect = useCallback((cls: ClassType) => {
-        setGalleryClassType(cls);
-        setCurrentScreen('GALLERY_CARD_LIST');
-    }, []);
-
-    const handleGalleryCardSelect = useCallback((cardId: string) => {
-        setGalleryCardId(cardId);
-        setCurrentScreen('GALLERY_CARD_DETAIL');
-    }, []);
-
-    const handleGalleryRelatedCardOpen = useCallback((parentCardId: string) => {
-        // MOCK_CARDSから親カードを取得
-        const parentCard = MOCK_CARDS.find(c => c.id === parentCardId);
-        if (parentCard && parentCard.relatedCards && parentCard.relatedCards.length > 0) {
-            setGalleryCardId(parentCardId);
-            setGalleryRelatedCardIds(parentCard.relatedCards);
-            setCurrentScreen('GALLERY_RELATED_CARD');
-        }
-    }, []);
-
-    const backFromGalleryCardDetail = useCallback(() => {
-        setGalleryCardId(null);
-        setCurrentScreen('GALLERY_CARD_LIST');
-    }, []);
-
-    const backFromGalleryRelatedCard = useCallback(() => {
-        setGalleryRelatedCardIds([]);
-        setCurrentScreen('GALLERY_CARD_DETAIL');
     }, []);
 
     // ホームカード設定ハンドラー
@@ -520,7 +475,7 @@ function App() {
                     audioSettings={audioSettings}
                     onAudioSettingsChange={updateAudioSettings}
                     playerId={playerId}
-                    onGalleryClassSelect={handleGalleryClassSelect}
+                    onSetHomeCard={handleSetHomeCard}
                     isAnonymous={isAnonymous}
                     userId={userId}
                     onNavigateToRegister={handleNavigateToRegister}
@@ -585,27 +540,6 @@ function App() {
                     playerId={playerId}
                     opponentPlayerId={opponentPlayerId}
                     opponentRating={opponentRating}
-                />
-            )}
-            {currentScreen === 'GALLERY_CARD_LIST' && galleryClassType && (
-                <GalleryCardListScreen
-                    classType={galleryClassType}
-                    onSelectCard={handleGalleryCardSelect}
-                />
-            )}
-            {currentScreen === 'GALLERY_CARD_DETAIL' && galleryCardId && (
-                <GalleryCardDetailScreen
-                    cardId={galleryCardId}
-                    onOpenRelatedCard={handleGalleryRelatedCardOpen}
-                    onBack={backFromGalleryCardDetail}
-                    onSetHomeCard={handleSetHomeCard}
-                />
-            )}
-            {currentScreen === 'GALLERY_RELATED_CARD' && galleryCardId && (
-                <GalleryRelatedCardScreen
-                    parentCardId={galleryCardId}
-                    relatedCardIds={galleryRelatedCardIds}
-                    onBack={backFromGalleryRelatedCard}
                 />
             )}
             {currentScreen === 'REGISTER' && (
