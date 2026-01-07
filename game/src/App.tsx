@@ -417,7 +417,7 @@ function App() {
     }
 
     return (
-        <div className="app-container">
+        <div className="app-container" style={{ userSelect: 'none' }}>
             {/* Portrait mode overlay - asks user to rotate device */}
             {isPortrait && (
                 <div style={{

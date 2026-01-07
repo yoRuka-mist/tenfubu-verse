@@ -688,6 +688,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                             borderRadius: 8 * scale,
                                             color: 'white',
                                             textAlign: 'center',
+                                            userSelect: 'text',
                                         }}
                                     />
                                     <div style={{ display: 'flex', gap: `${0.5 * scale}rem` }}>
