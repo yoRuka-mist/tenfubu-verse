@@ -121,7 +121,7 @@ function App() {
     const [audioSettings, setAudioSettings] = useState<AudioSettings>(loadAudioSettings);
 
     // Home card state (persisted to localStorage)
-    const [_homeCardId, setHomeCardId] = useState<string | null>(() => {
+    const [homeCardId, setHomeCardId] = useState<string | null>(() => {
         return localStorage.getItem('homeCardId');
     });
 
@@ -476,6 +476,7 @@ function App() {
                     onAudioSettingsChange={updateAudioSettings}
                     playerId={playerId}
                     onSetHomeCard={handleSetHomeCard}
+                    homeCardId={homeCardId}
                     isAnonymous={isAnonymous}
                     userId={userId}
                     onNavigateToRegister={handleNavigateToRegister}

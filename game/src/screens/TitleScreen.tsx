@@ -33,6 +33,7 @@ interface TitleScreenProps {
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
     onSetHomeCard?: (cardId: string) => void; // ホームカード設定用
+    homeCardId?: string | null; // ホームカードID
     isAnonymous?: boolean; // ユーザーが匿名かどうか
     userId?: string | null; // ユーザーID
     onNavigateToRegister?: () => void; // アカウント登録画面への遷移
@@ -47,6 +48,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     onAudioSettingsChange,
     playerId: _playerId,
     onSetHomeCard,
+    homeCardId = null,
     isAnonymous = true,
     userId = null,
     onNavigateToRegister,
@@ -75,14 +77,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const [selectedGalleryCard, setSelectedGalleryCard] = useState<string | null>(null);
     const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
-    // お気に入りカードの状態
-    const [homeCardId] = useState<string | null>(() => {
-        return localStorage.getItem('homeCardId');
-    });
+    // カード回転の状態
     const [cardRotation, setCardRotation] = useState(25); // Y軸回転角度
     const [isDragging, setIsDragging] = useState(false);
     const dragStartX = useRef(0);
     const dragStartRotation = useRef(0);
+    const lastMoveTime = useRef(0);
+    const lastMoveX = useRef(0);
+    const velocityRef = useRef(0);
+    const inertiaAnimationRef = useRef<number | null>(null);
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -107,23 +110,80 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         }, 600);
     };
 
+    // 角度を0~360度の範囲に正規化
+    const normalizeRotation = (rotation: number): number => {
+        const normalized = rotation % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    };
+
+    // 慣性アニメーションをクリア
+    const clearInertiaAnimation = () => {
+        if (inertiaAnimationRef.current !== null) {
+            cancelAnimationFrame(inertiaAnimationRef.current);
+            inertiaAnimationRef.current = null;
+        }
+    };
+
     // カードドラッグ処理
     const handleMouseDown = (e: React.MouseEvent) => {
+        clearInertiaAnimation();
         setIsDragging(true);
         dragStartX.current = e.clientX;
         dragStartRotation.current = cardRotation;
+        lastMoveTime.current = Date.now();
+        lastMoveX.current = e.clientX;
+        velocityRef.current = 0;
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isDragging) return;
+
+        const currentTime = Date.now();
+        const deltaTime = currentTime - lastMoveTime.current;
+        const deltaX = e.clientX - lastMoveX.current;
+
+        // 速度を計算（ピクセル/ミリ秒）
+        if (deltaTime > 0) {
+            velocityRef.current = deltaX / deltaTime;
+        }
+
         const delta = e.clientX - dragStartX.current;
         const newRotation = dragStartRotation.current + delta * 0.5;
-        setCardRotation(Math.max(-180, Math.min(180, newRotation)));
+        setCardRotation(normalizeRotation(newRotation));
+
+        lastMoveTime.current = currentTime;
+        lastMoveX.current = e.clientX;
     };
 
     const handleMouseUp = () => {
         setIsDragging(false);
+
+        // 慣性アニメーション開始
+        let currentVelocity = velocityRef.current * 0.5; // 回転速度に変換
+        const friction = 0.95; // 摩擦係数
+        const minVelocity = 0.1; // 最小速度閾値
+
+        const animate = () => {
+            if (Math.abs(currentVelocity) > minVelocity) {
+                setCardRotation(prev => normalizeRotation(prev + currentVelocity));
+                currentVelocity *= friction;
+                inertiaAnimationRef.current = requestAnimationFrame(animate);
+            } else {
+                inertiaAnimationRef.current = null;
+            }
+        };
+
+        if (Math.abs(currentVelocity) > minVelocity) {
+            animate();
+        }
     };
+
+    // コンポーネントアンマウント時にアニメーションをクリア
+    useEffect(() => {
+        return () => {
+            clearInertiaAnimation();
+        };
+    }, []);
 
     // ランダムマッチタイプ選択
     const handleMatchTypeSelect = (matchType: 'casual' | 'ranked') => {
