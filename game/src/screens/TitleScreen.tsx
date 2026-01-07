@@ -465,7 +465,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             backfaceVisibility: 'hidden',
                             borderRadius: 12 * scale,
                             background: homeCardId
-                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/contain no-repeat`
+                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`
                                 : 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
                             border: `3px solid ${homeCardId ? '#e94560' : '#4a5568'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
@@ -493,9 +493,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             transform: 'rotateY(180deg)',
                             borderRadius: 12 * scale,
                             background: homeCardId && evolvedImageUrl
-                                ? `#2d3748 url(${getAssetUrl(evolvedImageUrl)}) center/contain no-repeat`
+                                ? `#2d3748 url(${getAssetUrl(evolvedImageUrl)}) center/cover no-repeat`
                                 : homeCardId
-                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/contain no-repeat`
+                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`
                                 : `url(${getAssetUrl('/cards/sleeve_default.png')}) center/cover no-repeat`,
                             border: `3px solid ${homeCardId ? '#a855f7' : '#4a5568'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
