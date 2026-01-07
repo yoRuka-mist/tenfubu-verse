@@ -4255,31 +4255,35 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setLeaderUiFadeIn(true); // リーダーUIをフェードイン
         setCoinTossResult(isFirstPlayer ? 'FIRST' : 'SECOND');
 
-        // If going second, swap turn order
-        if (!isFirstPlayer) {
-            const newState = {
-                ...gameState,
-                activePlayerId: 'p2',
-                firstPlayerId: 'p2',
-                players: {
-                    p1: {
-                        ...gameState.players.p1,
-                        maxPp: 0,
-                        pp: 0
-                    },
-                    p2: {
-                        ...gameState.players.p2,
-                        maxPp: 1,
-                        pp: 1
-                    }
+        // Determine turn order based on isFirstPlayer
+        const myPlayerId = currentPlayerId;
+        const opponentPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+        const firstPlayerId = isFirstPlayer ? myPlayerId : opponentPlayerId;
+        const secondPlayerId = isFirstPlayer ? opponentPlayerId : myPlayerId;
+
+        // Always update gameState to ensure correct turn order
+        const newState = {
+            ...gameState,
+            activePlayerId: firstPlayerId,
+            firstPlayerId: firstPlayerId,
+            players: {
+                [firstPlayerId]: {
+                    ...gameState.players[firstPlayerId],
+                    maxPp: 1,
+                    pp: 1
                 },
-                logs: [`ターン 1 - ${gameState.players.p2.name} のターン`]
-            };
-            dispatch({ type: 'SYNC_STATE', payload: newState });
-        }
+                [secondPlayerId]: {
+                    ...gameState.players[secondPlayerId],
+                    maxPp: 0,
+                    pp: 0
+                }
+            },
+            logs: [`ターン 1 - ${gameState.players[firstPlayerId].name} のターン`]
+        };
+        dispatch({ type: 'SYNC_STATE', payload: newState });
 
         setCoinTossPhase('DONE');
-    }, [gameState, isFirstPlayer]);
+    }, [gameState, isFirstPlayer, currentPlayerId]);
 
     // Coin Toss and Game Start Animation Sequence - DISABLED (replaced by BattleIntro)
     // JOIN mode: Skip coin toss, wait for INIT_GAME from HOST
