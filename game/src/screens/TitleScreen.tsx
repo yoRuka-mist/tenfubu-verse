@@ -85,12 +85,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     // カード回転の状態
     const [cardRotation, setCardRotation] = useState(25); // Y軸回転角度
     const [isDragging, setIsDragging] = useState(false);
+    const [isAutoRotating, setIsAutoRotating] = useState(false);
     const dragStartX = useRef(0);
     const dragStartRotation = useRef(0);
     const lastMoveTime = useRef(0);
     const lastMoveX = useRef(0);
     const velocityRef = useRef(0);
     const inertiaAnimationRef = useRef<number | null>(null);
+    const autoRotationRef = useRef<number | null>(null);
+    const lastInteractionTime = useRef(Date.now());
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -129,9 +132,35 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         }
     };
 
+    // 自動回転をクリア
+    const clearAutoRotation = () => {
+        if (autoRotationRef.current !== null) {
+            cancelAnimationFrame(autoRotationRef.current);
+            autoRotationRef.current = null;
+        }
+        setIsAutoRotating(false);
+    };
+
+    // 自動回転を開始
+    const startAutoRotation = () => {
+        clearAutoRotation();
+        setIsAutoRotating(true);
+
+        const rotationSpeed = 0.2; // 回転速度（度/フレーム）
+
+        const rotate = () => {
+            setCardRotation(prev => normalizeRotation(prev + rotationSpeed));
+            autoRotationRef.current = requestAnimationFrame(rotate);
+        };
+
+        autoRotationRef.current = requestAnimationFrame(rotate);
+    };
+
     // カードドラッグ処理
     const handleMouseDown = (e: React.MouseEvent) => {
         clearInertiaAnimation();
+        clearAutoRotation();
+        lastInteractionTime.current = Date.now();
         setIsDragging(true);
         dragStartX.current = e.clientX;
         dragStartRotation.current = cardRotation;
@@ -162,6 +191,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
     const handleMouseUp = () => {
         setIsDragging(false);
+        lastInteractionTime.current = Date.now();
 
         // 慣性アニメーション開始
         let currentVelocity = velocityRef.current * 0.5; // 回転速度に変換
@@ -175,6 +205,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 inertiaAnimationRef.current = requestAnimationFrame(animate);
             } else {
                 inertiaAnimationRef.current = null;
+                lastInteractionTime.current = Date.now(); // 慣性終了時も更新
             }
         };
 
@@ -187,8 +218,23 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     useEffect(() => {
         return () => {
             clearInertiaAnimation();
+            clearAutoRotation();
         };
     }, []);
+
+    // 2秒間非アクティブ時に自動回転開始
+    useEffect(() => {
+        if (activeTab !== 'home') return;
+
+        const checkInterval = setInterval(() => {
+            const timeSinceLastInteraction = Date.now() - lastInteractionTime.current;
+            if (timeSinceLastInteraction >= 2000 && !isDragging && !inertiaAnimationRef.current && !isAutoRotating) {
+                startAutoRotation();
+            }
+        }, 100);
+
+        return () => clearInterval(checkInterval);
+    }, [activeTab, isDragging, isAutoRotating]);
 
     // ランダムマッチタイプ選択
     const handleMatchTypeSelect = (matchType: 'casual' | 'ranked') => {
@@ -307,7 +353,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     flexDirection: 'column',
                     alignItems: 'center',
                     transform: titleAnimating ? 'translateY(-100vh)' : 'translateY(0)',
-                    transition: titleAnimating ? 'transform 0.6s ease-in' : 'none',
+                    transition: titleAnimating ? 'transform 0.6s ease-out' : 'none',
                 }}>
                     <div style={{
                         fontFamily: 'Tamanegi, sans-serif',
@@ -404,22 +450,6 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 background: 'rgba(0, 0, 0, 0.5)',
                 zIndex: 1
             }} />
-
-            {/* タイトル（小さく上部に） */}
-            <div style={{
-                position: 'absolute',
-                top: 20 * scale,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontFamily: 'Tamanegi, sans-serif',
-                fontSize: `${2.5 * scale}rem`,
-                color: '#fff',
-                textShadow: '0 0 15px rgba(233, 69, 96, 0.7)',
-                letterSpacing: `${0.2 * scale}rem`,
-                zIndex: 10,
-            }}>
-                てんふぶバース
-            </div>
 
             {/* メインコンテンツエリア */}
             <div style={{
@@ -524,6 +554,79 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 </div>
                     );
                 })()}
+
+                {/* 右側: プロフィール情報エリア - ホームタブでのみ表示 */}
+                {activeTab === 'home' && (
+                    <div style={{
+                        position: 'absolute',
+                        right: 100 * scale,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: `${2 * scale}rem`,
+                        width: 350 * scale,
+                    }}>
+                        {/* 上部: プロフィール */}
+                        <div style={{
+                            background: 'rgba(0, 0, 0, 0.6)',
+                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: `${12 * scale}px`,
+                            padding: `${20 * scale}px`,
+                            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+                        }}>
+                            <h3 style={{
+                                margin: 0,
+                                marginBottom: `${10 * scale}px`,
+                                fontSize: `${1.2 * scale}rem`,
+                                color: '#fff',
+                                borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+                                paddingBottom: `${8 * scale}px`,
+                            }}>
+                                プロフィール
+                            </h3>
+                            <div style={{
+                                fontSize: `${1 * scale}rem`,
+                                color: '#e2e8f0',
+                            }}>
+                                <div style={{ marginBottom: `${8 * scale}px` }}>
+                                    <span style={{ color: '#aaa' }}>表示名:</span> {userId || 'ゲスト'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 下部: ランクとレート */}
+                        <div style={{
+                            background: 'rgba(0, 0, 0, 0.6)',
+                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: `${12 * scale}px`,
+                            padding: `${20 * scale}px`,
+                            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+                        }}>
+                            <h3 style={{
+                                margin: 0,
+                                marginBottom: `${10 * scale}px`,
+                                fontSize: `${1.2 * scale}rem`,
+                                color: '#fff',
+                                borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+                                paddingBottom: `${8 * scale}px`,
+                            }}>
+                                ランク・レート
+                            </h3>
+                            <div style={{
+                                fontSize: `${1 * scale}rem`,
+                                color: '#e2e8f0',
+                            }}>
+                                <div style={{ marginBottom: `${8 * scale}px` }}>
+                                    <span style={{ color: '#aaa' }}>ランク:</span> <span style={{ color: '#ffd700', fontWeight: 'bold' }}>BRONZE</span>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#aaa' }}>レート:</span> <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: `${1.2 * scale}rem` }}>1000</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* 中央: タブ別コンテンツ */}
                 <div style={{
