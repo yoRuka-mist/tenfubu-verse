@@ -449,8 +449,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     <div
                         onMouseDown={handleMouseDown}
                         style={{
-                            width: 250 * scale,
-                            height: 350 * scale,
+                            width: 375 * scale,
+                            height: 525 * scale,
                             transformStyle: 'preserve-3d',
                             transform: `rotateY(${cardRotation}deg)`,
                             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
@@ -465,10 +465,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             backfaceVisibility: 'hidden',
                             borderRadius: 12 * scale,
                             background: homeCardId
-                                ? `url(${getAssetUrl(normalImageUrl)})`
+                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/contain no-repeat`
                                 : 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
                             border: `3px solid ${homeCardId ? '#e94560' : '#4a5568'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
                             display: 'flex',
@@ -495,12 +493,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             transform: 'rotateY(180deg)',
                             borderRadius: 12 * scale,
                             background: homeCardId && evolvedImageUrl
-                                ? `url(${getAssetUrl(evolvedImageUrl)})`
+                                ? `#2d3748 url(${getAssetUrl(evolvedImageUrl)}) center/contain no-repeat`
                                 : homeCardId
-                                ? `url(${getAssetUrl(normalImageUrl)})`
-                                : `url(${getAssetUrl('/cards/sleeve_default.png')})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
+                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/contain no-repeat`
+                                : `url(${getAssetUrl('/cards/sleeve_default.png')}) center/cover no-repeat`,
                             border: `3px solid ${homeCardId ? '#a855f7' : '#4a5568'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
                             display: 'flex',
