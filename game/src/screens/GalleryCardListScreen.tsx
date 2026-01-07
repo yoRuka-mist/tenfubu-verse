@@ -2,6 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { ClassType } from '../core/types';
 import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE } from '../core/engine';
 
+// Helper function to resolve asset paths with base URL for GitHub Pages deployment
+const getAssetUrl = (path: string): string => {
+    const base = import.meta.env.BASE_URL || '/';
+    // Remove leading slash from path if base already ends with /
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${base}${cleanPath}`;
+};
+
+// Leader Images
+const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
+const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
+const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -38,6 +51,16 @@ const CLASS_NAMES = {
     YORUKA: 'Y'
 };
 
+// リーダー画像のマッピング
+const LEADER_IMAGES: Record<ClassType, string> = {
+    SENKA: senkaLeaderImg,
+    AJA: azyaLeaderImg,
+    YORUKA: yorukaLeaderImg
+};
+
+// 全クラスのリスト
+const ALL_CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+
 export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     classType,
     onSelectCard,
@@ -45,6 +68,11 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
 }) => {
     // Responsive scaling
     const [scale, setScale] = useState(1);
+
+    // 現在のクラスインデックス
+    const [currentClassIndex, setCurrentClassIndex] = useState(
+        ALL_CLASSES.indexOf(classType)
+    );
 
     useEffect(() => {
         const updateScale = () => {
@@ -63,8 +91,11 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                cls === 'AJA' ? AJA_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
     };
 
+    // 現在のクラス
+    const currentClass = ALL_CLASSES[currentClassIndex];
+    const template = getDeckTemplate(currentClass);
+
     // カードデータと枚数を取得（トークンを除外）
-    const template = getDeckTemplate(classType);
     const cardsWithCount = template
         .filter(entry => !entry.cardId.startsWith('TOKEN_'))
         .map(entry => ({
@@ -74,15 +105,27 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
         .filter(item => item.card); // undefinedを除外
 
     // クラスカラー取得
-    const classColor = CLASS_COLORS[classType];
-    const className = CLASS_NAMES[classType];
+    const classColor = CLASS_COLORS[currentClass];
+    const className = CLASS_NAMES[currentClass];
+    const leaderImage = LEADER_IMAGES[currentClass];
 
     // サイズ設定
-    const cardWidth = 140 * scale;
-    const cardHeight = 200 * scale;
-    const gap = 1 * scale;
-    const titleSize = 2 * scale;
+    const leaderCardWidth = 180 * scale;
+    const leaderCardHeight = 250 * scale;
+    const cardWidth = 110 * scale;
+    const cardHeight = 155 * scale;
+    const gap = 0.6 * scale;
+    const titleSize = 1.8 * scale;
     const buttonPadding = `${8 * scale}px ${16 * scale}px`;
+
+    // リーダー切り替え
+    const handlePrevClass = () => {
+        setCurrentClassIndex((prev) => (prev - 1 + ALL_CLASSES.length) % ALL_CLASSES.length);
+    };
+
+    const handleNextClass = () => {
+        setCurrentClassIndex((prev) => (prev + 1) % ALL_CLASSES.length);
+    };
 
     return (
         <div style={{
@@ -109,7 +152,7 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                     borderRadius: 6 * scale,
                     color: 'white',
                     cursor: 'pointer',
-                    fontFamily: 'Tamanegi, sans-serif',
+                    fontFamily: 'sans-serif',
                     transition: 'all 0.2s',
                     zIndex: 100
                 }}
@@ -124,132 +167,269 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                 fontSize: `${titleSize}rem`,
                 marginTop: `${80 * scale}px`,
                 marginBottom: `${20 * scale}px`,
-                fontFamily: 'Tamanegi, sans-serif',
+                fontFamily: 'sans-serif',
                 color: classColor.primary,
                 textShadow: `0 0 20px ${classColor.shadow}`
             }}>
                 {className} - カード一覧
             </h2>
 
-            {/* カードグリッド */}
+            {/* メインコンテンツ: 左側リーダー + 右側カードグリッド */}
             <div style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`,
-                gap: `${gap}rem`,
+                display: 'flex',
+                gap: `${2 * scale}rem`,
+                width: '95%',
                 maxWidth: `${1100 * scale}px`,
-                width: '90%',
-                padding: `${20 * scale}px`,
-                justifyItems: 'center'
+                alignItems: 'flex-start',
+                justifyContent: 'center'
             }}>
-                {cardsWithCount.map(({ card, count }) => (
-                    <div
-                        key={card.id}
-                        onClick={() => onSelectCard(card.id)}
+                {/* 左側: リーダー表示 */}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: `${1 * scale}rem`
+                }}>
+                    {/* 前のクラスボタン */}
+                    <button
+                        onClick={handlePrevClass}
                         style={{
-                            width: cardWidth,
-                            height: cardHeight,
+                            width: `${50 * scale}px`,
+                            height: `${50 * scale}px`,
+                            background: 'rgba(0, 0, 0, 0.5)',
                             border: `2px solid ${classColor.primary}`,
-                            borderRadius: 8 * scale,
-                            background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.9) 100%)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            borderRadius: '50%',
+                            color: classColor.primary,
+                            fontSize: `${1.5 * scale}rem`,
                             cursor: 'pointer',
+                            fontWeight: 'bold',
                             transition: 'all 0.2s',
-                            boxShadow: `0 4px 15px ${classColor.shadow}`,
-                            position: 'relative',
-                            overflow: 'hidden'
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                         }}
                         onMouseOver={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-5px) scale(1.05)';
-                            e.currentTarget.style.boxShadow = `0 8px 25px ${classColor.shadow}`;
+                            e.currentTarget.style.background = classColor.primary;
+                            e.currentTarget.style.color = 'white';
                         }}
                         onMouseOut={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                            e.currentTarget.style.boxShadow = `0 4px 15px ${classColor.shadow}`;
+                            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)';
+                            e.currentTarget.style.color = classColor.primary;
                         }}
                     >
-                        {/* カード情報（簡易表示） */}
+                        &lt;
+                    </button>
+
+                    {/* リーダーカード */}
+                    <div style={{
+                        width: leaderCardWidth,
+                        height: leaderCardHeight,
+                        border: `3px solid ${classColor.primary}`,
+                        borderRadius: 10 * scale,
+                        background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        boxShadow: `0 8px 30px ${classColor.shadow}`,
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}>
+                        <img
+                            src={leaderImage}
+                            alt={className}
+                            style={{
+                                width: '100%',
+                                height: '75%',
+                                objectFit: 'cover'
+                            }}
+                        />
                         <div style={{
-                            padding: `${10 * scale}px`,
-                            textAlign: 'center',
-                            flex: 1,
+                            padding: `${8 * scale}px`,
                             display: 'flex',
                             flexDirection: 'column',
+                            alignItems: 'center',
+                            width: '100%',
                             justifyContent: 'center',
-                            width: '100%'
+                            flex: 1
                         }}>
                             <h3 style={{
-                                fontSize: `${0.9 * scale}rem`,
-                                margin: `0 0 ${8 * scale}px 0`,
-                                fontFamily: 'Tamanegi, sans-serif',
-                                color: classColor.primary
-                            }}>
-                                {card.name}
-                            </h3>
-                            <p style={{
-                                fontSize: `${0.7 * scale}rem`,
-                                color: '#aaa',
+                                fontSize: `${1.2 * scale}rem`,
+                                color: classColor.primary,
                                 margin: 0,
-                                fontFamily: 'Tamanegi, sans-serif'
+                                fontFamily: 'sans-serif'
                             }}>
-                                {card.type === 'FOLLOWER' ? 'フォロワー' : 'スペル'}
-                            </p>
-                            {card.type === 'FOLLOWER' && (
-                                <p style={{
-                                    fontSize: `${0.8 * scale}rem`,
-                                    color: '#fff',
-                                    margin: `${5 * scale}px 0 0 0`,
-                                    fontFamily: 'Tamanegi, sans-serif'
-                                }}>
-                                    {card.attack}/{card.health}
-                                </p>
-                            )}
-                            <p style={{
-                                fontSize: `${0.7 * scale}rem`,
-                                color: '#ffcc00',
-                                margin: `${5 * scale}px 0 0 0`,
-                                fontFamily: 'Tamanegi, sans-serif',
-                                fontWeight: 'bold'
-                            }}>
-                                コスト: {card.cost}
-                            </p>
-                        </div>
-
-                        {/* 枚数バッジ（右下） */}
-                        <div style={{
-                            position: 'absolute',
-                            bottom: `${8 * scale}px`,
-                            right: `${8 * scale}px`,
-                            background: 'rgba(0, 0, 0, 0.8)',
-                            color: 'white',
-                            borderRadius: 50,
-                            width: `${28 * scale}px`,
-                            height: `${28 * scale}px`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: `${0.85 * scale}rem`,
-                            fontWeight: 'bold',
-                            fontFamily: 'Tamanegi, sans-serif',
-                            border: `2px solid ${classColor.primary}`,
-                            boxShadow: `0 0 10px ${classColor.shadow}`
-                        }}>
-                            {count}
+                                {className}
+                            </h3>
                         </div>
                     </div>
-                ))}
-            </div>
 
-            {/* カード総数表示 */}
-            <div style={{
-                marginTop: `${20 * scale}px`,
-                fontSize: `${0.9 * scale}rem`,
-                color: '#aaa',
-                fontFamily: 'Tamanegi, sans-serif'
-            }}>
-                全 {cardsWithCount.length} 種類のカード
+                    {/* 次のクラスボタン */}
+                    <button
+                        onClick={handleNextClass}
+                        style={{
+                            width: `${50 * scale}px`,
+                            height: `${50 * scale}px`,
+                            background: 'rgba(0, 0, 0, 0.5)',
+                            border: `2px solid ${classColor.primary}`,
+                            borderRadius: '50%',
+                            color: classColor.primary,
+                            fontSize: `${1.5 * scale}rem`,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.background = classColor.primary;
+                            e.currentTarget.style.color = 'white';
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)';
+                            e.currentTarget.style.color = classColor.primary;
+                        }}
+                    >
+                        &gt;
+                    </button>
+                </div>
+
+                {/* 右側: カードグリッド（3行表示） */}
+                <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: `${1 * scale}rem`
+                }}>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`,
+                        gap: `${gap}rem`,
+                        width: '100%',
+                        padding: `${10 * scale}px`,
+                        maxHeight: `${(cardHeight + gap * 16) * 3 + 40 * scale}px`, // 約3行分
+                        overflowY: 'auto',
+                        overflowX: 'hidden'
+                    }}>
+                        {cardsWithCount.map(({ card, count }) => (
+                            <div
+                                key={card.id}
+                                onClick={() => onSelectCard(card.id)}
+                                style={{
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    border: `2px solid ${classColor.primary}`,
+                                    borderRadius: 8 * scale,
+                                    background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.9) 100%)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-start',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: `0 4px 15px ${classColor.shadow}`,
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-5px) scale(1.05)';
+                                    e.currentTarget.style.boxShadow = `0 8px 25px ${classColor.shadow}`;
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                    e.currentTarget.style.boxShadow = `0 4px 15px ${classColor.shadow}`;
+                                }}
+                            >
+                                {/* カード画像 */}
+                                <div style={{
+                                    width: '100%',
+                                    height: '65%',
+                                    overflow: 'hidden',
+                                    borderBottom: `1px solid ${classColor.primary}`
+                                }}>
+                                    <img
+                                        src={getAssetUrl(card.imageUrl || `/cards/${card.id}.png`)}
+                                        alt={card.name}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover'
+                                        }}
+                                        onError={(e) => {
+                                            // 画像読み込みエラー時はプレースホルダー色
+                                            e.currentTarget.style.display = 'none';
+                                        }}
+                                    />
+                                </div>
+
+                                {/* カード情報 */}
+                                <div style={{
+                                    padding: `${5 * scale}px`,
+                                    textAlign: 'center',
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    width: '100%'
+                                }}>
+                                    <h3 style={{
+                                        fontSize: `${0.7 * scale}rem`,
+                                        margin: `0 0 ${3 * scale}px 0`,
+                                        fontFamily: 'sans-serif',
+                                        color: classColor.primary,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {card.name}
+                                    </h3>
+                                    <p style={{
+                                        fontSize: `${0.6 * scale}rem`,
+                                        color: '#ffcc00',
+                                        margin: 0,
+                                        fontFamily: 'sans-serif',
+                                        fontWeight: 'bold'
+                                    }}>
+                                        コスト: {card.cost}
+                                    </p>
+                                </div>
+
+                                {/* 枚数バッジ（右下） */}
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: `${5 * scale}px`,
+                                    right: `${5 * scale}px`,
+                                    background: 'rgba(0, 0, 0, 0.8)',
+                                    color: 'white',
+                                    borderRadius: 50,
+                                    width: `${22 * scale}px`,
+                                    height: `${22 * scale}px`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: `${0.7 * scale}rem`,
+                                    fontWeight: 'bold',
+                                    fontFamily: 'sans-serif',
+                                    border: `2px solid ${classColor.primary}`,
+                                    boxShadow: `0 0 10px ${classColor.shadow}`
+                                }}>
+                                    {count}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* カード総数表示 */}
+                    <div style={{
+                        fontSize: `${0.85 * scale}rem`,
+                        color: '#aaa',
+                        fontFamily: 'sans-serif',
+                        textAlign: 'center'
+                    }}>
+                        全 {cardsWithCount.length} 種類のカード
+                    </div>
+                </div>
             </div>
         </div>
     );

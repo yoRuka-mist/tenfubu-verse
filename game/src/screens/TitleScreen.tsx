@@ -737,29 +737,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         </div>
                     )}
 
-                    {/* ギャラリー */}
-                    {activeTab === 'gallery' && (
-                        <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
-                                ギャラリー
-                            </h2>
-                            <button
-                                onClick={onGalleryStart}
-                                style={{
-                                    padding: `${1 * scale}rem ${3 * scale}rem`,
-                                    fontSize: `${1.2 * scale}rem`,
-                                    background: '#ec4899',
-                                    border: 'none',
-                                    borderRadius: 8 * scale,
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                ギャラリーを開く
-                            </button>
-                        </div>
-                    )}
+                    {/* ギャラリー - タブクリックで直接遷移するため、コンテンツは不要 */}
 
                     {/* 設定 */}
                     {activeTab === 'settings' && (
@@ -1015,7 +993,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => {
+                            if (item.id === 'gallery') {
+                                onGalleryStart();
+                            } else {
+                                setActiveTab(item.id);
+                            }
+                        }}
                         style={{
                             flex: 1,
                             maxWidth: 140 * scale,
