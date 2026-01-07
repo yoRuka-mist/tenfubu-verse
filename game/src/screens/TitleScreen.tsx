@@ -168,15 +168,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         // フェードアウト開始
         setIsFading(true);
 
-        // 少し待ってから表示タブを切り替え（クロスフェード）
+        // 150ms後に表示タブを切り替え、同時にフェードイン開始
         setTimeout(() => {
             setDisplayedTab(newTab);
+            setIsFading(false); // 新しいコンテンツと同時にフェードイン開始
         }, 150);
-
-        // フェードイン開始
-        setTimeout(() => {
-            setIsFading(false);
-        }, 300);
     };
 
     // 角度を0~360度の範囲に正規化
@@ -1693,20 +1689,20 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     <div style={{
                         display: 'flex',
                         gap: `${1.5 * scale}rem`,
-                        marginBottom: `${2 * scale}rem`,
+                        marginBottom: `${1 * scale}rem`,
                     }}>
                         {/* 盞華 */}
                         <div
                             onClick={() => handleClassSelected('SENKA')}
                             style={{
                                 width: 200 * scale,
-                                height: 280 * scale,
                                 borderRadius: 12 * scale,
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                                 border: '3px solid rgba(255, 255, 255, 0.3)',
                                 transition: 'transform 0.2s, box-shadow 0.2s',
                                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                                background: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)',
                             }}
                             onMouseOver={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
@@ -1717,21 +1713,28 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
                             }}
                         >
-                            <img src={senkaLeaderImg} alt="盞華" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={senkaLeaderImg} alt="盞華" style={{ width: '100%', height: 168 * scale, objectFit: 'cover' }} />
+                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
+                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#e94560', margin: 0 }}>盞華</h3>
+                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>アグロ / ラッシュ</p>
+                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
+                                    突進フォロワーと多面展開で<br />相手を圧倒する。
+                                </p>
+                            </div>
                         </div>
 
-                        {/* あじゃ玉 */}
+                        {/* あじゃ */}
                         <div
                             onClick={() => handleClassSelected('AJA')}
                             style={{
                                 width: 200 * scale,
-                                height: 280 * scale,
                                 borderRadius: 12 * scale,
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                                 border: '3px solid rgba(255, 255, 255, 0.3)',
                                 transition: 'transform 0.2s, box-shadow 0.2s',
                                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                                background: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)',
                             }}
                             onMouseOver={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
@@ -1742,21 +1745,28 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
                             }}
                         >
-                            <img src={azyaLeaderImg} alt="あじゃ玉" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={azyaLeaderImg} alt="あじゃ" style={{ width: '100%', height: 168 * scale, objectFit: 'cover', objectPosition: 'center top' }} />
+                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
+                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#45a2e9', margin: 0 }}>あじゃ</h3>
+                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>コントロール / テクニカル</p>
+                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
+                                    強力な除去と堅牢な守護で<br />盤面を支配する。
+                                </p>
+                            </div>
                         </div>
 
-                        {/* よるか */}
+                        {/* Y */}
                         <div
                             onClick={() => handleClassSelected('YORUKA')}
                             style={{
                                 width: 200 * scale,
-                                height: 280 * scale,
                                 borderRadius: 12 * scale,
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                                 border: '3px solid rgba(255, 255, 255, 0.3)',
                                 transition: 'transform 0.2s, box-shadow 0.2s',
                                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                                background: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)',
                             }}
                             onMouseOver={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
@@ -1767,7 +1777,14 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
                             }}
                         >
-                            <img src={yorukaLeaderImg} alt="よるか" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={yorukaLeaderImg} alt="Y" style={{ width: '100%', height: 168 * scale, objectFit: 'cover' }} />
+                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
+                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#a855f7', margin: 0 }}>Y</h3>
+                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>ミッドレンジ / トリッキー</p>
+                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
+                                    墓地をリソースにする変則的な戦法で<br />相手を翻弄する。
+                                </p>
+                            </div>
                         </div>
                     </div>
 
