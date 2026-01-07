@@ -311,7 +311,7 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                             </div>
                         </>
                     ) : (
-                        // SPELL: 1枚のみ
+                        // SPELL: 1枚のみ（ラベル分のスペースを確保してボタン位置を揃える）
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${0.5 * scale}rem` }}>
                             <div style={{
                                 width: cardImageWidth,
@@ -331,6 +331,14 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                                         objectFit: 'cover'
                                     }}
                                 />
+                            </div>
+                            {/* ラベル分のスペーサー（フォロワーの「通常」「進化後」と同じ高さ） */}
+                            <div style={{
+                                fontSize: `${0.75 * scale}rem`,
+                                height: `${0.75 * scale * 1.5}rem`, // line-heightを考慮した高さ
+                                visibility: 'hidden'
+                            }}>
+
                             </div>
                         </div>
                     )}

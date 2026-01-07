@@ -273,7 +273,7 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                             </div>
                         </>
                     ) : (
-                        // SPELL: 1枚のみ
+                        // SPELL: 1枚のみ（ラベル分のスペースを確保）
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: `${0.5 * scale}rem` }}>
                             <div style={{
                                 width: cardImageWidth,
@@ -293,6 +293,13 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                                         objectFit: 'cover'
                                     }}
                                 />
+                            </div>
+                            {/* ラベル分のスペーサー */}
+                            <div style={{
+                                fontSize: `${0.75 * scale}rem`,
+                                height: `${0.75 * scale * 1.5}rem`,
+                                visibility: 'hidden'
+                            }}>
                             </div>
                         </div>
                     )}

@@ -9027,6 +9027,65 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                                 const handleEvolveButtonClick = (useSep: boolean) => {
                                     if (boardIndex < 0) return;
+
+                                    // Check if evolve effect needs target selection (same logic as drag & drop)
+                                    const follower = player.board[boardIndex];
+                                    if (!follower) return;
+
+                                    const triggersToCheck = useSep ? ['SUPER_EVOLVE', 'EVOLVE'] : ['EVOLVE'];
+
+                                    // Check which target type is needed
+                                    const getTargetTypeFromTrigger = () => {
+                                        const legacyType = follower.triggerAbilities?.EVOLVE?.targetType;
+                                        if (legacyType) return legacyType;
+
+                                        for (const trigger of follower.triggers || []) {
+                                            if (triggersToCheck.includes(trigger.trigger)) {
+                                                for (const effect of trigger.effects) {
+                                                    if (effect.targetType && ['SELECT_FOLLOWER', 'SELECT_ALLY_FOLLOWER', 'SELECT_OTHER_ALLY_FOLLOWER'].includes(effect.targetType)) {
+                                                        return effect.targetType;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        return null;
+                                    };
+
+                                    const targetTypeNeeded = getTargetTypeFromTrigger();
+                                    const needsTarget = !!targetTypeNeeded;
+                                    const needsAllyTarget = targetTypeNeeded === 'SELECT_ALLY_FOLLOWER' || targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
+                                    const excludeSelf = targetTypeNeeded === 'SELECT_OTHER_ALLY_FOLLOWER';
+
+                                    // Check valid targets based on target type
+                                    const targetPlayerIdForValidation = needsAllyTarget ? currentPlayerId : opponentPlayerId;
+                                    const targetBoardForValidation = gameState.players[targetPlayerIdForValidation].board;
+                                    const hasValidTargets = targetBoardForValidation.some(c => {
+                                        if (!c) return false;
+                                        // For ally targets, exclude self if SELECT_OTHER_ALLY_FOLLOWER
+                                        if (needsAllyTarget && excludeSelf && (c as any).instanceId === selectedInstanceId) return false;
+                                        // For enemy targets, check STEALTH and AURA
+                                        if (!needsAllyTarget) {
+                                            if (c.passiveAbilities?.includes('STEALTH')) return false;
+                                            if (c.passiveAbilities?.includes('AURA')) return false;
+                                        }
+                                        return true;
+                                    });
+
+                                    if (needsTarget && hasValidTargets) {
+                                        // Enter targeting mode
+                                        setTargetingState({
+                                            type: 'EVOLVE',
+                                            sourceIndex: boardIndex,
+                                            sourceInstanceId: selectedInstanceId,
+                                            sourceVisualIndex: visualIndex >= 0 ? visualIndex : boardIndex,
+                                            useSep,
+                                            allowedTargetPlayerId: targetPlayerIdForValidation,
+                                            excludeInstanceId: excludeSelf ? selectedInstanceId : undefined
+                                        });
+                                        return;
+                                    }
+
+                                    // No target needed or no valid targets - proceed with evolution
                                     handleEvolveWithAnimation(visualIndex >= 0 ? visualIndex : boardIndex, useSep, undefined, selectedInstanceId);
                                 };
 
