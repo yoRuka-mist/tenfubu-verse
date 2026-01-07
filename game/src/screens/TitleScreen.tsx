@@ -21,17 +21,41 @@ interface TitleScreenProps {
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
     onGalleryStart: () => void; // ギャラリー開始ハンドラー
+    isAnonymous?: boolean; // ユーザーが匿名かどうか
+    userId?: string | null; // ユーザーID
+    onNavigateToRegister?: () => void; // アカウント登録画面への遷移
+    onNavigateToLogin?: () => void; // ログイン画面への遷移
+    onNavigateToProfile?: () => void; // プロフィール設定画面への遷移
+    onLogout?: () => void; // ログアウト処理
 }
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSettings, onAudioSettingsChange, playerId: _playerId, onGalleryStart }) => {
+export const TitleScreen: React.FC<TitleScreenProps> = ({
+    onStartConfig,
+    audioSettings,
+    onAudioSettingsChange,
+    playerId: _playerId,
+    onGalleryStart,
+    isAnonymous = true,
+    userId = null,
+    onNavigateToRegister,
+    onNavigateToLogin,
+    onNavigateToProfile,
+    onLogout
+}) => {
     // 画面フェーズ: 'title' = GAME START画面, 'home' = ホーム画面
     const [phase, setPhase] = useState<'title' | 'home'>('title');
     const [titleAnimating, setTitleAnimating] = useState(false);
+
+    // デバッグ用：設定タブの状態を確認
+    useEffect(() => {
+        console.log('👤 TitleScreen auth state:', { isAnonymous, userId });
+    }, [isAnonymous, userId]);
 
     // ホーム画面の状態
     const [activeTab, setActiveTab] = useState<MenuTab>('home');
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
     // お気に入りカードの状態
     const [homeCardId] = useState<string | null>(() => {
@@ -90,6 +114,22 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
         } else {
             onStartConfig('RANKED_MATCH');
         }
+    };
+
+    // ログアウト確認
+    const handleLogoutClick = () => {
+        setShowLogoutConfirm(true);
+    };
+
+    const handleLogoutConfirm = () => {
+        setShowLogoutConfirm(false);
+        if (onLogout) {
+            onLogout();
+        }
+    };
+
+    const handleLogoutCancel = () => {
+        setShowLogoutConfirm(false);
     };
 
     // Scaled sizes
@@ -767,7 +807,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                             </div>
 
                             {/* SE */}
-                            <div style={{ marginBottom: `${1 * scale}rem` }}>
+                            <div style={{ marginBottom: `${1.5 * scale}rem` }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: `${0.5 * scale}rem` }}>
                                     <span style={{ fontSize: `${1 * scale}rem` }}>効果音</span>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8 * scale, cursor: 'pointer' }}>
@@ -792,6 +832,164 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
                                     disabled={!audioSettings.seEnabled}
                                     style={{ width: '100%', opacity: audioSettings.seEnabled ? 1 : 0.5 }}
                                 />
+                            </div>
+
+                            {/* プロフィール設定 */}
+                            <div style={{
+                                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                                paddingTop: `${1.5 * scale}rem`,
+                                marginTop: `${1 * scale}rem`,
+                                marginBottom: `${1.5 * scale}rem`
+                            }}>
+                                <h3 style={{
+                                    fontSize: `${1.2 * scale}rem`,
+                                    marginBottom: `${1 * scale}rem`,
+                                    color: '#fff'
+                                }}>
+                                    プロフィール
+                                </h3>
+
+                                <button
+                                    onClick={onNavigateToProfile}
+                                    style={{
+                                        width: '100%',
+                                        padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                        fontSize: `${0.9 * scale}rem`,
+                                        background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+                                        border: 'none',
+                                        borderRadius: 6 * scale,
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold',
+                                        transition: 'all 0.3s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                    プレイヤー名を変更
+                                </button>
+                            </div>
+
+                            {/* アカウント */}
+                            <div style={{
+                                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                                paddingTop: `${1.5 * scale}rem`,
+                                marginTop: `${1 * scale}rem`
+                            }}>
+                                <h3 style={{
+                                    fontSize: `${1.2 * scale}rem`,
+                                    marginBottom: `${1 * scale}rem`,
+                                    color: '#fff'
+                                }}>
+                                    アカウント
+                                </h3>
+
+                                {isAnonymous ? (
+                                    // 匿名ユーザーの場合
+                                    <div>
+                                        <p style={{
+                                            fontSize: `${0.9 * scale}rem`,
+                                            color: '#aaa',
+                                            marginBottom: `${1 * scale}rem`
+                                        }}>
+                                            ログインしていません
+                                        </p>
+
+                                        <div style={{
+                                            display: 'flex',
+                                            gap: 10 * scale,
+                                            marginBottom: `${1 * scale}rem`
+                                        }}>
+                                            <button
+                                                onClick={onNavigateToRegister}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                                    fontSize: `${0.9 * scale}rem`,
+                                                    background: 'linear-gradient(135deg, #4a9eff 0%, #357abd 100%)',
+                                                    border: 'none',
+                                                    borderRadius: 6 * scale,
+                                                    color: 'white',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 'bold',
+                                                    transition: 'all 0.3s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                            >
+                                                アカウント登録
+                                            </button>
+                                            <button
+                                                onClick={onNavigateToLogin}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                                    fontSize: `${0.9 * scale}rem`,
+                                                    background: '#555',
+                                                    border: 'none',
+                                                    borderRadius: 6 * scale,
+                                                    color: 'white',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 'bold',
+                                                    transition: 'all 0.3s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = '#666'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = '#555'}
+                                            >
+                                                ログイン
+                                            </button>
+                                        </div>
+
+                                        <p style={{
+                                            fontSize: `${0.75 * scale}rem`,
+                                            color: '#888',
+                                            textAlign: 'center',
+                                            lineHeight: 1.4
+                                        }}>
+                                            ※アカウント登録すると、別の端末からデータを引き継げます
+                                        </p>
+                                    </div>
+                                ) : (
+                                    // 登録済みユーザーの場合
+                                    <div>
+                                        <p style={{
+                                            fontSize: `${0.9 * scale}rem`,
+                                            color: '#4ade80',
+                                            marginBottom: `${0.5 * scale}rem`,
+                                            fontWeight: 'bold'
+                                        }}>
+                                            ログイン中
+                                        </p>
+                                        <p style={{
+                                            fontSize: `${0.85 * scale}rem`,
+                                            color: '#fff',
+                                            marginBottom: `${0.3 * scale}rem`
+                                        }}>
+                                            ユーザーID: <span style={{ color: '#4a9eff', fontWeight: 'bold' }}>{userId || '不明'}</span>
+                                        </p>
+
+                                        <button
+                                            onClick={handleLogoutClick}
+                                            style={{
+                                                width: '100%',
+                                                padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                                fontSize: `${0.9 * scale}rem`,
+                                                background: '#d32f2f',
+                                                border: 'none',
+                                                borderRadius: 6 * scale,
+                                                color: 'white',
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                transition: 'all 0.3s',
+                                                marginTop: `${0.5 * scale}rem`
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = '#b71c1c'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = '#d32f2f'}
+                                        >
+                                            ログアウト
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -847,6 +1045,85 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartConfig, audioSe
             }}>
                 Ver 1.04 Beta
             </p>
+
+            {/* ログアウト確認ダイアログ */}
+            {showLogoutConfirm && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    zIndex: 100
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                        borderRadius: 12 * scale,
+                        padding: `${2 * scale}rem`,
+                        minWidth: 300 * scale,
+                        border: '2px solid rgba(255, 255, 255, 0.2)',
+                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
+                    }}>
+                        <h3 style={{
+                            fontSize: `${1.2 * scale}rem`,
+                            marginBottom: `${1 * scale}rem`,
+                            color: '#fff',
+                            textAlign: 'center'
+                        }}>
+                            ログアウトしますか？
+                        </h3>
+
+                        <div style={{
+                            display: 'flex',
+                            gap: 10 * scale,
+                            marginTop: `${1.5 * scale}rem`
+                        }}>
+                            <button
+                                onClick={handleLogoutCancel}
+                                style={{
+                                    flex: 1,
+                                    padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                    fontSize: `${0.9 * scale}rem`,
+                                    background: '#555',
+                                    border: 'none',
+                                    borderRadius: 6 * scale,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    transition: 'all 0.3s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#666'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = '#555'}
+                            >
+                                キャンセル
+                            </button>
+                            <button
+                                onClick={handleLogoutConfirm}
+                                style={{
+                                    flex: 1,
+                                    padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                    fontSize: `${0.9 * scale}rem`,
+                                    background: '#d32f2f',
+                                    border: 'none',
+                                    borderRadius: 6 * scale,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    transition: 'all 0.3s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#b71c1c'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = '#d32f2f'}
+                            >
+                                ログアウト
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

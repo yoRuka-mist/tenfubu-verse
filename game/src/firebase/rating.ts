@@ -48,7 +48,8 @@ export interface ClassRating {
 
 // プレイヤーデータ
 export interface PlayerData {
-    playerName: string;
+    userId: string;          // ユーザーID（認証用、変更不可）
+    playerName: string;      // プレイヤー名（表示名、変更可能）
     createdAt: number;
     lastMatchAt: number;
     ratings: Partial<Record<ClassType, ClassRating>>;

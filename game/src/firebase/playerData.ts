@@ -6,6 +6,7 @@ import { PlayerData, ClassRating, createInitialClassRating, RatingCalculationRes
 // プレイヤーデータを取得（なければ作成）
 export const getOrCreatePlayerData = async (
     playerId: string,
+    userId: string,
     playerName: string
 ): Promise<PlayerData> => {
     const playerRef = ref(database, `players/${playerId}`);
@@ -13,17 +14,18 @@ export const getOrCreatePlayerData = async (
 
     if (snapshot.exists()) {
         const data = snapshot.val() as PlayerData;
-        // 名前が変わっていたら更新
-        if (data.playerName !== playerName) {
-            await update(playerRef, { playerName });
-            data.playerName = playerName;
+        // userIdがない場合は追加（マイグレーション用）
+        if (!data.userId) {
+            await update(playerRef, { userId });
+            data.userId = userId;
         }
         return data;
     }
 
     // 新規作成
     const newPlayerData: PlayerData = {
-        playerName,
+        userId,
+        playerName: playerName || 'プレイヤー',
         createdAt: Date.now(),
         lastMatchAt: Date.now(),
         ratings: {},
@@ -91,4 +93,13 @@ export const updateRatingAfterMatch = async (
 
     // lastMatchAt の更新
     await update(playerRef, { lastMatchAt: Date.now() });
+};
+
+// プレイヤー名を更新
+export const updatePlayerName = async (
+    playerId: string,
+    newPlayerName: string
+): Promise<void> => {
+    const playerRef = ref(database, `players/${playerId}`);
+    await update(playerRef, { playerName: newPlayerName });
 };

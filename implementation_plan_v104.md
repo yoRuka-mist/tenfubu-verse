@@ -9,70 +9,129 @@
 
 ## 実装タスク一覧
 
-### Phase 1: Firebase Auth 導入 + ユーザーコード方式
+### Phase 1: Firebase Auth 導入 + ID/パスワード方式
 
 #### 概要: プレイヤー識別の仕組み
 
-```
-初回起動時
-    ↓
-Firebase Anonymous Auth で UID 発行
-    ↓
-UID から6文字のユーザーコードを生成（例: "A3F7K9"）
-    ↓
-ユーザーに表示 → メモしてもらう
+**基本方針**:
+- 初回起動時は匿名認証で即プレイ可能（アカウント登録不要）
+- 設定画面からアカウント登録（メールアドレス/パスワード）可能
+- 登録済みアカウントは別端末からログインしてデータ引き継ぎ可能
+- 匿名アカウントを正式アカウントに昇格可能（データ引き継ぎ）
 
-別端末/ブラウザからアクセス時
+```
+【初回起動】
+起動
     ↓
-タイトル画面「引き継ぎ」ボタン
+Firebase Anonymous Auth → 匿名UID発行
     ↓
-コード入力 → 既存アカウントと紐付け
+そのままプレイ可能（アカウント登録なし）
+
+【アカウント登録】（任意）
+設定画面 →「アカウント登録」
+    ↓
+メールアドレス/パスワード入力
+    ↓
+匿名アカウントを正式アカウントに昇格
+    ↓
+データはそのまま引き継ぎ
+
+【別端末からログイン】
+起動（匿名UIDが発行される）
+    ↓
+設定画面 →「ログイン」
+    ↓
+メールアドレス/パスワード入力
+    ↓
+既存アカウントでログイン → データ引き継ぎ
 ```
 
 #### Firebase データ構造
 
 ```
 players/
-  {playerId}/
+  {playerId}/              // Firebase Auth の UID
     playerName: "ユーザー名"
-    userCode: "A3F7K9"    // 引き継ぎ用コード
+    email: "user@example.com"  // 登録済みの場合のみ（nullなら匿名）
+    isAnonymous: true/false    // 匿名かどうか
     createdAt: timestamp
     lastMatchAt: timestamp
     ratings/
       TENFUBUKI/
         rating: 0
         winStreak: 0
+        totalMatches: 0
+        wins: 0
+        losses: 0
+      AJADAMA/
         ...
-
-userCodes/                 // 逆引き用インデックス
-  A3F7K9: "{playerId}"
 ```
 
-#### Task 1-1: Firebase Anonymous Auth のセットアップ
+#### Task 1-1: Firebase Auth のセットアップ
 
 **対象ファイル**: `game/src/firebase/auth.ts`（新規作成）
 
 ```typescript
 import { auth } from './config';
-import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
-
-let currentUser: User | null = null;
+import {
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
+  onAuthStateChanged,
+  signOut,
+  User
+} from 'firebase/auth';
 
 // 匿名認証でサインイン
-export const signInAnonymousUser = async (): Promise<string> => {
+export const signInAnonymousUser = async (): Promise<User> => {
   const result = await signInAnonymously(auth);
-  currentUser = result.user;
-  return result.user.uid;
+  return result.user;
 };
 
-// 現在のユーザーIDを取得
-export const getCurrentUserId = (): string | null => {
-  return currentUser?.uid ?? null;
+// メール/パスワードでログイン
+export const signInWithEmail = async (email: string, password: string): Promise<User> => {
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  return result.user;
+};
+
+// 新規アカウント登録（匿名アカウントを昇格）
+export const linkAnonymousToEmail = async (email: string, password: string): Promise<User> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('No user logged in');
+  }
+
+  const credential = EmailAuthProvider.credential(email, password);
+  const result = await linkWithCredential(currentUser, credential);
+  return result.user;
+};
+
+// 新規アカウント作成（匿名でない場合）
+export const createAccount = async (email: string, password: string): Promise<User> => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  return result.user;
+};
+
+// ログアウト
+export const logOut = async (): Promise<void> => {
+  await signOut(auth);
+};
+
+// 現在のユーザーを取得
+export const getCurrentUser = (): User | null => {
+  return auth.currentUser;
 };
 
 // 認証状態の監視
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
+};
+
+// ユーザーが匿名かどうか
+export const isAnonymousUser = (): boolean => {
+  return auth.currentUser?.isAnonymous ?? true;
 };
 ```
 
@@ -87,80 +146,50 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
 
 **対象ファイル**: `game/src/App.tsx`
 
-- アプリ起動時に `signInAnonymousUser()` を呼び出し
-- `playerId` を state で管理
+**変更内容**:
+- アプリ起動時に認証状態を確認
+- 未ログインなら `signInAnonymousUser()` を呼び出し
+- `playerId` (UID) を state で管理
+- `isAnonymous` を state で管理
 - 認証完了までローディング表示
 
-#### Task 1-4: ユーザーコード生成・管理
-
-**対象ファイル**: `game/src/firebase/userCode.ts`（新規作成）
-
 ```typescript
-import { database } from './config';
-import { ref, get, set } from 'firebase/database';
+const [playerId, setPlayerId] = useState<string | null>(null);
+const [isAnonymous, setIsAnonymous] = useState<boolean>(true);
+const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-// 6文字のランダムコードを生成（英大文字 + 数字）
-const generateUserCode = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 紛らわしい文字を除外（I,O,0,1）
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
-
-// ユーザーコードの重複チェック
-const isCodeAvailable = async (code: string): Promise<boolean> => {
-  const codeRef = ref(database, `userCodes/${code}`);
-  const snapshot = await get(codeRef);
-  return !snapshot.exists();
-};
-
-// 一意のユーザーコードを生成
-export const createUniqueUserCode = async (): Promise<string> => {
-  let code: string;
-  let attempts = 0;
-  do {
-    code = generateUserCode();
-    attempts++;
-    if (attempts > 10) {
-      throw new Error('Failed to generate unique user code');
+useEffect(() => {
+  const unsubscribe = onAuthStateChange(async (user) => {
+    if (user) {
+      setPlayerId(user.uid);
+      setIsAnonymous(user.isAnonymous);
+    } else {
+      // 未ログイン → 匿名ログイン
+      const anonymousUser = await signInAnonymousUser();
+      setPlayerId(anonymousUser.uid);
+      setIsAnonymous(true);
     }
-  } while (!(await isCodeAvailable(code)));
-  return code;
-};
-
-// ユーザーコードを登録（playerIdと紐付け）
-export const registerUserCode = async (code: string, playerId: string): Promise<void> => {
-  const codeRef = ref(database, `userCodes/${code}`);
-  await set(codeRef, playerId);
-};
-
-// ユーザーコードからplayerIdを検索
-export const getPlayerIdByCode = async (code: string): Promise<string | null> => {
-  const codeRef = ref(database, `userCodes/${code.toUpperCase()}`);
-  const snapshot = await get(codeRef);
-  if (snapshot.exists()) {
-    return snapshot.val() as string;
-  }
-  return null;
-};
+    setAuthLoading(false);
+  });
+  return () => unsubscribe();
+}, []);
 ```
 
-#### Task 1-5: 引き継ぎ画面
+#### Task 1-4: アカウント登録画面
 
-**対象ファイル**: `game/src/screens/TransferScreen.tsx`（新規作成）
+**対象ファイル**: `game/src/screens/RegisterScreen.tsx`（新規作成）
 
 **仕様**:
-- 6文字のコード入力フィールド
-- 「引き継ぎ」ボタン
-- エラーメッセージ表示（コードが見つからない場合）
+- メールアドレス入力フィールド
+- パスワード入力フィールド（2回入力で確認）
+- 「登録」ボタン
+- エラーメッセージ表示
 - 戻るボタン
 
 **Props**:
 ```typescript
-interface TransferScreenProps {
-  onTransferSuccess: (playerId: string) => void;
+interface RegisterScreenProps {
+  onRegisterSuccess: () => void;
   onBack: () => void;
 }
 ```
@@ -171,44 +200,140 @@ interface TransferScreenProps {
 │  [戻る]                              │
 ├─────────────────────────────────────┤
 │                                     │
-│         アカウント引き継ぎ            │
+│         アカウント登録                │
 │                                     │
-│     引き継ぎコードを入力してください     │
+│  メールアドレス                       │
+│  [________________________]         │
 │                                     │
-│         [ A 3 F 7 K 9 ]             │
+│  パスワード                          │
+│  [________________________]         │
 │                                     │
-│           [引き継ぎ]                 │
+│  パスワード（確認）                    │
+│  [________________________]         │
 │                                     │
-│     ※コードが見つかりません（エラー時）   │
+│           [登録]                     │
+│                                     │
+│  ※パスワードが一致しません（エラー時）    │
 │                                     │
 └─────────────────────────────────────┘
 ```
 
-#### Task 1-6: 設定画面に引き継ぎ機能を追加
+**処理フロー**:
+1. 入力バリデーション（パスワード一致、形式チェック）
+2. `linkAnonymousToEmail()` 呼び出し（匿名→正式アカウント昇格）
+3. 成功 → 設定画面に戻る
+4. 失敗 → エラーメッセージ表示
+
+#### Task 1-5: ログイン画面
+
+**対象ファイル**: `game/src/screens/LoginScreen.tsx`（新規作成）
+
+**仕様**:
+- メールアドレス入力フィールド
+- パスワード入力フィールド
+- 「ログイン」ボタン
+- エラーメッセージ表示
+- 戻るボタン
+
+**Props**:
+```typescript
+interface LoginScreenProps {
+  onLoginSuccess: () => void;
+  onBack: () => void;
+}
+```
+
+**レイアウト**:
+```
+┌─────────────────────────────────────┐
+│  [戻る]                              │
+├─────────────────────────────────────┤
+│                                     │
+│            ログイン                  │
+│                                     │
+│  メールアドレス                       │
+│  [________________________]         │
+│                                     │
+│  パスワード                          │
+│  [________________________]         │
+│                                     │
+│           [ログイン]                 │
+│                                     │
+│  ※メールアドレスまたはパスワードが      │
+│    正しくありません（エラー時）         │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+**処理フロー**:
+1. `signInWithEmail()` 呼び出し
+2. 成功 → タイトル画面に戻る（新しいUIDでデータ読み込み）
+3. 失敗 → エラーメッセージ表示
+
+**注意**: ログイン成功時、現在の匿名アカウントのデータは破棄される（ログイン先のデータを使用）
+
+#### Task 1-6: 設定画面にアカウント機能を追加
 
 **対象ファイル**: `game/src/screens/SettingsScreen.tsx`（既存 or 新規確認）
 
 **変更内容**:
-- 設定画面内に「引き継ぎ」ボタンを追加
-- ユーザーコード表示エリアを追加（現在のコードを確認できるように）
-- 「引き継ぎ」ボタン押下で引き継ぎ画面（TransferScreen）へ遷移
+- アカウント状態に応じてUIを切り替え
+- 匿名ユーザー: 「アカウント登録」「ログイン」ボタン表示
+- 登録済みユーザー: ログイン中のメールアドレス表示、「ログアウト」ボタン
 
-**レイアウト例**:
+**Props追加**:
+```typescript
+interface SettingsScreenProps {
+  // ... 既存props
+  playerId: string;
+  isAnonymous: boolean;
+  email: string | null;
+  onNavigateToRegister: () => void;
+  onNavigateToLogin: () => void;
+  onLogout: () => void;
+}
+```
+
+**レイアウト（匿名ユーザーの場合）**:
 ```
 ┌─────────────────────────────────────┐
 │  設定                                │
 ├─────────────────────────────────────┤
 │                                     │
 │  【アカウント】                        │
-│  あなたの引き継ぎコード: A3F7K9        │
-│  （メモしておいてください）             │
+│  ログインしていません                  │
 │                                     │
-│           [引き継ぎ]                 │
+│  [アカウント登録]    [ログイン]        │
+│                                     │
+│  ※アカウント登録すると、別の端末から     │
+│    データを引き継げます                │
 │                                     │
 │  【その他の設定項目...】               │
 │                                     │
 └─────────────────────────────────────┘
 ```
+
+**レイアウト（登録済みユーザーの場合）**:
+```
+┌─────────────────────────────────────┐
+│  設定                                │
+├─────────────────────────────────────┤
+│                                     │
+│  【アカウント】                        │
+│  ログイン中: user@example.com         │
+│                                     │
+│           [ログアウト]                │
+│                                     │
+│  【その他の設定項目...】               │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+**ログアウト処理**:
+1. 確認ダイアログ表示
+2. `logOut()` 呼び出し
+3. 自動的に匿名アカウントで再ログイン（新規UIDが発行される）
+4. タイトル画面に戻る
 
 ---
 
@@ -803,9 +928,9 @@ interface GalleryRelatedCardScreenProps {
 - `game/src/firebase/auth.ts`
 - `game/src/firebase/rating.ts`
 - `game/src/firebase/playerData.ts`
-- `game/src/firebase/userCode.ts`（追加）
 - `game/src/screens/MatchTypeSelectScreen.tsx`
-- `game/src/screens/TransferScreen.tsx`（追加）
+- `game/src/screens/RegisterScreen.tsx`（アカウント登録画面）
+- `game/src/screens/LoginScreen.tsx`（ログイン画面）
 - `game/src/screens/GalleryClassSelectScreen.tsx`
 - `game/src/screens/GalleryCardListScreen.tsx`
 - `game/src/screens/GalleryCardDetailScreen.tsx`
@@ -814,7 +939,7 @@ interface GalleryRelatedCardScreenProps {
 ### 変更
 - `game/src/firebase/config.ts`
 - `game/src/firebase/matchmaking.ts`
-- `game/src/screens/SettingsScreen.tsx`（追加: 引き継ぎボタン、コード表示）
+- `game/src/screens/SettingsScreen.tsx`（追加: アカウント管理UI）
 - `game/src/screens/ClassSelectScreen.tsx`
 - `game/src/screens/MatchmakingScreen.tsx`
 - `game/src/screens/GameScreen.tsx`

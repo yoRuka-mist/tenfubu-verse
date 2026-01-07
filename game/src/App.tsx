@@ -8,9 +8,12 @@ import { GalleryClassSelectScreen } from './screens/GalleryClassSelectScreen';
 import { GalleryCardListScreen } from './screens/GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './screens/GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './screens/GalleryRelatedCardScreen';
+import { RegisterScreen } from './screens/RegisterScreen';
+import { LoginScreen } from './screens/LoginScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { ClassType, AIDifficulty, AudioSettings } from './core/types';
 import { NetworkAdapter } from './network/types';
-import { signInAnonymousUser, onAuthStateChange } from './firebase/auth';
+import { signInAnonymousUser, onAuthStateChange, logOut } from './firebase/auth';
 import { getOrCreatePlayerData } from './firebase/playerData';
 import { MOCK_CARDS } from './core/engine';
 
@@ -53,7 +56,8 @@ const loadAudioSettings = (): AudioSettings => {
 };
 
 type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME' |
-                'GALLERY_CLASS_SELECT' | 'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD';
+                'GALLERY_CLASS_SELECT' | 'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD' |
+                'REGISTER' | 'LOGIN' | 'PROFILE';
 type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
 
 // Portrait mode detection hook
@@ -92,8 +96,10 @@ function App() {
 
     // Firebase Auth: プレイヤーID
     const [playerId, setPlayerId] = useState<string | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [_authLoading, setAuthLoading] = useState(true);
+    const [isAnonymous, setIsAnonymous] = useState<boolean>(true);
+    const [_userEmail, setUserEmail] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [authLoading, setAuthLoading] = useState<boolean>(true);
 
     // Turn timer setting (persisted to localStorage)
     const [timerEnabled, setTimerEnabled] = useState<boolean>(() => {
@@ -125,24 +131,62 @@ function App() {
     const [galleryCardId, setGalleryCardId] = useState<string | null>(null);
     const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
 
+    // メールアドレスからユーザーIDを抽出
+    const extractUserId = (email: string | null): string | null => {
+        if (!email) return null;
+        // メールアドレスが{userId}@tenfubu-game.local形式の場合、userIdを抽出
+        if (email.endsWith('@tenfubu-game.local')) {
+            return email.replace('@tenfubu-game.local', '');
+        }
+        return null;
+    };
+
     // Firebase Auth: 認証処理
     useEffect(() => {
         // 認証状態の監視
         const unsubscribe = onAuthStateChange(async (user) => {
+            console.log('🔐 Auth state changed:', {
+                uid: user?.uid,
+                email: user?.email,
+                isAnonymous: user?.isAnonymous
+            });
+
             if (user) {
                 setPlayerId(user.uid);
+                setIsAnonymous(user.isAnonymous);
+                setUserEmail(user.email);
+                setUserId(extractUserId(user.email));
+
+                const extractedUserId = extractUserId(user.email);
+                console.log('📝 State updated:', {
+                    playerId: user.uid,
+                    isAnonymous: user.isAnonymous,
+                    userId: extractedUserId
+                });
+
                 // プレイヤーデータを取得/作成
                 try {
-                    await getOrCreatePlayerData(user.uid, playerName || 'プレイヤー');
+                    await getOrCreatePlayerData(
+                        user.uid,
+                        extractedUserId || 'anonymous',
+                        playerName || 'プレイヤー'
+                    );
                 } catch (error) {
                     console.error('Failed to create player data:', error);
                 }
             } else {
                 // 未認証の場合は匿名認証を実行
                 try {
-                    const uid = await signInAnonymousUser();
-                    setPlayerId(uid);
-                    await getOrCreatePlayerData(uid, playerName || 'プレイヤー');
+                    const anonymousUser = await signInAnonymousUser();
+                    setPlayerId(anonymousUser.uid);
+                    setIsAnonymous(true);
+                    setUserEmail(null);
+                    setUserId(null);
+                    await getOrCreatePlayerData(
+                        anonymousUser.uid,
+                        'anonymous',
+                        playerName || 'プレイヤー'
+                    );
                 } catch (error) {
                     console.error('Failed to sign in:', error);
                 }
@@ -346,6 +390,76 @@ function App() {
         setCurrentScreen('GALLERY_CARD_DETAIL');
     }, []);
 
+    // アカウント関連のハンドラー
+    const handleNavigateToRegister = useCallback(() => {
+        setCurrentScreen('REGISTER');
+    }, []);
+
+    const handleNavigateToLogin = useCallback(() => {
+        setCurrentScreen('LOGIN');
+    }, []);
+
+    const handleRegisterSuccess = useCallback(() => {
+        // 登録成功 → 設定画面またはタイトル画面に戻る
+        setCurrentScreen('TITLE');
+    }, []);
+
+    const handleLoginSuccess = useCallback(() => {
+        // ログイン成功 → タイトル画面に戻る
+        setCurrentScreen('TITLE');
+    }, []);
+
+    const handleLogout = useCallback(async () => {
+        try {
+            await logOut();
+            // ログアウト後は自動的に匿名認証される（onAuthStateChangeで処理）
+            setCurrentScreen('TITLE');
+        } catch (error) {
+            console.error('Failed to logout:', error);
+        }
+    }, []);
+
+    const backFromRegister = useCallback(() => {
+        setCurrentScreen('TITLE');
+    }, []);
+
+    const backFromLogin = useCallback(() => {
+        setCurrentScreen('TITLE');
+    }, []);
+
+    const handleNavigateToProfile = useCallback(() => {
+        setCurrentScreen('PROFILE');
+    }, []);
+
+    const handleProfileUpdateSuccess = useCallback((newName: string) => {
+        setPlayerName(newName);
+        localStorage.setItem('playerName', newName);
+        setCurrentScreen('TITLE');
+    }, []);
+
+    const backFromProfile = useCallback(() => {
+        setCurrentScreen('TITLE');
+    }, []);
+
+    // 認証完了までローディング表示
+    if (authLoading) {
+        return (
+            <div style={{
+                width: '100vw',
+                height: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                color: 'white',
+                fontSize: '1.5rem',
+                fontWeight: 'bold'
+            }}>
+                Loading...
+            </div>
+        );
+    }
+
     return (
         <div className="app-container">
             {/* Portrait mode overlay - asks user to rotate device */}
@@ -406,6 +520,12 @@ function App() {
                     onAudioSettingsChange={updateAudioSettings}
                     playerId={playerId}
                     onGalleryStart={handleGalleryStart}
+                    isAnonymous={isAnonymous}
+                    userId={userId}
+                    onNavigateToRegister={handleNavigateToRegister}
+                    onNavigateToLogin={handleNavigateToLogin}
+                    onNavigateToProfile={handleNavigateToProfile}
+                    onLogout={handleLogout}
                 />
             )}
             {currentScreen === 'CLASS_SELECT' && (
@@ -491,6 +611,26 @@ function App() {
                     parentCardId={galleryCardId}
                     relatedCardIds={galleryRelatedCardIds}
                     onBack={backFromGalleryRelatedCard}
+                />
+            )}
+            {currentScreen === 'REGISTER' && (
+                <RegisterScreen
+                    onRegisterSuccess={handleRegisterSuccess}
+                    onBack={backFromRegister}
+                />
+            )}
+            {currentScreen === 'LOGIN' && (
+                <LoginScreen
+                    onLoginSuccess={handleLoginSuccess}
+                    onBack={backFromLogin}
+                />
+            )}
+            {currentScreen === 'PROFILE' && (
+                <ProfileScreen
+                    playerId={playerId}
+                    currentPlayerName={playerName}
+                    onUpdateSuccess={handleProfileUpdateSuccess}
+                    onBack={backFromProfile}
                 />
             )}
         </div>
