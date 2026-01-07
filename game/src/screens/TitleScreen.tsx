@@ -4,6 +4,8 @@ import { GalleryCardListScreen } from './GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './GalleryRelatedCardScreen';
 import { MOCK_CARDS } from '../core/engine';
+import { getAllClassRatings } from '../firebase/playerData';
+import { getRankFromRating, RANK_DISPLAY_NAMES, ClassRating, RankType } from '../firebase/rating';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -20,6 +22,16 @@ const BASE_HEIGHT = 720;
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+
+// ランクの色
+const RANK_COLORS: Record<RankType, string> = {
+    BRONZE: '#cd7f32',
+    SILVER: '#c0c0c0',
+    GOLD: '#ffd700',
+    PLATINUM: '#e5e4e2',
+    DIAMOND: '#b9f2ff',
+    MASTER: '#ff4500',
+};
 
 // メニュー項目の型
 type MenuTab = 'solo' | 'room' | 'random' | 'home' | 'ranking' | 'gallery' | 'settings';
@@ -72,6 +84,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
     // ホーム画面の状態
     const [activeTab, setActiveTab] = useState<MenuTab>('home');
+    const [displayedTab, setDisplayedTab] = useState<MenuTab>('home'); // 実際に表示されているタブ（フェード用）
+    const [isFading, setIsFading] = useState(false); // タブ切り替えのフェードアニメーション用
     const [showJoinInput, setShowJoinInput] = useState(false);
     const [joinId, setJoinId] = useState('');
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -81,6 +95,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const [selectedGalleryClass, setSelectedGalleryClass] = useState<ClassType | null>(null);
     const [selectedGalleryCard, setSelectedGalleryCard] = useState<string | null>(null);
     const [galleryRelatedCardIds, setGalleryRelatedCardIds] = useState<string[]>([]);
+
+    // クラス選択の状態
+    const [showingClassSelect, setShowingClassSelect] = useState(false);
+    const [classSelectMode, setClassSelectMode] = useState<'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH'>('CPU');
+    const [classRatings, setClassRatings] = useState<Partial<Record<ClassType, ClassRating>>>({});
+    const [loadingRatings, setLoadingRatings] = useState(false);
 
     // カード回転の状態
     const [cardRotation, setCardRotation] = useState(25); // Y軸回転角度
@@ -109,6 +129,26 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         return () => window.removeEventListener('resize', updateScale);
     }, []);
 
+    // レーティング取得（ランクマッチ用）
+    useEffect(() => {
+        const fetchRatings = async () => {
+            if (!_playerId) {
+                setLoadingRatings(false);
+                return;
+            }
+            setLoadingRatings(true);
+            try {
+                const ratings = await getAllClassRatings(_playerId);
+                setClassRatings(ratings);
+            } catch (error) {
+                console.error('Failed to fetch class ratings:', error);
+            } finally {
+                setLoadingRatings(false);
+            }
+        };
+        fetchRatings();
+    }, [_playerId]);
+
     // タイトル→ホームへの遷移
     const handleGameStart = () => {
         setTitleAnimating(true);
@@ -116,6 +156,27 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             setPhase('home');
             setTitleAnimating(false);
         }, 600);
+    };
+
+    // タブ切り替えハンドラー（クロスフェードアニメーション付き）
+    const handleTabChange = (newTab: MenuTab) => {
+        if (newTab === activeTab || isFading) return; // 同じタブまたはフェード中は無視
+
+        // タブボタンの状態は即座に切り替え
+        setActiveTab(newTab);
+
+        // フェードアウト開始
+        setIsFading(true);
+
+        // 少し待ってから表示タブを切り替え（クロスフェード）
+        setTimeout(() => {
+            setDisplayedTab(newTab);
+        }, 150);
+
+        // フェードイン開始
+        setTimeout(() => {
+            setIsFading(false);
+        }, 300);
     };
 
     // 角度を0~360度の範囲に正規化
@@ -291,6 +352,26 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         setGalleryView('card-detail');
     };
 
+    // クラス選択の開始ハンドラー
+    const handleStartClassSelect = (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH') => {
+        setClassSelectMode(mode);
+        setShowingClassSelect(true);
+    };
+
+    // クラス選択完了ハンドラー
+    const handleClassSelected = (classType: ClassType) => {
+        setShowingClassSelect(false);
+        onStartConfig(classSelectMode, undefined);
+        // App.tsxの startGame が呼ばれ、ClassSelectScreenに遷移してクラスが選択される
+        // ただし、今はタイトル画面内でクラス選択を完了させるので、classTypeを渡す
+        // TODO: onStartConfigのシグネチャを変更するか、別の方法で渡す
+    };
+
+    // クラス選択をキャンセル
+    const handleCancelClassSelect = () => {
+        setShowingClassSelect(false);
+    };
+
     // ギャラリータブが変更された時にリセット
     useEffect(() => {
         if (activeTab !== 'gallery') {
@@ -462,7 +543,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 zIndex: 2,
             }}>
                 {/* 左側: お気に入りカード表示 - ホームタブでのみ表示 */}
-                {activeTab === 'home' && (() => {
+                {displayedTab === 'home' && (() => {
                     console.log('🎴 Rendering home card, homeCardId:', homeCardId);
                     // カードデータを取得
                     const homeCard = homeCardId ? MOCK_CARDS.find(c => c.id === homeCardId) : null;
@@ -479,8 +560,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     <div
                         onMouseDown={handleMouseDown}
                         style={{
-                            width: 488 * scale,
-                            height: 683 * scale,
+                            width: 439 * scale,
+                            height: 615 * scale,
                             transformStyle: 'preserve-3d',
                             transform: `rotateY(${cardRotation}deg)`,
                             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
@@ -556,7 +637,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 })()}
 
                 {/* 右側: プロフィール情報エリア - ホームタブでのみ表示 */}
-                {activeTab === 'home' && (
+                {displayedTab === 'home' && (
                     <div style={{
                         position: 'absolute',
                         right: 100 * scale,
@@ -634,9 +715,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     flexDirection: 'column',
                     alignItems: 'center',
                     maxWidth: 600 * scale,
+                    opacity: isFading ? 0 : 1,
+                    transition: 'opacity 0.3s ease-in-out',
                 }}>
                     {/* ホームタブ */}
-                    {activeTab === 'home' && (
+                    {displayedTab === 'home' && (
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1 * scale}rem` }}>
                                 ようこそ！
@@ -648,7 +731,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* ひとりで遊ぶ */}
-                    {activeTab === 'solo' && (
+                    {displayedTab === 'solo' && (
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1 * scale}rem`, color: '#e94560' }}>
                                 ひとりで遊ぶ
@@ -672,7 +755,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* ルームマッチ - ドア風パネル */}
-                    {activeTab === 'room' && (
+                    {displayedTab === 'room' && (
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#60a5fa' }}>
                                 ルームマッチ
@@ -842,7 +925,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* ランダムマッチ - ドア風パネル */}
-                    {activeTab === 'random' && (
+                    {displayedTab === 'random' && (
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#4ade80' }}>
                                 ランダムマッチ
@@ -958,7 +1041,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* ランキング（未実装） */}
-                    {activeTab === 'ranking' && (
+                    {displayedTab === 'ranking' && (
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1 * scale}rem`, color: '#a855f7' }}>
                                 ランキング
@@ -970,7 +1053,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* ギャラリー */}
-                    {activeTab === 'gallery' && (
+                    {displayedTab === 'gallery' && (
                         <>
                             {galleryView === 'class' && (
                                 <div style={{ textAlign: 'center' }}>
@@ -1214,7 +1297,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     )}
 
                     {/* 設定 */}
-                    {activeTab === 'settings' && (
+                    {displayedTab === 'settings' && (
                         <div style={{
                             background: 'rgba(0, 0, 0, 0.3)',
                             borderRadius: 12 * scale,
@@ -1467,7 +1550,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => handleTabChange(item.id)}
                         style={{
                             flex: 1,
                             maxWidth: 140 * scale,

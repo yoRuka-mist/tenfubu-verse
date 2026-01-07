@@ -55,7 +55,7 @@ export interface PlayerData {
     ratings: Partial<Record<ClassType, ClassRating>>;
 }
 
-// 初期クラスレーティング
+// 初期クラスレーティング（初期値は0）
 export const createInitialClassRating = (): ClassRating => ({
     rating: 0,
     winStreak: 0,
