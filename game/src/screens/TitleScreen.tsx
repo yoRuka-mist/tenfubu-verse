@@ -432,7 +432,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 zIndex: 2,
             }}>
                 {/* 左側: お気に入りカード表示 - ホームタブでのみ表示 */}
-                {activeTab === 'home' && (
+                {activeTab === 'home' && (() => {
+                    console.log('🎴 Rendering home card, homeCardId:', homeCardId);
+                    // カードデータを取得
+                    const homeCard = homeCardId ? MOCK_CARDS.find(c => c.id === homeCardId) : null;
+                    const normalImageUrl = homeCard?.imageUrl || `/cards/${homeCardId}.png`;
+                    const evolvedImageUrl = homeCard?.type === 'FOLLOWER' ? (homeCard?.evolvedImageUrl || `/cards/${homeCardId}_evolved.png`) : null;
+                    return (
                 <div style={{
                     position: 'absolute',
                     left: 150 * scale,
@@ -459,7 +465,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             backfaceVisibility: 'hidden',
                             borderRadius: 12 * scale,
                             background: homeCardId
-                                ? `url(${getAssetUrl(`/cards/${homeCardId}.png`)})`
+                                ? `url(${getAssetUrl(normalImageUrl)})`
                                 : 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
@@ -488,8 +494,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             backfaceVisibility: 'hidden',
                             transform: 'rotateY(180deg)',
                             borderRadius: 12 * scale,
-                            background: homeCardId
-                                ? `url(${getAssetUrl(`/cards/${homeCardId}_evolved.png`)})`
+                            background: homeCardId && evolvedImageUrl
+                                ? `url(${getAssetUrl(evolvedImageUrl)})`
+                                : homeCardId
+                                ? `url(${getAssetUrl(normalImageUrl)})`
                                 : `url(${getAssetUrl('/cards/sleeve_default.png')})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
@@ -518,7 +526,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         ドラッグで回転
                     </p>
                 </div>
-                )}
+                    );
+                })()}
 
                 {/* 中央: タブ別コンテンツ */}
                 <div style={{
