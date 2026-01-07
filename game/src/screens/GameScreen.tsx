@@ -2785,20 +2785,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     isCasualOrRanked
                 });
 
-                // For CASUAL_MATCH/RANKED_MATCH: Update HOST's local gameState.firstPlayerId first
-                if (isCasualOrRanked) {
-                    dispatch({ type: 'SET_FIRST_PLAYER_ID', payload: { firstPlayerId } });
-                }
-
                 // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
                 // isFirstPlayer indicates if HOST (p1) goes first
                 // If HOST goes second (isFirstPlayer=false), then p2 is first player
+                // Note: We update both the local state and the sent state
                 const stateToSend = isCasualOrRanked
                     ? {
                         ...gameState,
-                        firstPlayerId
+                        firstPlayerId,
+                        activePlayerId: firstPlayerId  // Also set activePlayerId for correct turn
                     }
                     : gameState;
+
+                // Update HOST's local gameState to match what we're sending
+                if (isCasualOrRanked) {
+                    dispatch({ type: 'SYNC_STATE', payload: stateToSend });
+                }
 
                 adapter.send({ type: 'INIT_GAME', payload: stateToSend });
 
@@ -4203,13 +4205,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setMyRematchRequested(false);
         setOpponentRematchRequested(false);
 
-        // 3. Update player class if new deck type is provided
+        // 4. Reset rating states for RANKED_MATCH
+        setRatingResult(null);
+        setRatingUpdateDone(false);
+        setVictoryReason('normal');
+
+        // 5. Update player class if new deck type is provided
         const deckToUse = newDeckType || currentPlayerClass;
         if (newDeckType) {
             setCurrentPlayerClass(newDeckType);
         }
 
-        // 4. Determine opponent class based on new player class
+        // 6. Determine opponent class based on new player class
         // CPUは自分と違うクラスをランダムで選択（YORUKAの場合はSENKAかAJA）
         let newOpponentClass: ClassType = opponentClass;
         if (opponentType === 'CPU') {
@@ -4220,16 +4227,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             }
         }
 
-        // 5. Suppress immediate diff detection by clearing and then resetting the Ref
+        // 7. Suppress immediate diff detection by clearing and then resetting the Ref
         const opponentDefaultName = opponentType === 'ONLINE' ? '対戦相手' : 'CPU';
         const freshState = initializeGame(playerName, deckToUse, opponentDefaultName, newOpponentClass);
         prevPlayersRef.current = freshState.players;
         prevHandSizeRef.current = { player: freshState.players.p1.hand.length, opponent: freshState.players.p2.hand.length };
 
-        // 6. Force BGM re-roll and restart
+        // 8. Force BGM re-roll and restart
         setBgmLoadedForClass(null);
 
-        // 7. Reset battle intro and coin toss for new game
+        // 9. Reset battle intro and coin toss for new game
         setShowBattleIntro(gameMode !== 'JOIN'); // JOIN時はホストからの同期を待つ
         // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
         const isCasualOrRankedMode = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
@@ -4239,12 +4246,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
-        // 8. For online rematch, HOST needs to send new game state after coin toss completes
+        // 10. For online rematch, HOST needs to send new game state after coin toss completes
         if (gameMode === 'HOST' || isCasualOrRankedMode) {
             initialStateSentRef.current = false;
         }
 
-        // 9. Update Game State
+        // 11. Update Game State
         dispatch({ type: 'SYNC_STATE', payload: freshState });
     }, [currentPlayerClass, opponentClass, opponentType, gameMode]);
 
@@ -4255,32 +4262,42 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setLeaderUiFadeIn(true); // リーダーUIをフェードイン
         setCoinTossResult(isFirstPlayer ? 'FIRST' : 'SECOND');
 
-        // Determine turn order based on isFirstPlayer
+        // Use gameState.firstPlayerId if already set (CASUAL_MATCH/RANKED_MATCH)
+        // Otherwise calculate from isFirstPlayer (HOST/JOIN with coin toss)
         const myPlayerId = currentPlayerId;
         const opponentPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
-        const firstPlayerId = isFirstPlayer ? myPlayerId : opponentPlayerId;
-        const secondPlayerId = isFirstPlayer ? opponentPlayerId : myPlayerId;
 
-        // Always update gameState to ensure correct turn order
-        const newState = {
-            ...gameState,
-            activePlayerId: firstPlayerId,
-            firstPlayerId: firstPlayerId,
-            players: {
-                [firstPlayerId]: {
-                    ...gameState.players[firstPlayerId],
-                    maxPp: 1,
-                    pp: 1
+        const effectiveFirstPlayerId = gameState.firstPlayerId || (isFirstPlayer ? myPlayerId : opponentPlayerId);
+        const secondPlayerId = effectiveFirstPlayerId === myPlayerId ? opponentPlayerId : myPlayerId;
+
+        // Only update if activePlayerId is not already set, or if PP needs initialization
+        const needsUpdate = gameState.activePlayerId !== effectiveFirstPlayerId
+            || gameState.players[effectiveFirstPlayerId].pp !== 1
+            || gameState.players[secondPlayerId].pp !== 0;
+
+        if (needsUpdate) {
+            const newState = {
+                ...gameState,
+                activePlayerId: effectiveFirstPlayerId,
+                firstPlayerId: effectiveFirstPlayerId,
+                players: {
+                    [effectiveFirstPlayerId]: {
+                        ...gameState.players[effectiveFirstPlayerId],
+                        maxPp: 1,
+                        pp: 1
+                    },
+                    [secondPlayerId]: {
+                        ...gameState.players[secondPlayerId],
+                        maxPp: 0,
+                        pp: 0
+                    }
                 },
-                [secondPlayerId]: {
-                    ...gameState.players[secondPlayerId],
-                    maxPp: 0,
-                    pp: 0
-                }
-            },
-            logs: [`ターン 1 - ${gameState.players[firstPlayerId].name} のターン`]
-        };
-        dispatch({ type: 'SYNC_STATE', payload: newState });
+                logs: gameState.logs.length === 0
+                    ? [`ターン 1 - ${gameState.players[effectiveFirstPlayerId].name} のターン`]
+                    : gameState.logs
+            };
+            dispatch({ type: 'SYNC_STATE', payload: newState });
+        }
 
         setCoinTossPhase('DONE');
     }, [gameState, isFirstPlayer, currentPlayerId]);
