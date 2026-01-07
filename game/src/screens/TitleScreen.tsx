@@ -430,7 +430,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 {activeTab === 'home' && (
                 <div style={{
                     position: 'absolute',
-                    left: 50 * scale,
+                    left: 150 * scale,
                     top: '50%',
                     transform: 'translateY(-50%)',
                     perspective: 1000,
@@ -438,8 +438,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     <div
                         onMouseDown={handleMouseDown}
                         style={{
-                            width: 200 * scale,
-                            height: 280 * scale,
+                            width: 250 * scale,
+                            height: 350 * scale,
                             transformStyle: 'preserve-3d',
                             transform: `rotateY(${cardRotation}deg)`,
                             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
