@@ -449,8 +449,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     <div
                         onMouseDown={handleMouseDown}
                         style={{
-                            width: 375 * scale,
-                            height: 525 * scale,
+                            width: 488 * scale,
+                            height: 683 * scale,
                             transformStyle: 'preserve-3d',
                             transform: `rotateY(${cardRotation}deg)`,
                             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
