@@ -40,7 +40,7 @@ type MenuTab = 'solo' | 'room' | 'random' | 'home' | 'ranking' | 'gallery' | 'se
 type GalleryView = 'class' | 'card-list' | 'card-detail' | 'related-card';
 
 interface TitleScreenProps {
-    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', roomId?: string) => void;
+    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', roomId?: string, classType?: ClassType) => void;
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
@@ -300,9 +300,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     // ランダムマッチタイプ選択
     const handleMatchTypeSelect = (matchType: 'casual' | 'ranked') => {
         if (matchType === 'casual') {
-            onStartConfig('CASUAL_MATCH');
+            handleStartClassSelect('CASUAL_MATCH');
         } else {
-            onStartConfig('RANKED_MATCH');
+            handleStartClassSelect('RANKED_MATCH');
         }
     };
 
@@ -353,18 +353,22 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     };
 
     // クラス選択の開始ハンドラー
-    const handleStartClassSelect = (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH') => {
+    const handleStartClassSelect = (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH', roomId?: string) => {
         setClassSelectMode(mode);
+        if (roomId) {
+            setJoinId(roomId);
+        }
         setShowingClassSelect(true);
     };
 
     // クラス選択完了ハンドラー
     const handleClassSelected = (classType: ClassType) => {
         setShowingClassSelect(false);
-        onStartConfig(classSelectMode, undefined);
-        // App.tsxの startGame が呼ばれ、ClassSelectScreenに遷移してクラスが選択される
-        // ただし、今はタイトル画面内でクラス選択を完了させるので、classTypeを渡す
-        // TODO: onStartConfigのシグネチャを変更するか、別の方法で渡す
+        // クラスを選択してゲーム開始
+        const roomIdToPass = classSelectMode === 'JOIN' ? joinId : undefined;
+        onStartConfig(classSelectMode, roomIdToPass, classType);
+        // ルームID入力状態をリセット
+        setShowJoinInput(false);
     };
 
     // クラス選択をキャンセル
@@ -737,7 +741,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 ひとりで遊ぶ
                             </h2>
                             <button
-                                onClick={() => onStartConfig('CPU')}
+                                onClick={() => handleStartClassSelect('CPU')}
                                 style={{
                                     padding: `${1 * scale}rem ${3 * scale}rem`,
                                     fontSize: `${1.2 * scale}rem`,
@@ -768,7 +772,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 }}>
                                     {/* 部屋を作るパネル - 左側なので右に傾ける */}
                                     <div
-                                        onClick={() => onStartConfig('HOST')}
+                                        onClick={() => handleStartClassSelect('HOST')}
                                         style={{
                                             width: 200 * scale,
                                             height: 280 * scale,
@@ -903,7 +907,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                             戻る
                                         </button>
                                         <button
-                                            onClick={() => onStartConfig('JOIN', joinId)}
+                                            onClick={() => handleStartClassSelect('JOIN', joinId)}
                                             disabled={!joinId}
                                             style={{
                                                 padding: `${0.6 * scale}rem ${1.5 * scale}rem`,
@@ -1657,6 +1661,180 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* クラス選択オーバーレイ */}
+            {showingClassSelect && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.85)',
+                    zIndex: 200,
+                    padding: `${2 * scale}rem`,
+                }}>
+                    {/* タイトル */}
+                    <h2 style={{
+                        fontSize: `${2 * scale}rem`,
+                        marginBottom: `${2 * scale}rem`,
+                        color: '#fff',
+                    }}>
+                        クラスを選択
+                    </h2>
+
+                    {/* クラスカード */}
+                    <div style={{
+                        display: 'flex',
+                        gap: `${1.5 * scale}rem`,
+                        marginBottom: `${2 * scale}rem`,
+                    }}>
+                        {/* 盞華 */}
+                        <div
+                            onClick={() => handleClassSelected('SENKA')}
+                            style={{
+                                width: 200 * scale,
+                                height: 280 * scale,
+                                borderRadius: 12 * scale,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '3px solid rgba(255, 255, 255, 0.3)',
+                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(255, 100, 100, 0.5)';
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
+                            }}
+                        >
+                            <img src={senkaLeaderImg} alt="盞華" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+
+                        {/* あじゃ玉 */}
+                        <div
+                            onClick={() => handleClassSelected('AJA')}
+                            style={{
+                                width: 200 * scale,
+                                height: 280 * scale,
+                                borderRadius: 12 * scale,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '3px solid rgba(255, 255, 255, 0.3)',
+                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(100, 200, 255, 0.5)';
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
+                            }}
+                        >
+                            <img src={azyaLeaderImg} alt="あじゃ玉" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+
+                        {/* よるか */}
+                        <div
+                            onClick={() => handleClassSelected('YORUKA')}
+                            style={{
+                                width: 200 * scale,
+                                height: 280 * scale,
+                                borderRadius: 12 * scale,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '3px solid rgba(255, 255, 255, 0.3)',
+                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(200, 100, 255, 0.5)';
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
+                            }}
+                        >
+                            <img src={yorukaLeaderImg} alt="よるか" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                    </div>
+
+                    {/* ランクマッチの場合、レート表示 */}
+                    {classSelectMode === 'RANKED_MATCH' && !loadingRatings && (
+                        <div style={{
+                            display: 'flex',
+                            gap: `${1.5 * scale}rem`,
+                            marginBottom: `${2 * scale}rem`,
+                        }}>
+                            {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((classType) => {
+                                const rating = classRatings[classType];
+                                const ratingValue = rating?.rating ?? 0;
+                                const rank = getRankFromRating(ratingValue);
+                                const rankColor = RANK_COLORS[rank];
+                                const rankName = RANK_DISPLAY_NAMES[rank];
+
+                                return (
+                                    <div key={classType} style={{
+                                        width: 200 * scale,
+                                        textAlign: 'center',
+                                        color: '#fff',
+                                    }}>
+                                        <div style={{
+                                            fontSize: `${1 * scale}rem`,
+                                            color: rankColor,
+                                            fontWeight: 'bold',
+                                        }}>
+                                            {rankName}
+                                        </div>
+                                        <div style={{
+                                            fontSize: `${1.2 * scale}rem`,
+                                            color: '#4ade80',
+                                            fontWeight: 'bold',
+                                        }}>
+                                            {ratingValue}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* 戻るボタン */}
+                    <button
+                        onClick={handleCancelClassSelect}
+                        style={{
+                            padding: `${0.8 * scale}rem ${2 * scale}rem`,
+                            fontSize: `${1 * scale}rem`,
+                            background: 'transparent',
+                            border: '2px solid rgba(255, 255, 255, 0.3)',
+                            borderRadius: 8 * scale,
+                            color: 'white',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                        }}
+                    >
+                        戻る
+                    </button>
                 </div>
             )}
         </div>

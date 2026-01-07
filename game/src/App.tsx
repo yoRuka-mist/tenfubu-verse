@@ -302,10 +302,26 @@ function App() {
         return () => document.removeEventListener('click', handleClick);
     }, [currentScreen, audioSettings.bgmEnabled]);
 
-    const handleTitleConfig = useCallback((mode: GameMode, id?: string) => {
+    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType) => {
         setGameMode(mode);
         if (id) setRoomId(id);
-        setCurrentScreen('CLASS_SELECT');
+
+        // classTypeが指定されている場合は、ClassSelectScreenをスキップ
+        if (classType) {
+            setSelectedClass(classType);
+            // 直接適切な画面に遷移
+            if (mode === 'CPU') {
+                setCurrentScreen('GAME');
+            } else if (mode === 'CASUAL_MATCH' || mode === 'RANKED_MATCH') {
+                setCurrentScreen('MATCHMAKING');
+            } else {
+                // HOST/JOIN → ロビー画面へ
+                setCurrentScreen('LOBBY');
+            }
+        } else {
+            // classTypeが指定されていない場合は従来通りClassSelectScreenへ
+            setCurrentScreen('CLASS_SELECT');
+        }
     }, []);
 
     const startGame = useCallback((cls: ClassType) => {
