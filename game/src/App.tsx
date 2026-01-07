@@ -302,9 +302,10 @@ function App() {
         return () => document.removeEventListener('click', handleClick);
     }, [currentScreen, audioSettings.bgmEnabled]);
 
-    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType) => {
+    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType, aiDifficulty?: AIDifficulty) => {
         setGameMode(mode);
         if (id) setRoomId(id);
+        if (aiDifficulty) setAiDifficulty(aiDifficulty);
 
         // classTypeが指定されている場合は、ClassSelectScreenをスキップ
         if (classType) {

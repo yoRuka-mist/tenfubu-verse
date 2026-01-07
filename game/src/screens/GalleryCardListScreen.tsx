@@ -93,14 +93,15 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     const currentClass = ALL_CLASSES[currentClassIndex];
     const template = getDeckTemplate(currentClass);
 
-    // カードデータと枚数を取得（トークンを除外）
+    // カードデータと枚数を取得（トークンを除外し、コスト順でソート）
     const cardsWithCount = template
         .filter(entry => !entry.cardId.startsWith('TOKEN_'))
         .map(entry => ({
             card: MOCK_CARDS.find(c => c.id === entry.cardId)!,
             count: entry.count
         }))
-        .filter(item => item.card); // undefinedを除外
+        .filter(item => item.card) // undefinedを除外
+        .sort((a, b) => a.card.cost - b.card.cost); // コスト順でソート
 
     // クラスカラー取得
     const classColor = CLASS_COLORS[currentClass];

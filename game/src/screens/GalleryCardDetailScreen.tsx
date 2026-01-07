@@ -15,6 +15,8 @@ const BASE_HEIGHT = 720;
 
 interface GalleryCardDetailScreenProps {
     cardId: string;
+    allCardIds?: string[]; // 全カードIDリスト（コスト順）
+    onNavigate?: (direction: 'prev' | 'next') => void; // カードナビゲーション
     onOpenRelatedCard: (cardId: string) => void;
     onBack: () => void;
     onSetHomeCard?: (cardId: string) => void; // ホームカード設定用
@@ -22,6 +24,8 @@ interface GalleryCardDetailScreenProps {
 
 export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = ({
     cardId,
+    allCardIds = [],
+    onNavigate,
     onOpenRelatedCard,
     onBack,
     onSetHomeCard
@@ -94,6 +98,9 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
         }
     };
 
+    // 前後のカードがあるかチェック
+    const hasPrevNext = allCardIds.length > 1 && onNavigate;
+
     return (
         <div style={{
             minHeight: '100dvh',
@@ -131,6 +138,86 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
                     戻る
                 </button>
             </div>
+
+            {/* 左矢印ボタン */}
+            {hasPrevNext && (
+                <div style={{
+                    position: 'absolute',
+                    left: `${20 * scale}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 100
+                }}>
+                    <button
+                        onClick={() => onNavigate('prev')}
+                        style={{
+                            width: `${60 * scale}px`,
+                            height: `${60 * scale}px`,
+                            background: 'rgba(0, 0, 0, 0.6)',
+                            border: '2px solid rgba(255, 255, 255, 0.3)',
+                            borderRadius: '50%',
+                            color: 'white',
+                            fontSize: `${2 * scale}rem`,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.6)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                    >
+                        &lt;
+                    </button>
+                </div>
+            )}
+
+            {/* 右矢印ボタン */}
+            {hasPrevNext && (
+                <div style={{
+                    position: 'absolute',
+                    right: `${20 * scale}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 100
+                }}>
+                    <button
+                        onClick={() => onNavigate('next')}
+                        style={{
+                            width: `${60 * scale}px`,
+                            height: `${60 * scale}px`,
+                            background: 'rgba(0, 0, 0, 0.6)',
+                            border: '2px solid rgba(255, 255, 255, 0.3)',
+                            borderRadius: '50%',
+                            color: 'white',
+                            fontSize: `${2 * scale}rem`,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.6)';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                    >
+                        &gt;
+                    </button>
+                </div>
+            )}
 
             {/* メインコンテンツ: 左右レイアウト（イラスト優先） */}
             <div style={{
