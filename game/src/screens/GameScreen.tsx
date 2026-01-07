@@ -2179,7 +2179,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                 cursor: 'pointer'
                             }}
                         >
-                            タイトルへ {!shouldStopCountdown && `(${timeLeft})`}
+                            ホームへ戻る {!shouldStopCountdown && `(${timeLeft})`}
                         </button>
                     </div>
                 )}
@@ -2375,6 +2375,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // HOST is always p1 (goes first in standard rules)
     // JOIN is always p2
     // For CASUAL_MATCH/RANKED_MATCH, use adapter.isHost to determine player role
+    // IMPORTANT: adapter?.isHost must be explicitly checked for boolean true
+    // If adapter is undefined or adapter.isHost is undefined, default to false (JOIN side)
     const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
                    ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter?.isHost === true);
     const currentPlayerId = isHost ? 'p1' : 'p2';
@@ -2383,7 +2385,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // DEBUG: Log initial state for intro sync troubleshooting
     console.log('[GameScreen INIT]', {
         gameMode,
+        'adapter exists': !!adapter,
         'adapter?.isHost': adapter?.isHost,
+        'adapter?.isHost === true': adapter?.isHost === true,
         isHost,
         currentPlayerId,
         connected,
@@ -2453,6 +2457,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
     // コイントス結果（先攻/後攻）を保持 - CPU/HOSTではランダム、JOINではINIT_GAMEから同期
     const [isFirstPlayer, setIsFirstPlayer] = React.useState(() => Math.random() > 0.5);
+
+    // DEBUG: Log isFirstPlayer when BattleIntro is shown
+    useEffect(() => {
+        if (showBattleIntro && (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH')) {
+            console.log('[GameScreen DEBUG] BattleIntro shown with isFirstPlayer:', isFirstPlayer, 'currentPlayerId:', currentPlayerId, 'adapter?.isHost:', adapter?.isHost);
+        }
+    }, [showBattleIntro, gameMode, isFirstPlayer, currentPlayerId, adapter]);
 
     // Rematch states for online play
     const [myRematchRequested, setMyRematchRequested] = React.useState(false);
@@ -2608,7 +2619,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
             // Small delay to ensure JOIN's message handler is ready
             const sendInitAndReady = () => {
-                console.log('[GameScreen] HOST side: Actually sending INIT_GAME now, isFirstPlayer:', isFirstPlayer);
+                const firstPlayerId = isFirstPlayer ? 'p1' : 'p2';
+                console.log('[GameScreen] HOST side: Actually sending INIT_GAME now', {
+                    isFirstPlayer,
+                    firstPlayerId,
+                    currentPlayerId,
+                    'adapter.isHost': adapter.isHost,
+                    isCasualOrRanked
+                });
 
                 // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
                 // isFirstPlayer indicates if HOST (p1) goes first
@@ -2616,7 +2634,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 const stateToSend = isCasualOrRanked
                     ? {
                         ...gameState,
-                        firstPlayerId: isFirstPlayer ? 'p1' : 'p2'
+                        firstPlayerId
                     }
                     : gameState;
 
@@ -4302,8 +4320,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 setGameSynced(true);
 
                 // Show BattleIntro for JOIN with correct first player info
-                const isJoinSideFirst = msg.payload.firstPlayerId === currentPlayerId;
-                console.log('[GameScreen] JOIN side: Setting isFirstPlayer, firstPlayerId:', msg.payload.firstPlayerId, 'currentPlayerId:', currentPlayerId, 'isJoinSideFirst:', isJoinSideFirst);
+                const receivedFirstPlayerId = msg.payload.firstPlayerId;
+                const isJoinSideFirst = receivedFirstPlayerId === currentPlayerId;
+                console.log('[GameScreen] JOIN side: Setting isFirstPlayer', {
+                    'received firstPlayerId': receivedFirstPlayerId,
+                    currentPlayerId,
+                    'adapter?.isHost': adapter?.isHost,
+                    'isHost (calculated)': isHost,
+                    isJoinSideFirst,
+                    'comparison': `${receivedFirstPlayerId} === ${currentPlayerId} = ${isJoinSideFirst}`
+                });
                 setIsFirstPlayer(isJoinSideFirst);
 
                 // For CASUAL_MATCH/RANKED_MATCH: Don't show BattleIntro immediately, wait for sync
