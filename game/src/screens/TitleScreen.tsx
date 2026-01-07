@@ -65,6 +65,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         console.log('👤 TitleScreen auth state:', { isAnonymous, userId });
     }, [isAnonymous, userId]);
 
+    // デバッグ用：ホームカードIDの変更を確認
+    useEffect(() => {
+        console.log('🎴 TitleScreen homeCardId changed:', homeCardId);
+    }, [homeCardId]);
+
     // ホーム画面の状態
     const [activeTab, setActiveTab] = useState<MenuTab>('home');
     const [showJoinInput, setShowJoinInput] = useState(false);

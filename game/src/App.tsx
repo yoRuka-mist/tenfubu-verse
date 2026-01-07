@@ -342,8 +342,10 @@ function App() {
 
     // ホームカード設定ハンドラー
     const handleSetHomeCard = useCallback((cardId: string) => {
+        console.log('🎴 App handleSetHomeCard called with cardId:', cardId);
         setHomeCardId(cardId);
         localStorage.setItem('homeCardId', cardId);
+        console.log('🎴 localStorage updated:', localStorage.getItem('homeCardId'));
     }, []);
 
     // アカウント関連のハンドラー

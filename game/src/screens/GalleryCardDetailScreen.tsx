@@ -83,10 +83,14 @@ export const GalleryCardDetailScreen: React.FC<GalleryCardDetailScreenProps> = (
 
     // ホームカード設定ハンドラー
     const handleSetHomeCard = () => {
+        console.log('🎴 GalleryCardDetailScreen handleSetHomeCard called with cardId:', cardId);
         if (onSetHomeCard) {
+            console.log('🎴 Calling onSetHomeCard callback');
             onSetHomeCard(cardId);
             setIsSettingHome(true);
             setTimeout(() => setIsSettingHome(false), 1500);
+        } else {
+            console.warn('🎴 onSetHomeCard callback is not provided');
         }
     };
 
