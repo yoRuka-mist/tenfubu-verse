@@ -22,7 +22,6 @@ const BASE_HEIGHT = 720;
 interface GalleryCardListScreenProps {
     classType: ClassType;
     onSelectCard: (cardId: string) => void;
-    onBack: () => void;
 }
 
 // クラスごとの色設定
@@ -63,8 +62,7 @@ const ALL_CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
 
 export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     classType,
-    onSelectCard,
-    onBack
+    onSelectCard
 }) => {
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -116,7 +114,6 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     const cardHeight = 155 * scale;
     const gap = 0.6 * scale;
     const titleSize = 1.8 * scale;
-    const buttonPadding = `${8 * scale}px ${16 * scale}px`;
 
     // リーダー切り替え
     const handlePrevClass = () => {
@@ -138,30 +135,6 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
             position: 'relative',
             paddingBottom: `${40 * scale}px`
         }}>
-            {/* 戻るボタン（左上固定） */}
-            <button
-                onClick={onBack}
-                style={{
-                    position: 'fixed',
-                    top: `${20 * scale}px`,
-                    left: `${20 * scale}px`,
-                    background: 'rgba(0, 0, 0, 0.5)',
-                    padding: buttonPadding,
-                    fontSize: `${0.9 * scale}rem`,
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: 6 * scale,
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontFamily: 'sans-serif',
-                    transition: 'all 0.2s',
-                    zIndex: 100
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'}
-            >
-                クラス選択に戻る
-            </button>
-
             {/* タイトル */}
             <h2 style={{
                 fontSize: `${titleSize}rem`,

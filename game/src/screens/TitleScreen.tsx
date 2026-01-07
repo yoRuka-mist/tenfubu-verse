@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AudioSettings } from '../core/types';
+import { AudioSettings, ClassType } from '../core/types';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -12,6 +12,11 @@ const getAssetUrl = (path: string): string => {
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
+// Leader Images
+const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
+const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
+const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+
 // メニュー項目の型
 type MenuTab = 'solo' | 'room' | 'random' | 'home' | 'ranking' | 'gallery' | 'settings';
 
@@ -20,7 +25,7 @@ interface TitleScreenProps {
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
-    onGalleryStart: () => void; // ギャラリー開始ハンドラー
+    onGalleryClassSelect: (classType: ClassType) => void; // ギャラリークラス選択ハンドラー
     isAnonymous?: boolean; // ユーザーが匿名かどうか
     userId?: string | null; // ユーザーID
     onNavigateToRegister?: () => void; // アカウント登録画面への遷移
@@ -34,7 +39,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     audioSettings,
     onAudioSettingsChange,
     playerId: _playerId,
-    onGalleryStart,
+    onGalleryClassSelect,
     isAnonymous = true,
     userId = null,
     onNavigateToRegister,
@@ -737,7 +742,194 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         </div>
                     )}
 
-                    {/* ギャラリー - タブクリックで直接遷移するため、コンテンツは不要 */}
+                    {/* ギャラリー */}
+                    {activeTab === 'gallery' && (
+                        <div style={{ textAlign: 'center' }}>
+                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
+                                ギャラリー - クラス選択
+                            </h2>
+
+                            {/* Class Cards */}
+                            <div style={{
+                                display: 'flex',
+                                gap: `${1.2 * scale}rem`,
+                                justifyContent: 'center',
+                                marginBottom: `${1 * scale}rem`
+                            }}>
+                                {/* Senka Class */}
+                                <div
+                                    onClick={() => onGalleryClassSelect('SENKA')}
+                                    style={{
+                                        width: 200 * scale,
+                                        height: 280 * scale,
+                                        border: '1px solid #444',
+                                        borderRadius: 10 * scale,
+                                        background: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'flex-start',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        boxShadow: '0 4px 20px rgba(233, 69, 96, 0.2)',
+                                        overflow: 'hidden',
+                                        position: 'relative'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.boxShadow = '0 8px 30px rgba(233, 69, 96, 0.4)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.boxShadow = '0 4px 20px rgba(233, 69, 96, 0.2)';
+                                    }}
+                                >
+                                    <img
+                                        src={senkaLeaderImg}
+                                        alt="Senka"
+                                        style={{
+                                            width: '100%',
+                                            height: '75%',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                    <div style={{
+                                        padding: `${8 * scale}px`,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        width: '100%',
+                                        justifyContent: 'center',
+                                        flex: 1
+                                    }}>
+                                        <h3 style={{
+                                            fontSize: `${1.4 * scale}rem`,
+                                            color: '#e94560',
+                                            margin: 0,
+                                            fontFamily: 'sans-serif'
+                                        }}>
+                                            盞華
+                                        </h3>
+                                    </div>
+                                </div>
+
+                                {/* Aja Class */}
+                                <div
+                                    onClick={() => onGalleryClassSelect('AJA')}
+                                    style={{
+                                        width: 200 * scale,
+                                        height: 280 * scale,
+                                        border: '1px solid #444',
+                                        borderRadius: 10 * scale,
+                                        background: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'flex-start',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        boxShadow: '0 4px 20px rgba(69, 162, 233, 0.2)',
+                                        overflow: 'hidden',
+                                        position: 'relative'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.boxShadow = '0 8px 30px rgba(69, 162, 233, 0.4)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.boxShadow = '0 4px 20px rgba(69, 162, 233, 0.2)';
+                                    }}
+                                >
+                                    <img
+                                        src={azyaLeaderImg}
+                                        alt="Azya"
+                                        style={{
+                                            width: '100%',
+                                            height: '75%',
+                                            objectFit: 'cover',
+                                            objectPosition: 'center top'
+                                        }}
+                                    />
+                                    <div style={{
+                                        padding: `${8 * scale}px`,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        width: '100%',
+                                        justifyContent: 'center',
+                                        flex: 1
+                                    }}>
+                                        <h3 style={{
+                                            fontSize: `${1.4 * scale}rem`,
+                                            color: '#45a2e9',
+                                            margin: 0,
+                                            fontFamily: 'sans-serif'
+                                        }}>
+                                            あじゃ
+                                        </h3>
+                                    </div>
+                                </div>
+
+                                {/* Yoruka Class */}
+                                <div
+                                    onClick={() => onGalleryClassSelect('YORUKA')}
+                                    style={{
+                                        width: 200 * scale,
+                                        height: 280 * scale,
+                                        border: '1px solid #444',
+                                        borderRadius: 10 * scale,
+                                        background: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'flex-start',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        boxShadow: '0 4px 20px rgba(168, 85, 247, 0.2)',
+                                        overflow: 'hidden',
+                                        position: 'relative'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.boxShadow = '0 8px 30px rgba(168, 85, 247, 0.4)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.boxShadow = '0 4px 20px rgba(168, 85, 247, 0.2)';
+                                    }}
+                                >
+                                    <img
+                                        src={yorukaLeaderImg}
+                                        alt="Yoruka"
+                                        style={{
+                                            width: '100%',
+                                            height: '75%',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                    <div style={{
+                                        padding: `${8 * scale}px`,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        width: '100%',
+                                        justifyContent: 'center',
+                                        flex: 1
+                                    }}>
+                                        <h3 style={{
+                                            fontSize: `${1.4 * scale}rem`,
+                                            color: '#a855f7',
+                                            margin: 0,
+                                            fontFamily: 'sans-serif'
+                                        }}>
+                                            Y
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* 設定 */}
                     {activeTab === 'settings' && (
@@ -993,13 +1185,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => {
-                            if (item.id === 'gallery') {
-                                onGalleryStart();
-                            } else {
-                                setActiveTab(item.id);
-                            }
-                        }}
+                        onClick={() => setActiveTab(item.id)}
                         style={{
                             flex: 1,
                             maxWidth: 140 * scale,

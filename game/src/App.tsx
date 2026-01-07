@@ -4,7 +4,6 @@ import { ClassSelectScreen } from './screens/ClassSelectScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { MatchmakingScreen } from './screens/MatchmakingScreen';
 import { GameScreen } from './screens/GameScreen';
-import { GalleryClassSelectScreen } from './screens/GalleryClassSelectScreen';
 import { GalleryCardListScreen } from './screens/GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './screens/GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './screens/GalleryRelatedCardScreen';
@@ -56,7 +55,7 @@ const loadAudioSettings = (): AudioSettings => {
 };
 
 type Screen = 'TITLE' | 'CLASS_SELECT' | 'LOBBY' | 'MATCHMAKING' | 'GAME' |
-                'GALLERY_CLASS_SELECT' | 'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD' |
+                'GALLERY_CARD_LIST' | 'GALLERY_CARD_DETAIL' | 'GALLERY_RELATED_CARD' |
                 'REGISTER' | 'LOGIN' | 'PROFILE';
 type GameMode = 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
 
@@ -356,10 +355,6 @@ function App() {
     }, []);
 
     // Gallery handlers
-    const handleGalleryStart = useCallback(() => {
-        setCurrentScreen('GALLERY_CLASS_SELECT');
-    }, []);
-
     const handleGalleryClassSelect = useCallback((cls: ClassType) => {
         setGalleryClassType(cls);
         setCurrentScreen('GALLERY_CARD_LIST');
@@ -378,11 +373,6 @@ function App() {
             setGalleryRelatedCardIds(parentCard.relatedCards);
             setCurrentScreen('GALLERY_RELATED_CARD');
         }
-    }, []);
-
-    const backFromGalleryCardList = useCallback(() => {
-        setGalleryClassType(null);
-        setCurrentScreen('GALLERY_CLASS_SELECT');
     }, []);
 
     const backFromGalleryCardDetail = useCallback(() => {
@@ -530,7 +520,7 @@ function App() {
                     audioSettings={audioSettings}
                     onAudioSettingsChange={updateAudioSettings}
                     playerId={playerId}
-                    onGalleryStart={handleGalleryStart}
+                    onGalleryClassSelect={handleGalleryClassSelect}
                     isAnonymous={isAnonymous}
                     userId={userId}
                     onNavigateToRegister={handleNavigateToRegister}
@@ -597,17 +587,10 @@ function App() {
                     opponentRating={opponentRating}
                 />
             )}
-            {currentScreen === 'GALLERY_CLASS_SELECT' && (
-                <GalleryClassSelectScreen
-                    onSelectClass={handleGalleryClassSelect}
-                    onBack={backToTitle}
-                />
-            )}
             {currentScreen === 'GALLERY_CARD_LIST' && galleryClassType && (
                 <GalleryCardListScreen
                     classType={galleryClassType}
                     onSelectCard={handleGalleryCardSelect}
-                    onBack={backFromGalleryCardList}
                 />
             )}
             {currentScreen === 'GALLERY_CARD_DETAIL' && galleryCardId && (
