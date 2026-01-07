@@ -498,6 +498,8 @@ function App() {
                     homeCardId={homeCardId}
                     isAnonymous={isAnonymous}
                     userId={userId}
+                    currentPlayerName={playerName}
+                    onPlayerNameUpdate={(newName) => setPlayerName(newName)}
                     onNavigateToRegister={handleNavigateToRegister}
                     onNavigateToLogin={handleNavigateToLogin}
                     onNavigateToProfile={handleNavigateToProfile}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ClassType, Player } from '../core/types';
 import { usePerformanceMode, getLightModeEffects } from '../hooks/usePerformanceMode';
+import { RankType, RANK_DISPLAY_NAMES } from '../firebase/rating';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -25,6 +26,19 @@ const DIAGONAL_OFFSET = 8; // 斜め線のオフセット（%）
 // GameScreenと同じ定数を使用
 const LEADER_SIZE = 240;
 
+// ランク色取得
+const getRankColor = (rank: RankType): string => {
+    switch (rank) {
+        case 'BRONZE': return '#cd7f32';
+        case 'SILVER': return '#c0c0c0';
+        case 'GOLD': return '#ffd700';
+        case 'PLATINUM': return '#e5e4e2';
+        case 'DIAMOND': return '#b9f2ff';
+        case 'MASTER': return '#ff1493';
+        default: return '#ffffff';
+    }
+};
+
 interface BattleIntroProps {
     myPlayer: Player;
     opponentPlayer: Player;
@@ -37,6 +51,9 @@ interface BattleIntroProps {
     onOrbLand?: () => void; // 光の玉着地時のSE再生コールバック
     onFadeInBoard?: () => void; // 盤面フェードイン開始のコールバック
     isMobile?: boolean; // モバイルかどうか
+    isRankedMatch?: boolean; // ランクマッチかどうか
+    myRank?: RankType; // 自分のランク
+    opponentRank?: RankType; // 相手のランク
 }
 
 type AnimationPhase =
@@ -63,7 +80,10 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
     onImpact,
     onOrbLand,
     onFadeInBoard,
-    isMobile = false
+    isMobile = false,
+    isRankedMatch = false,
+    myRank,
+    opponentRank
 }) => {
     const [phase, setPhase] = useState<AnimationPhase>('fade-in');
     const [shakeScreen, setShakeScreen] = useState(false);
@@ -541,6 +561,20 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                     >
                                         {myPlayer.name}
                                     </div>
+                                    {/* ランクマッチ時のランク表示 */}
+                                    {isRankedMatch && myRank && (
+                                        <div
+                                            style={{
+                                                color: getRankColor(myRank),
+                                                fontSize: 1.2 * scale + 'rem',
+                                                fontWeight: 'bold',
+                                                textShadow: `0 0 10px ${getRankColor(myRank)}80`,
+                                                marginTop: `${4 * scale}px`,
+                                            }}
+                                        >
+                                            {RANK_DISPLAY_NAMES[myRank]}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -652,6 +686,20 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                                     >
                                         {opponentPlayer.name}
                                     </div>
+                                    {/* ランクマッチ時のランク表示 */}
+                                    {isRankedMatch && opponentRank && (
+                                        <div
+                                            style={{
+                                                color: getRankColor(opponentRank),
+                                                fontSize: 1.2 * scale + 'rem',
+                                                fontWeight: 'bold',
+                                                textShadow: `0 0 10px ${getRankColor(opponentRank)}80`,
+                                                marginTop: `${4 * scale}px`,
+                                            }}
+                                        >
+                                            {RANK_DISPLAY_NAMES[opponentRank]}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

@@ -3423,6 +3423,16 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             };
         }
 
+        // 先攻プレイヤーIDの設定（CASUAL_MATCH/RANKED_MATCHでHOST側が決定）
+        case 'SET_FIRST_PLAYER_ID': {
+            const { firstPlayerId } = action.payload;
+            console.log('[Engine] SET_FIRST_PLAYER_ID:', firstPlayerId);
+            return {
+                ...state,
+                firstPlayerId: firstPlayerId
+            };
+        }
+
         // エクストラPPの有効化/無効化
         case 'TOGGLE_EXTRA_PP': {
             const playerId = action.playerId;

@@ -4,7 +4,7 @@ import { GalleryCardListScreen } from './GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './GalleryRelatedCardScreen';
 import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE } from '../core/engine';
-import { getAllClassRatings } from '../firebase/playerData';
+import { getAllClassRatings, updatePlayerName } from '../firebase/playerData';
 import { getRankFromRating, RANK_DISPLAY_NAMES, ClassRating, RankType } from '../firebase/rating';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
@@ -48,9 +48,11 @@ interface TitleScreenProps {
     homeCardId?: string | null; // ホームカードID
     isAnonymous?: boolean; // ユーザーが匿名かどうか
     userId?: string | null; // ユーザーID
+    currentPlayerName?: string; // 現在のプレイヤー名
+    onPlayerNameUpdate?: (newName: string) => void; // プレイヤー名更新のコールバック
     onNavigateToRegister?: () => void; // アカウント登録画面への遷移
     onNavigateToLogin?: () => void; // ログイン画面への遷移
-    onNavigateToProfile?: () => void; // プロフィール設定画面への遷移
+    onNavigateToProfile?: () => void; // プロフィール設定画面への遷移（削除予定）
     onLogout?: () => void; // ログアウト処理
 }
 
@@ -63,9 +65,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     homeCardId = null,
     isAnonymous = true,
     userId = null,
+    currentPlayerName = 'プレイヤー',
+    onPlayerNameUpdate,
     onNavigateToRegister,
     onNavigateToLogin,
-    onNavigateToProfile,
+    onNavigateToProfile: _onNavigateToProfile,
     onLogout
 }) => {
     // 画面フェーズ: 'title' = GAME START画面, 'home' = ホーム画面
@@ -116,6 +120,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const inertiaAnimationRef = useRef<number | null>(null);
     const autoRotationRef = useRef<number | null>(null);
     const lastInteractionTime = useRef(Date.now());
+
+    // プレイヤー名編集の状態
+    const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
+    const [editPlayerName, setEditPlayerName] = useState(currentPlayerName);
+    const [playerNameError, setPlayerNameError] = useState('');
+    const [playerNameLoading, setPlayerNameLoading] = useState(false);
 
     // Responsive scaling
     const [scale, setScale] = useState(1);
@@ -294,6 +304,65 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
         return () => clearInterval(checkInterval);
     }, [activeTab, isDragging, isAutoRotating]);
+
+    // プレイヤー名更新ハンドラー
+    const handlePlayerNameUpdate = async () => {
+        setPlayerNameError('');
+
+        // バリデーション
+        if (!editPlayerName.trim()) {
+            setPlayerNameError('プレイヤー名を入力してください');
+            return;
+        }
+
+        if (editPlayerName.length > 20) {
+            setPlayerNameError('プレイヤー名は20文字以内にしてください');
+            return;
+        }
+
+        if (!userId) {
+            setPlayerNameError('ユーザーIDが見つかりません');
+            return;
+        }
+
+        setPlayerNameLoading(true);
+
+        try {
+            await updatePlayerName(userId, editPlayerName.trim());
+            // 成功時はコールバックで親コンポーネントに通知
+            onPlayerNameUpdate?.(editPlayerName.trim());
+            setIsEditingPlayerName(false);
+            setPlayerNameError('');
+        } catch (err: any) {
+            console.error('Failed to update player name:', err);
+            setPlayerNameError('プレイヤー名の更新に失敗しました');
+        } finally {
+            setPlayerNameLoading(false);
+        }
+    };
+
+    // プレイヤー名編集開始
+    const handleStartEditPlayerName = () => {
+        setEditPlayerName(currentPlayerName);
+        setPlayerNameError('');
+        setIsEditingPlayerName(true);
+    };
+
+    // プレイヤー名編集キャンセル
+    const handleCancelEditPlayerName = () => {
+        setEditPlayerName(currentPlayerName);
+        setPlayerNameError('');
+        setIsEditingPlayerName(false);
+    };
+
+    // Enterキーで更新
+    const handlePlayerNameKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !playerNameLoading) {
+            handlePlayerNameUpdate();
+        } else if (e.key === 'Escape') {
+            handleCancelEditPlayerName();
+        }
+    };
 
     // ランダムマッチタイプ選択
     const handleMatchTypeSelect = (matchType: 'casual' | 'ranked') => {
@@ -1645,25 +1714,132 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                     プロフィール
                                 </h3>
 
-                                <button
-                                    onClick={onNavigateToProfile}
-                                    style={{
-                                        width: '100%',
-                                        padding: `${0.6 * scale}rem ${1 * scale}rem`,
-                                        fontSize: `${0.9 * scale}rem`,
-                                        background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
-                                        border: 'none',
-                                        borderRadius: 6 * scale,
-                                        color: 'white',
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.3s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                >
-                                    プレイヤー名を変更
-                                </button>
+                                {/* プレイヤー名表示・編集 */}
+                                {!isEditingPlayerName ? (
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: `${0.5 * scale}rem`
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            borderRadius: 6 * scale,
+                                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                                        }}>
+                                            <span style={{
+                                                fontSize: `${0.9 * scale}rem`,
+                                                color: '#fff'
+                                            }}>
+                                                {currentPlayerName}
+                                            </span>
+                                            <button
+                                                onClick={handleStartEditPlayerName}
+                                                style={{
+                                                    padding: `${0.4 * scale}rem ${0.8 * scale}rem`,
+                                                    fontSize: `${0.75 * scale}rem`,
+                                                    background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+                                                    border: 'none',
+                                                    borderRadius: 4 * scale,
+                                                    color: 'white',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 'bold',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                            >
+                                                編集
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: `${0.5 * scale}rem`
+                                    }}>
+                                        <input
+                                            type="text"
+                                            value={editPlayerName}
+                                            onChange={(e) => setEditPlayerName(e.target.value)}
+                                            onKeyDown={handlePlayerNameKeyPress}
+                                            disabled={playerNameLoading}
+                                            maxLength={20}
+                                            autoFocus
+                                            style={{
+                                                width: '100%',
+                                                padding: `${0.6 * scale}rem ${1 * scale}rem`,
+                                                fontSize: `${0.9 * scale}rem`,
+                                                borderRadius: 6 * scale,
+                                                border: playerNameError ? '2px solid #ff5050' : '2px solid #a855f7',
+                                                background: '#2a2a3e',
+                                                color: '#fff',
+                                                outline: 'none',
+                                                transition: 'border-color 0.3s',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                        {playerNameError && (
+                                            <div style={{
+                                                fontSize: `${0.7 * scale}rem`,
+                                                color: '#ff5050',
+                                                marginTop: `${-0.2 * scale}rem`
+                                            }}>
+                                                {playerNameError}
+                                            </div>
+                                        )}
+                                        <div style={{
+                                            display: 'flex',
+                                            gap: `${0.5 * scale}rem`
+                                        }}>
+                                            <button
+                                                onClick={handleCancelEditPlayerName}
+                                                disabled={playerNameLoading}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: `${0.5 * scale}rem`,
+                                                    fontSize: `${0.8 * scale}rem`,
+                                                    background: '#555',
+                                                    border: 'none',
+                                                    borderRadius: 4 * scale,
+                                                    color: 'white',
+                                                    cursor: playerNameLoading ? 'not-allowed' : 'pointer',
+                                                    fontWeight: 'bold',
+                                                    opacity: playerNameLoading ? 0.5 : 1,
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => !playerNameLoading && (e.currentTarget.style.background = '#666')}
+                                                onMouseLeave={(e) => !playerNameLoading && (e.currentTarget.style.background = '#555')}
+                                            >
+                                                キャンセル
+                                            </button>
+                                            <button
+                                                onClick={handlePlayerNameUpdate}
+                                                disabled={playerNameLoading}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: `${0.5 * scale}rem`,
+                                                    fontSize: `${0.8 * scale}rem`,
+                                                    background: playerNameLoading ? '#555' : 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+                                                    border: 'none',
+                                                    borderRadius: 4 * scale,
+                                                    color: 'white',
+                                                    cursor: playerNameLoading ? 'not-allowed' : 'pointer',
+                                                    fontWeight: 'bold',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => !playerNameLoading && (e.currentTarget.style.transform = 'scale(1.05)')}
+                                                onMouseLeave={(e) => !playerNameLoading && (e.currentTarget.style.transform = 'scale(1)')}
+                                            >
+                                                {playerNameLoading ? '更新中...' : '保存'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* アカウント */}

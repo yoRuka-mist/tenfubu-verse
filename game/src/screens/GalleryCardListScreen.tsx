@@ -103,6 +103,17 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
         .filter(item => item.card) // undefinedを除外
         .sort((a, b) => a.card.cost - b.card.cost); // コスト順でソート
 
+    // コスト帯別の枚数を集計
+    const costCounts: { [cost: number]: number } = {};
+    cardsWithCount.forEach(({ card, count }) => {
+        costCounts[card.cost] = (costCounts[card.cost] || 0) + count;
+    });
+
+    // コストの最大値を取得（グラフのX軸範囲用）
+    const maxCost = Math.max(...Object.keys(costCounts).map(Number), 10);
+    // 枚数の最大値を取得（グラフのY軸スケール用）
+    const maxCount = Math.max(...Object.values(costCounts), 1);
+
     // クラスカラー取得
     const classColor = CLASS_COLORS[currentClass];
     const className = CLASS_NAMES[currentClass];
@@ -159,13 +170,20 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                 alignItems: 'flex-start',
                 justifyContent: 'center'
             }}>
-                {/* 左側: リーダー表示（左右にボタン配置） */}
+                {/* 左側: リーダー表示（左右にボタン配置） + コスト帯グラフ */}
                 <div style={{
                     display: 'flex',
-                    flexDirection: 'row',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: `${0.8 * scale}rem`
+                    gap: `${1.5 * scale}rem`
                 }}>
+                    {/* リーダーカード + ボタン */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: `${0.8 * scale}rem`
+                    }}>
                     {/* 前のクラスボタン */}
                     <button
                         onClick={handlePrevClass}
@@ -269,6 +287,83 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                     >
                         &gt;
                     </button>
+                </div>
+
+                    {/* コスト帯別枚数グラフ */}
+                    <div style={{
+                        width: leaderCardWidth + 45 * 2 * scale + 0.8 * 2 * scale * 16, // リーダーカード幅 + ボタン2つ + gap
+                        padding: `${12 * scale}px`,
+                        background: 'rgba(0, 0, 0, 0.5)',
+                        borderRadius: 8 * scale,
+                        border: `1px solid ${classColor.primary}30`,
+                    }}>
+                        <h4 style={{
+                            fontSize: `${0.8 * scale}rem`,
+                            margin: `0 0 ${8 * scale}px 0`,
+                            color: classColor.primary,
+                            textAlign: 'center',
+                            fontFamily: 'sans-serif'
+                        }}>
+                            コスト帯分布
+                        </h4>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'space-between',
+                            height: `${100 * scale}px`,
+                            gap: `${2 * scale}px`,
+                            borderBottom: `1px solid ${classColor.primary}40`,
+                            paddingBottom: `${4 * scale}px`
+                        }}>
+                            {Array.from({ length: maxCost + 1 }, (_, i) => {
+                                const count = costCounts[i] || 0;
+                                const barHeight = maxCount > 0 ? (count / maxCount) * 80 * scale : 0;
+                                return (
+                                    <div
+                                        key={i}
+                                        style={{
+                                            flex: 1,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: `${2 * scale}px`
+                                        }}
+                                    >
+                                        {/* 枚数ラベル */}
+                                        {count > 0 && (
+                                            <div style={{
+                                                fontSize: `${0.6 * scale}rem`,
+                                                color: classColor.primary,
+                                                fontWeight: 'bold',
+                                                fontFamily: 'sans-serif'
+                                            }}>
+                                                {count}
+                                            </div>
+                                        )}
+                                        {/* 棒 */}
+                                        <div
+                                            style={{
+                                                width: '100%',
+                                                height: `${barHeight}px`,
+                                                background: count > 0 ? `linear-gradient(180deg, ${classColor.primary} 0%, ${classColor.primary}80 100%)` : 'transparent',
+                                                borderRadius: `${2 * scale}px`,
+                                                transition: 'all 0.3s',
+                                                boxShadow: count > 0 ? `0 0 8px ${classColor.shadow}` : 'none'
+                                            }}
+                                        />
+                                        {/* コストラベル */}
+                                        <div style={{
+                                            fontSize: `${0.65 * scale}rem`,
+                                            color: '#aaa',
+                                            fontFamily: 'sans-serif'
+                                        }}>
+                                            {i}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
 
                 {/* 右側: カードグリッド（3行表示） */}

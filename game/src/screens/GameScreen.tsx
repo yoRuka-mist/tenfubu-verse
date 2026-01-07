@@ -8,7 +8,7 @@ import { TurnTimer } from '../components/TurnTimer';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 import { usePerformanceMode } from '../hooks/usePerformanceMode';
-import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType } from '../firebase/rating';
+import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType, getRankFromRating, RANK_THRESHOLDS } from '../firebase/rating';
 import { getClassRating, updateRatingAfterMatch } from '../firebase/playerData';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
@@ -1614,6 +1614,55 @@ type ResultAnimPhase =
 const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematching, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick, victoryReason = 'normal', isRankedMatch = false, ratingResult }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
 
+    // レートゲージアニメーション用の状態
+    const [animatedRating, setAnimatedRating] = React.useState(ratingResult ? (ratingResult.newRating - ratingResult.ratingChange) : 0);
+    const animationStartTimeRef = React.useRef<number | null>(null);
+    const ANIMATION_DURATION = 1500; // 1.5秒でアニメーション
+
+    // レートからゲージ進捗を計算（0-1の範囲）
+    const getRatingProgress = (rating: number): { rank: RankType; progress: number; ratingInRank: number; rankMax: number } => {
+        const threshold = RANK_THRESHOLDS.find(t => rating >= t.min && rating <= t.max) || RANK_THRESHOLDS[0];
+        const rankMax = threshold.rank === 'MASTER' ? 2000 : (threshold.max - threshold.min + 1); // 各ランク2000ポイント
+        const ratingInRank = rating - threshold.min;
+        const progress = Math.min(1, ratingInRank / rankMax);
+        return { rank: threshold.rank, progress, ratingInRank, rankMax };
+    };
+
+    // レートアニメーション
+    React.useEffect(() => {
+        if (!ratingResult || !isRankedMatch) return;
+
+        const startRating = ratingResult.newRating - ratingResult.ratingChange;
+        const endRating = ratingResult.newRating;
+
+        const animate = (timestamp: number) => {
+            if (!animationStartTimeRef.current) {
+                animationStartTimeRef.current = timestamp;
+            }
+
+            const elapsed = timestamp - animationStartTimeRef.current;
+            const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+
+            // easeOutQuad easing
+            const easedProgress = 1 - (1 - progress) * (1 - progress);
+            const currentRating = startRating + (endRating - startRating) * easedProgress;
+
+            setAnimatedRating(currentRating);
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        // フェーズ4（rate）になったらアニメーション開始
+        const timer = setTimeout(() => {
+            animationStartTimeRef.current = null;
+            requestAnimationFrame(animate);
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [ratingResult, isRankedMatch, ANIMATION_DURATION]);
+
     // 勝利理由のメッセージを取得
     const getVictoryReasonMessage = () => {
         if (!isVictory) return null;
@@ -1984,109 +2033,174 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                 </div>
 
                 {/* Rate display - phase 4 (rate) - ランクマッチ用 */}
-                {isRankedMatch && ratingResult && (
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginTop: 16,
-                        opacity: phaseIndex >= 4 ? 1 : 0,
-                        transform: phaseIndex >= 4 ? 'translateY(0)' : 'translateY(20px)',
-                        transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
-                    }}>
-                        {/* レート変動表示 */}
+                {isRankedMatch && ratingResult && (() => {
+                    const currentProgress = getRatingProgress(animatedRating);
+                    const finalProgress = getRatingProgress(ratingResult.newRating);
+
+                    return (
                         <div style={{
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
                             gap: 12,
-                            background: 'rgba(0, 0, 0, 0.5)',
-                            padding: '12px 24px',
-                            borderRadius: 12,
-                            border: `2px solid ${ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e'}`
+                            marginTop: 16,
+                            opacity: phaseIndex >= 4 ? 1 : 0,
+                            transform: phaseIndex >= 4 ? 'translateY(0)' : 'translateY(20px)',
+                            transition: 'opacity 0.4s ease-out, transform 0.4s ease-out',
+                            width: '90%',
+                            maxWidth: 500
                         }}>
-                            <span style={{
-                                fontSize: '1.2rem',
-                                color: 'rgba(255,255,255,0.8)',
-                                fontFamily: 'var(--font-tamanegi)'
-                            }}>
-                                レート
-                            </span>
-                            <span style={{
-                                fontSize: '2rem',
-                                fontWeight: 'bold',
-                                color: ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e',
-                                fontFamily: 'var(--font-tamanegi)'
-                            }}>
-                                {ratingResult.ratingChange >= 0 ? '+' : ''}{ratingResult.ratingChange}
-                            </span>
-                        </div>
-
-                        {/* ボーナス内訳（勝利時のみ） */}
-                        {ratingResult.ratingChange > 0 && (ratingResult.bonusBreakdown.winStreakBonus > 0 || ratingResult.bonusBreakdown.rankDiffBonus > 0) && (
+                            {/* レート変動表示 */}
                             <div style={{
                                 display: 'flex',
-                                gap: 16,
-                                fontSize: '0.85rem',
-                                color: 'rgba(255,255,255,0.6)',
-                                fontFamily: 'var(--font-tamanegi)'
+                                alignItems: 'center',
+                                gap: 12,
+                                background: 'rgba(0, 0, 0, 0.5)',
+                                padding: '12px 24px',
+                                borderRadius: 12,
+                                border: `2px solid ${ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e'}`
                             }}>
-                                <span>基本: +{ratingResult.bonusBreakdown.base}</span>
-                                {ratingResult.bonusBreakdown.winStreakBonus > 0 && (
-                                    <span style={{ color: '#f6e05e' }}>
-                                        連勝: +{ratingResult.bonusBreakdown.winStreakBonus}
-                                    </span>
-                                )}
-                                {ratingResult.bonusBreakdown.rankDiffBonus > 0 && (
-                                    <span style={{ color: '#63b3ed' }}>
-                                        格上: +{ratingResult.bonusBreakdown.rankDiffBonus}
-                                    </span>
-                                )}
+                                <span style={{
+                                    fontSize: '1.2rem',
+                                    color: 'rgba(255,255,255,0.8)',
+                                    fontFamily: 'var(--font-tamanegi)'
+                                }}>
+                                    レート
+                                </span>
+                                <span style={{
+                                    fontSize: '2rem',
+                                    fontWeight: 'bold',
+                                    color: ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e',
+                                    fontFamily: 'var(--font-tamanegi)'
+                                }}>
+                                    {ratingResult.ratingChange >= 0 ? '+' : ''}{ratingResult.ratingChange}
+                                </span>
                             </div>
-                        )}
 
-                        {/* 新しいレートとランク */}
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: '1rem',
-                            color: 'rgba(255,255,255,0.8)',
-                            fontFamily: 'var(--font-tamanegi)'
-                        }}>
-                            <span style={{
-                                color: getRankColor(ratingResult.newRank),
-                                fontWeight: 'bold'
+                            {/* ボーナス内訳（勝利時のみ） */}
+                            {ratingResult.ratingChange > 0 && (ratingResult.bonusBreakdown.winStreakBonus > 0 || ratingResult.bonusBreakdown.rankDiffBonus > 0) && (
+                                <div style={{
+                                    display: 'flex',
+                                    gap: 16,
+                                    fontSize: '0.85rem',
+                                    color: 'rgba(255,255,255,0.6)',
+                                    fontFamily: 'var(--font-tamanegi)'
+                                }}>
+                                    <span>基本: +{ratingResult.bonusBreakdown.base}</span>
+                                    {ratingResult.bonusBreakdown.winStreakBonus > 0 && (
+                                        <span style={{ color: '#f6e05e' }}>
+                                            連勝: +{ratingResult.bonusBreakdown.winStreakBonus}
+                                        </span>
+                                    )}
+                                    {ratingResult.bonusBreakdown.rankDiffBonus > 0 && (
+                                        <span style={{ color: '#63b3ed' }}>
+                                            格上: +{ratingResult.bonusBreakdown.rankDiffBonus}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ランク名とゲージ */}
+                            <div style={{
+                                width: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 8,
+                                background: 'rgba(0, 0, 0, 0.5)',
+                                padding: 16,
+                                borderRadius: 12,
+                                border: '2px solid rgba(255, 255, 255, 0.2)'
                             }}>
-                                {RANK_DISPLAY_NAMES[ratingResult.newRank]}
-                            </span>
-                            <span>{ratingResult.newRating}</span>
+                                {/* ランク名 */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <span style={{
+                                        fontSize: '1.4rem',
+                                        fontWeight: 'bold',
+                                        color: getRankColor(currentProgress.rank),
+                                        fontFamily: 'var(--font-tamanegi)',
+                                        textShadow: `0 0 10px ${getRankColor(currentProgress.rank)}80`
+                                    }}>
+                                        {RANK_DISPLAY_NAMES[currentProgress.rank]}
+                                    </span>
+                                    <span style={{
+                                        fontSize: '1rem',
+                                        color: 'rgba(255,255,255,0.8)',
+                                        fontFamily: 'var(--font-tamanegi)'
+                                    }}>
+                                        {Math.floor(animatedRating)} / {currentProgress.rank === 'MASTER' ? '∞' : (RANK_THRESHOLDS.find(t => t.rank === currentProgress.rank)?.max || 0)}
+                                    </span>
+                                </div>
+
+                                {/* ゲージ本体 */}
+                                <div style={{
+                                    width: '100%',
+                                    height: 24,
+                                    background: 'rgba(0, 0, 0, 0.7)',
+                                    borderRadius: 12,
+                                    overflow: 'hidden',
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    position: 'relative'
+                                }}>
+                                    {/* ゲージバー */}
+                                    <div style={{
+                                        width: `${currentProgress.progress * 100}%`,
+                                        height: '100%',
+                                        background: `linear-gradient(90deg, ${getRankColor(currentProgress.rank)}cc, ${getRankColor(currentProgress.rank)})`,
+                                        borderRadius: 10,
+                                        transition: 'width 0.05s linear',
+                                        boxShadow: `0 0 10px ${getRankColor(currentProgress.rank)}80`
+                                    }} />
+
+                                    {/* 進捗テキスト */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 'bold',
+                                        color: 'white',
+                                        textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                                        fontFamily: 'var(--font-tamanegi)'
+                                    }}>
+                                        {Math.floor(currentProgress.ratingInRank)} / {currentProgress.rankMax}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ランク昇格/降格メッセージ */}
+                            {ratingResult.isRankUp && animatedRating >= ratingResult.newRating - 10 && (
+                                <div style={{
+                                    fontSize: '1.4rem',
+                                    fontWeight: 'bold',
+                                    color: '#f6e05e',
+                                    textShadow: '0 0 20px rgba(246, 224, 94, 0.8)',
+                                    fontFamily: 'var(--font-tamanegi)',
+                                    animation: 'pulse 1s ease-in-out infinite'
+                                }}>
+                                    {RANK_DISPLAY_NAMES[finalProgress.rank]}に昇格！
+                                </div>
+                            )}
+                            {ratingResult.isRankDown && (
+                                <div style={{
+                                    fontSize: '1.2rem',
+                                    color: '#e53e3e',
+                                    fontFamily: 'var(--font-tamanegi)'
+                                }}>
+                                    {RANK_DISPLAY_NAMES[finalProgress.rank]}に降格
+                                </div>
+                            )}
                         </div>
-
-                        {/* ランク昇格/降格メッセージ */}
-                        {ratingResult.isRankUp && (
-                            <div style={{
-                                fontSize: '1.4rem',
-                                fontWeight: 'bold',
-                                color: '#f6e05e',
-                                textShadow: '0 0 20px rgba(246, 224, 94, 0.8)',
-                                fontFamily: 'var(--font-tamanegi)',
-                                animation: 'pulse 1s ease-in-out infinite'
-                            }}>
-                                {RANK_DISPLAY_NAMES[ratingResult.newRank]}に昇格！
-                            </div>
-                        )}
-                        {ratingResult.isRankDown && (
-                            <div style={{
-                                fontSize: '1.2rem',
-                                color: '#e53e3e',
-                                fontFamily: 'var(--font-tamanegi)'
-                            }}>
-                                {RANK_DISPLAY_NAMES[ratingResult.newRank]}に降格
-                            </div>
-                        )}
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* yoRuka message - positioned above the yoRuka image */}
                 <div style={{
@@ -2455,8 +2569,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [coinTossPhase, setCoinTossPhase] = React.useState<'IDLE' | 'TOSSING' | 'RESULT' | 'DONE'>('IDLE');
     const [coinTossResult, setCoinTossResult] = React.useState<'FIRST' | 'SECOND' | null>(null);
     const [isGameStartAnim, setIsGameStartAnim] = React.useState(false);
-    // コイントス結果（先攻/後攻）を保持 - CPU/HOSTではランダム、JOINではINIT_GAMEから同期
-    const [isFirstPlayer, setIsFirstPlayer] = React.useState(() => Math.random() > 0.5);
+    // コイントス結果（先攻/後攻）を保持
+    // CASUAL_MATCH/RANKED_MATCHでは、HOSTが決定してJOINに送信
+    // HOST側：ランダムに決定
+    // JOIN側：INIT_GAMEを受信するまで仮の値（false）
+    const [isFirstPlayer, setIsFirstPlayer] = React.useState(() => {
+        // JOIN側は常にINIT_GAMEを受信するまで待つ
+        const isCasualOrRankedMode = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+        const isJoin = gameMode === 'JOIN' || (isCasualOrRankedMode && !isHost);
+        if (isJoin) {
+            return false; // 仮の値、INIT_GAMEまたはコイントス完了で上書きされる
+        }
+        return Math.random() > 0.5;
+    });
 
     // DEBUG: Log isFirstPlayer when BattleIntro is shown
     useEffect(() => {
@@ -2490,6 +2615,38 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // ランクマッチ用：レート計算結果
     const [ratingResult, setRatingResult] = React.useState<RatingCalculationResult | null>(null);
     const [ratingUpdateDone, setRatingUpdateDone] = React.useState(false);
+
+    // BattleIntro用：ランク情報
+    const [myRank, setMyRank] = React.useState<RankType | undefined>(undefined);
+    const [opponentRank, setOpponentRank] = React.useState<RankType | undefined>(undefined);
+
+    // ランクマッチ開始時のランク情報取得
+    React.useEffect(() => {
+        if (gameMode !== 'RANKED_MATCH' || !authPlayerId) {
+            setMyRank(undefined);
+            setOpponentRank(undefined);
+            return;
+        }
+
+        const fetchRanks = async () => {
+            try {
+                // 自分のランク取得
+                const myClassRating = await getClassRating(authPlayerId, currentPlayerClass);
+                const myCurrentRank = getRankFromRating(myClassRating.rating);
+                setMyRank(myCurrentRank);
+
+                // 相手のランク取得（propOpponentRatingから計算）
+                if (propOpponentRating !== undefined && propOpponentRating !== null) {
+                    const opponentCurrentRank = getRankFromRating(propOpponentRating);
+                    setOpponentRank(opponentCurrentRank);
+                }
+            } catch (error) {
+                console.error('[GameScreen] Failed to fetch rank info:', error);
+            }
+        };
+
+        fetchRanks();
+    }, [gameMode, authPlayerId, currentPlayerClass, propOpponentRating]);
 
     // ランクマッチ終了時のレート更新処理
     React.useEffect(() => {
@@ -2627,6 +2784,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     'adapter.isHost': adapter.isHost,
                     isCasualOrRanked
                 });
+
+                // For CASUAL_MATCH/RANKED_MATCH: Update HOST's local gameState.firstPlayerId first
+                if (isCasualOrRanked) {
+                    dispatch({ type: 'SET_FIRST_PLAYER_ID', payload: { firstPlayerId } });
+                }
 
                 // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
                 // isFirstPlayer indicates if HOST (p1) goes first
@@ -4069,13 +4231,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
         // 7. Reset battle intro and coin toss for new game
         setShowBattleIntro(gameMode !== 'JOIN'); // JOIN時はホストからの同期を待つ
-        setIsFirstPlayer(Math.random() > 0.5); // 新しいランダム結果
+        // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
+        const isCasualOrRankedMode = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+        const isJoinSide = gameMode === 'JOIN' || (isCasualOrRankedMode && !isHost);
+        setIsFirstPlayer(isJoinSide ? false : Math.random() > 0.5);
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
         // 8. For online rematch, HOST needs to send new game state after coin toss completes
-        if (gameMode === 'HOST') {
+        if (gameMode === 'HOST' || isCasualOrRankedMode) {
             initialStateSentRef.current = false;
         }
 
@@ -7609,6 +7774,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     onOrbLand={() => playSE('gan.mp3', 0.8)}
                     onFadeInBoard={() => setBoardFadeIn(true)}
                     isMobile={isMobile}
+                    isRankedMatch={gameMode === 'RANKED_MATCH'}
+                    myRank={myRank}
+                    opponentRank={opponentRank}
                 />
             )}
 

@@ -166,7 +166,41 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                 {currentPage + 1} / {relatedCardIds.length}
             </div>
 
-            {/* メインコンテンツ: 左右レイアウト（イラスト優先） */}
+            {/* 左矢印ボタン（画面左端） */}
+            <button
+                onClick={goToPrevPage}
+                style={{
+                    ...arrowButtonStyle,
+                    position: 'absolute',
+                    left: `${15 * scale}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 100
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'}
+            >
+                &lt;
+            </button>
+
+            {/* 右矢印ボタン（画面右端） */}
+            <button
+                onClick={goToNextPage}
+                style={{
+                    ...arrowButtonStyle,
+                    position: 'absolute',
+                    right: `${15 * scale}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 100
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'}
+            >
+                &gt;
+            </button>
+
+            {/* メインコンテンツ: 中央レイアウト */}
             <div style={{
                 display: 'flex',
                 gap: `${2 * scale}rem`,
@@ -178,22 +212,6 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                 width: '100%',
                 margin: '0 auto'
             }}>
-                {/* 左矢印ボタン */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flex: '0 0 auto'
-                }}>
-                    <button
-                        onClick={goToPrevPage}
-                        style={arrowButtonStyle}
-                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'}
-                    >
-                        &lt;
-                    </button>
-                </div>
-
                 {/* 中央: イラスト表示エリア（横2列配置または中央配置、固定幅） */}
                 <div style={{
                     display: 'flex',
@@ -304,22 +322,6 @@ export const GalleryRelatedCardScreen: React.FC<GalleryRelatedCardScreenProps> =
                         </div>
                     )}
                     </div>
-                </div>
-
-                {/* 右矢印ボタン */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flex: '0 0 auto'
-                }}>
-                    <button
-                        onClick={goToNextPage}
-                        style={arrowButtonStyle}
-                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'}
-                    >
-                        &gt;
-                    </button>
                 </div>
 
                 {/* 右側: カード情報エリア（固定幅） */}
