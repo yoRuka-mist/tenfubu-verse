@@ -14,6 +14,9 @@ const getAssetUrl = (path: string): string => {
     return `${base}${cleanPath}`;
 };
 
+// App Version
+const APP_VERSION = 'Ver 1.1 Beta';
+
 // Base dimensions for scaling
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
@@ -613,7 +616,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     fontSize: `${0.8 * scale}rem`,
                     zIndex: 2
                 }}>
-                    Ver 1.1 Beta
+                    {APP_VERSION}
                 </p>
 
                 <style>{`
@@ -2311,7 +2314,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 fontSize: `${0.7 * scale}rem`,
                 zIndex: 2,
             }}>
-                Ver 1.04 Beta
+                {APP_VERSION}
             </p>
 
             {/* ログアウト確認ダイアログ */}
