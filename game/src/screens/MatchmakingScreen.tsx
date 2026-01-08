@@ -26,7 +26,7 @@ interface MatchmakingScreenProps {
     playerClass: ClassType;
     playerName: string;
     playerId: string | null;
-    onGameStart: (adapter: NetworkAdapter, opponentClass: ClassType, isHost: boolean, opponentPlayerId?: string, opponentRating?: number) => void;
+    onGameStart: (adapter: NetworkAdapter, opponentClass: ClassType, isHost: boolean, opponentPlayerId?: string, opponentRating?: number, opponentName?: string) => void;
     onCancel: () => void;
 }
 
@@ -40,6 +40,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
 }) => {
     const [status, setStatus] = useState<MatchmakingStatus>('idle');
     const [statusMessage, setStatusMessage] = useState('接続準備中...');
+    const [surrenderCooldownRemaining, setSurrenderCooldownRemaining] = useState<number>(0); // Task 4: 降参クールダウン残り時間（秒）
     const [searchTime, setSearchTime] = useState(0);
     const peerRef = useRef<Peer | null>(null);
     const connectionRef = useRef<DataConnection | null>(null);
@@ -64,6 +65,28 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
         window.addEventListener('resize', updateScale);
         return () => window.removeEventListener('resize', updateScale);
     }, []);
+
+    // Task 4: 降参クールダウン残り時間のカウントダウン
+    useEffect(() => {
+        if (surrenderCooldownRemaining <= 0) return;
+
+        const interval = setInterval(() => {
+            setSurrenderCooldownRemaining(prev => {
+                const newTime = prev - 1;
+                if (newTime <= 0) {
+                    // クールダウン終了
+                    localStorage.removeItem('rankedSurrenderCooldownEnd');
+                    localStorage.removeItem('rankedSurrenderTimestamps');
+                    setStatusMessage('クールダウン終了。再度マッチングを開始できます。');
+                    return 0;
+                }
+                setStatusMessage(`降参ペナルティ中です。残り${Math.ceil(newTime / 60)}分${newTime % 60}秒お待ちください。`);
+                return newTime;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [surrenderCooldownRemaining > 0]);
 
     // 検索時間のカウントアップ + タイムアウト処理
     useEffect(() => {
@@ -98,6 +121,30 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
 
         const initMatchmaking = async () => {
             try {
+                // Task 4: ランクマッチの場合、降参クールダウンをチェック
+                if (matchType === 'ranked') {
+                    const cooldownEndStr = localStorage.getItem('rankedSurrenderCooldownEnd');
+                    if (cooldownEndStr) {
+                        const cooldownEnd = parseInt(cooldownEndStr, 10);
+                        const remaining = cooldownEnd - Date.now();
+                        if (remaining > 0) {
+                            setStatus('error');
+                            const remainingSeconds = Math.ceil(remaining / 1000);
+                            setSurrenderCooldownRemaining(remainingSeconds);
+                            setStatusMessage(`降参ペナルティ中です。残り${Math.ceil(remainingSeconds / 60)}分お待ちください。`);
+                            console.log('%c[Matchmaking] Surrender cooldown active', 'background: #ff0000; color: #ffffff;', {
+                                remainingMs: remaining,
+                                remainingMin: Math.ceil(remaining / 60000)
+                            });
+                            return;
+                        } else {
+                            // クールダウン終了、データをクリア
+                            localStorage.removeItem('rankedSurrenderCooldownEnd');
+                            localStorage.removeItem('rankedSurrenderTimestamps');
+                        }
+                    }
+                }
+
                 // ランクマッチの場合、自分のレートを取得
                 if (matchType === 'ranked' && playerId) {
                     try {
@@ -161,7 +208,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                                 // ゲーム開始
                                 isGameStartingRef.current = true; // cleanup時にPeer破棄をスキップ
                                 const adapter = new PeerJSAdapter(peer, conn, true);
-                                onGameStart(adapter, data.playerClass, true, data.playerId, data.rating);
+                                onGameStart(adapter, data.playerClass, true, data.playerId, data.rating, data.playerName);
                             }
                         });
                     });
@@ -226,7 +273,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
 
                                         isGameStartingRef.current = true; // cleanup時にPeer破棄をスキップ
                                         const adapter = new PeerJSAdapter(peer, conn, false);
-                                        onGameStart(adapter, data.playerClass, false, data.playerId, data.rating);
+                                        onGameStart(adapter, data.playerClass, false, data.playerId, data.rating, data.playerName);
                                     }
                                 });
                             });

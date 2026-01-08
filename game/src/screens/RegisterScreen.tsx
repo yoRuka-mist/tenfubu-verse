@@ -136,12 +136,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                 </h1>
 
                 {/* フォーム */}
-                <div style={{
-                    width: 400 * scale,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 20 * scale
-                }}>
+                <form
+                    onSubmit={(e) => { e.preventDefault(); handleRegister(); }}
+                    style={{
+                        width: 400 * scale,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 20 * scale
+                    }}
+                >
                     {/* ユーザーID */}
                     <div>
                         <label style={{
@@ -155,11 +158,14 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                         </label>
                         <input
                             type="text"
+                            name="username"
                             value={userId}
                             onChange={(e) => setUserId(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="player123"
                             disabled={loading}
+                            autoComplete="username"
+                            maxLength={20}
                             style={{
                                 width: '100%',
                                 padding: `${12 * scale}px ${16 * scale}px`,
@@ -181,7 +187,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                             marginTop: 4 * scale,
                             marginBottom: 0
                         }}>
-                            英数字とアンダースコア、3-20文字
+                            半角英数字と _ （アンダースコア）のみ、3〜20文字
                         </p>
                     </div>
 
@@ -194,15 +200,17 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                             marginBottom: 8 * scale,
                             fontWeight: 'bold'
                         }}>
-                            パスワード（6文字以上）
+                            パスワード
                         </label>
                         <input
                             type="password"
+                            name="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="••••••"
                             disabled={loading}
+                            autoComplete="new-password"
                             style={{
                                 width: '100%',
                                 padding: `${12 * scale}px ${16 * scale}px`,
@@ -218,6 +226,14 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                             onFocus={(e) => e.currentTarget.style.borderColor = '#4a9eff'}
                             onBlur={(e) => e.currentTarget.style.borderColor = '#444'}
                         />
+                        <p style={{
+                            fontSize: 12 * scale,
+                            color: '#888',
+                            marginTop: 4 * scale,
+                            marginBottom: 0
+                        }}>
+                            6文字以上
+                        </p>
                     </div>
 
                     {/* パスワード確認 */}
@@ -233,11 +249,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                         </label>
                         <input
                             type="password"
+                            name="confirm-password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="••••••"
                             disabled={loading}
+                            autoComplete="new-password"
                             style={{
                                 width: '100%',
                                 padding: `${12 * scale}px ${16 * scale}px`,
@@ -253,6 +271,14 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                             onFocus={(e) => e.currentTarget.style.borderColor = '#4a9eff'}
                             onBlur={(e) => e.currentTarget.style.borderColor = '#444'}
                         />
+                        <p style={{
+                            fontSize: 12 * scale,
+                            color: '#888',
+                            marginTop: 4 * scale,
+                            marginBottom: 0
+                        }}>
+                            上と同じパスワードを入力
+                        </p>
                     </div>
 
                     {/* エラーメッセージ */}
@@ -335,7 +361,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                         ユーザーIDとパスワードを登録すると、<br />
                         別の端末からデータを引き継げます
                     </div>
-                </div>
+                </form>
             </div>
         </div>
     );

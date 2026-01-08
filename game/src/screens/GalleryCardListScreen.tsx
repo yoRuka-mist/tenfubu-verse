@@ -111,8 +111,28 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
 
     // コストの最大値を取得（グラフのX軸範囲用）
     const maxCost = Math.max(...Object.keys(costCounts).map(Number), 10);
-    // 枚数の最大値を取得（グラフのY軸スケール用）
-    const maxCount = Math.max(...Object.values(costCounts), 1);
+
+    // 全クラス共通のY軸最大値を計算（グラフの高さを統一するため）
+    const globalMaxCount = React.useMemo(() => {
+        let maxAcrossAllClasses = 1;
+        for (const cls of ALL_CLASSES) {
+            const tmpl = getDeckTemplate(cls);
+            const classCostCounts: { [cost: number]: number } = {};
+            tmpl
+                .filter(entry => !entry.cardId.startsWith('TOKEN_'))
+                .forEach(entry => {
+                    const card = MOCK_CARDS.find(c => c.id === entry.cardId);
+                    if (card) {
+                        classCostCounts[card.cost] = (classCostCounts[card.cost] || 0) + entry.count;
+                    }
+                });
+            const classMax = Math.max(...Object.values(classCostCounts), 0);
+            if (classMax > maxAcrossAllClasses) {
+                maxAcrossAllClasses = classMax;
+            }
+        }
+        return maxAcrossAllClasses;
+    }, []);
 
     // クラスカラー取得
     const classColor = CLASS_COLORS[currentClass];
@@ -317,7 +337,7 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
                         }}>
                             {Array.from({ length: maxCost + 1 }, (_, i) => {
                                 const count = costCounts[i] || 0;
-                                const barHeight = maxCount > 0 ? (count / maxCount) * 80 * scale : 0;
+                                const barHeight = globalMaxCount > 0 ? (count / globalMaxCount) * 80 * scale : 0;
                                 return (
                                     <div
                                         key={i}

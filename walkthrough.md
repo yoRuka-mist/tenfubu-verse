@@ -3384,3 +3384,65 @@ game/public/stamps/
 
 - `game/src/core/engine.ts`
   - 3251-3265行目: UPDATE_PLAYER_NAMEハンドラ
+
+---
+
+## 2026-01-07 ランクマッチ同期処理バグ修正
+
+### 問題
+1. CASUAL_MATCH/RANKED_MATCHモードでカード効果（手札に加える等）が発動しない
+2. レート変動が発生しない（降参/切断時含む）
+
+### 原因分析
+`RESOLVE_EFFECT`の処理において、`gameMode === 'HOST'`でHOST/JOIN判定していたが、
+CASUAL_MATCHやRANKED_MATCHモードでは`gameMode`は`'CASUAL_MATCH'`や`'RANKED_MATCH'`のまま。
+そのため、どちらのプレイヤーも`RESOLVE_EFFECT`を実行しない状態になっていた。
+
+### 修正内容
+
+#### GameScreen.tsx
+
+##### 1. GENERATE_CARDエフェクト処理の修正（3651-3667行目付近）
+- `gameMode === 'CPU' || gameMode === 'HOST'` を `gameMode === 'CPU' || isHost` に変更
+- `gameMode === 'HOST'`での状態送信を`isHost && gameMode !== 'CPU'`に変更
+
+```typescript
+// 修正前
+if (gameMode === 'CPU' || gameMode === 'HOST') {
+    // ...
+    if (gameMode === 'HOST' && connected && adapter) {
+        // 状態送信
+    }
+}
+
+// 修正後
+const shouldProcessEffects = gameMode === 'CPU' || isHost;
+if (shouldProcessEffects) {
+    // ...
+    const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
+    if (isOnlineHost) {
+        // 状態送信
+    }
+}
+```
+
+##### 2. 通常エフェクト処理の修正（3869-3888行目付近）
+同様に`isHost`を使用した判定に変更
+
+##### 3. レート更新処理にデバッグログ追加（2651-2707行目付近）
+問題切り分けのためのログ出力を追加
+
+### 影響範囲
+- CASUAL_MATCH/RANKED_MATCHでのカード効果処理
+- エフェクト処理のHOST/JOIN判定全般
+
+### 補足
+`isHost`変数は以下のロジックで正しく計算されている：
+```typescript
+const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
+               ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter?.isHost === true);
+```
+
+マッチメイキングでは：
+- 先に待機していたプレイヤー → HOST（isHost: true）
+- 後から参加したプレイヤー → JOIN（isHost: false）

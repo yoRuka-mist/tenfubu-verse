@@ -268,13 +268,13 @@ export const MOCK_CARDS: Card[] = [
     {
         id: 'c_azya', name: 'あじゃ', cost: 8, type: 'FOLLOWER',
         attack: 4, health: 4,
-        description: '[オーラ]\nファンファーレ：相手リーダーに3ダメージ。自分リーダーを2回復する。相手フォロワーをランダムに1体破壊し、1体を手札に戻す。自分の手札の「つぶまる」「ゆうなぎ」「なゆた」のコストを-2する。\n超進化：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出す。自分の他のフォロワーすべてを+1/+2し[守護]と[突進]を付与する。「悠長・オブ・ジ・アビス」「それ俺のやぞ！」を手札に加える。次に自分のリーダーがダメージを受けるとき、そのダメージは0になる。',
+        description: '[オーラ]\nファンファーレ：相手のリーダーに3ダメージ。自分のリーダーを2回復する。相手フォロワーをランダムに1体破壊し、1体を手札に戻す。自分の手札の「つぶまる」「ゆうなぎ」「なゆた」のコストを-2する。\n超進化：「つぶまる」「ゆうなぎ」「なゆた」を1体ずつ出す。自分の他のフォロワーすべてを+1/+2し[守護]と[突進]を付与する。「悠長・オブ・ジ・アビス」「それ俺のやぞ！」を手札に加える。次に自分のリーダーがダメージを受けるとき、そのダメージは0になる。',
         flavorText: 'あじゃ「お前たち、俺を守れ」\nつぶまる&ゆうなぎ&なゆた「ｳｽ」',
         imageUrl: '/cards/azya.png',
         evolvedImageUrl: '/cards/azya_2.png',
         attackEffectType: 'THUNDER',
         passiveAbilities: ['AURA'],
-        relatedCards: ['c_tsubumaru', 'c_yunagi', 'c_nayuta'],
+        relatedCards: ['c_tsubumaru', 'c_yunagi', 'c_nayuta', 's_yucho_of_the_abyss', 's_thats_mine'],
         triggers: [
             {
                 trigger: 'FANFARE',
@@ -1091,17 +1091,17 @@ export const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_yuka', count: 3 },             // 悠霞
     { cardId: 'c_setsuna', count: 3 },          // 刹那
     { cardId: 's_hayakikoto', count: 3 },       // 疾きこと風の如く
-    { cardId: 's_night_parade', count: 1 },      // ナイト・パレード
+    { cardId: 's_night_parade', count: 1 },     // ナイト・パレード
     { cardId: 'c_kasuga', count: 1 },           // かすが
-    { cardId: 'c_yunagi', count: 3 },           // ゆうなぎ
+    { cardId: 'c_blue_tsubaki', count: 3 },     // 青ツバキ
     { cardId: 'c_tsubumaru', count: 3 },        // つぶまる
     { cardId: 'c_nayuta', count: 3 },           // なゆた
-    { cardId: 'c_mono', count: 3 },             // Mono
+    { cardId: 'c_mono', count: 2 },             // Mono
     { cardId: 'c_ruiyu', count: 1 },            // ルイ・ユー
     { cardId: 'c_sara', count: 1 },             // sara
-    { cardId: 's_3cats', count: 2 },            // 茶トラ
-    { cardId: 'c_yuri', count: 2 },             // ユウリ
-    { cardId: 'c_sia', count: 2 },              // しあ
+    { cardId: 's_3cats', count: 3 },            // 茶トラ
+    { cardId: 'c_bucchi', count: 2 },           // ぶっちー
+    { cardId: 'c_alice', count: 2 },            // ありす
 ];
 
 // Helper to get card definition by ID or Name
@@ -1777,7 +1777,7 @@ function processSingleEffect(
                     target.currentHealth = 0;
                     const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === newState.players[targetPid]) || targetPid;
                     // ラストワード発動
-                    const lastWordTrigger = target.triggers?.find(t => t.trigger === 'LASTWORD');
+                    const lastWordTrigger = target.triggers?.find(t => t.trigger === 'LAST_WORD');
                     if (lastWordTrigger) {
                         lastWordTrigger.effects.forEach(e => {
                             newState.pendingEffects.push({
@@ -2871,6 +2871,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                             const randomIdx = Math.floor(rng() * validIndices.length);
                             resolvedTargetIds.push(targetBoard[validIndices[randomIdx]]!.instanceId);
                         }
+                        console.log(`[Engine PLAY_CARD] RANDOM_DAMAGE_BY_TURN: Pre-calculated ${resolvedTargetIds.length} targets (turn ${count}):`, resolvedTargetIds);
                     } else if (e.type === 'RANDOM_DESTROY' || e.type === 'RANDOM_SET_HP' || e.type === 'RANDOM_DAMAGE') {
                         // Pre-calculate random targets for visualization
                         // RANDOM_DAMAGE needs pre-calculation for correct effect display in online play
@@ -2885,6 +2886,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         }
                         const selectedIndices = validIndices.slice(0, count);
                         resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                        console.log(`[Engine PLAY_CARD] ${e.type}: Pre-calculated ${resolvedTargetIds.length} targets:`, resolvedTargetIds);
                     }
                     // CRITICAL: Pre-calculate ALL_FOLLOWERS and ALL_OTHER_FOLLOWERS targets at queue time
                     // This ensures effects only hit units that existed when the effect was triggered
@@ -3098,6 +3100,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                     }
                     const selectedIndices = validIndices.slice(0, count);
                     resolvedTargetIds = selectedIndices.map(i => targetBoard[i]!.instanceId);
+                    console.log(`[Engine EVOLVE] ${e.type}: Pre-calculated ${resolvedTargetIds.length} targets:`, resolvedTargetIds);
                 }
                 // CRITICAL: Pre-calculate ALL_FOLLOWERS targets at queue time
                 else if (e.targetType === 'ALL_FOLLOWERS' || e.type === 'AOE_DAMAGE') {

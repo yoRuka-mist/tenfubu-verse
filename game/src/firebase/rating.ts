@@ -160,3 +160,27 @@ export const calculateLossRating = (
         },
     };
 };
+
+// ===== 対戦履歴（Match History）=====
+
+// 対戦参加者の情報
+export interface MatchPlayer {
+    playerId: string;
+    playerName: string;
+    playerClass: ClassType;
+    ratingBefore: number;
+    ratingAfter: number;
+    isFirst: boolean;  // 先攻かどうか
+}
+
+// 対戦履歴レコード
+export interface MatchRecord {
+    matchId: string;
+    timestamp: number;
+    gameMode: 'CASUAL_MATCH' | 'RANKED_MATCH';
+    player1: MatchPlayer;
+    player2: MatchPlayer;
+    winnerId: string;  // 勝者のplayerId
+    winnerSide: 'player1' | 'player2';
+    duration?: number;  // 試合時間（秒）- オプション
+}

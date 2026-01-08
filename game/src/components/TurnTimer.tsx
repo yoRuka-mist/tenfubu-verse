@@ -38,6 +38,9 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
     // ユニークIDでスタイル名の衝突を回避
     const uniqueId = useId().replace(/:/g, '_');
 
+    // 一時停止状態を追跡（解除時に終了時刻を再計算するため）
+    const wasPausedRef = useRef(isPaused);
+
     // コールバックを常に最新に保つ
     useEffect(() => {
         onTimeUpRef.current = onTimeUp;
@@ -46,12 +49,13 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
     // ターンキー（ターン変更検知用）
     const turnKey = `${turnCount}-${activePlayerId}`;
 
-    // タイマーリセット
+    // タイマーリセット（isPausedがtrueの間は終了時刻を設定しない）
     const resetTimer = useCallback(() => {
         setTimeRemaining(timerDuration);
         setIsWarning(false);
         setIsUrgent(false);
-        endTimeRef.current = Date.now() + timerDuration * 1000;
+        // isPaused中はendTimeを0にして、解除時に設定する
+        endTimeRef.current = 0;
         timeUpCalledRef.current = false;
     }, [timerDuration]);
 
@@ -62,6 +66,15 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
             resetTimer();
         }
     }, [turnKey, resetTimer]);
+
+    // isPaused解除時に終了時刻を再設定
+    useEffect(() => {
+        if (wasPausedRef.current && !isPaused) {
+            // 一時停止解除: 現在のtimeRemainingベースで終了時刻を再計算
+            endTimeRef.current = Date.now() + timeRemaining * 1000;
+        }
+        wasPausedRef.current = isPaused;
+    }, [isPaused, timeRemaining]);
 
     // タイマー動作（Date.now()ベースで精度向上、小数点以下も更新）
     useEffect(() => {

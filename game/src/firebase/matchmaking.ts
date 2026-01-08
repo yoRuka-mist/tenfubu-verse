@@ -57,14 +57,47 @@ export class MatchmakingManager {
             const waitingPlayers: { key: string; data: WaitingPlayer }[] = [];
 
             if (snapshot.exists()) {
+                // Task 1: 同一アカウント（playerId）の重複エントリを削除（ランクマッチのみ）
+                const duplicateEntries: string[] = [];
+
+                // 5分以内に対戦開始した相手はブロック（ブースティング防止）
+                const MATCH_START_COOLDOWN_MS = 5 * 60 * 1000; // 5分
+
                 snapshot.forEach((child) => {
                     const data = child.val() as WaitingPlayer;
                     // 自分自身や古いエントリ（5分以上前）は除外
                     const isRecent = Date.now() - data.timestamp < 5 * 60 * 1000;
+
+                    // 同一playerIdの既存エントリを検出（ランクマッチかつplayerIdがある場合のみ）
+                    if (matchType === 'ranked' && playerId && data.playerId === playerId) {
+                        console.log(`[Matchmaking] Found duplicate entry for playerId: ${playerId}, removing...`);
+                        duplicateEntries.push(child.key!);
+                        return; // このエントリはwaitingPlayersに追加しない
+                    }
+
+                    // ランクマッチ: 5分以内に対戦開始した相手はスキップ（ブースティング防止）
+                    if (matchType === 'ranked' && data.playerId) {
+                        const matchStartKey = `rankedMatchStart_${data.playerId}`;
+                        const matchStartTime = localStorage.getItem(matchStartKey);
+                        if (matchStartTime) {
+                            const timeSinceMatchStart = Date.now() - parseInt(matchStartTime, 10);
+                            if (timeSinceMatchStart < MATCH_START_COOLDOWN_MS) {
+                                console.log(`[Matchmaking] Skipping opponent ${data.playerId} - match started ${Math.floor(timeSinceMatchStart / 1000)}s ago (cooldown: ${MATCH_START_COOLDOWN_MS / 1000}s)`);
+                                return; // このエントリはwaitingPlayersに追加しない
+                            }
+                        }
+                    }
+
                     if (data.peerId !== peerId && isRecent) {
                         waitingPlayers.push({ key: child.key!, data });
                     }
                 });
+
+                // 重複エントリを削除
+                for (const entryKey of duplicateEntries) {
+                    await remove(ref(database, `matchmaking/${matchType}/${entryKey}`));
+                    console.log(`[Matchmaking] Removed duplicate entry: ${entryKey}`);
+                }
             }
 
             // 待機中のプレイヤーがいる場合、マッチング

@@ -109,6 +109,13 @@ function App() {
     // 相手のプレイヤー情報（ランクマッチ用）
     const [opponentPlayerId, setOpponentPlayerId] = useState<string | undefined>(undefined);
     const [opponentRating, setOpponentRating] = useState<number | undefined>(undefined);
+    const [opponentName, setOpponentName] = useState<string | undefined>(undefined);
+
+    // ゲームセッションID（GameScreenをリマウントさせるためのkey）
+    const [gameSessionId, setGameSessionId] = useState<number>(0);
+
+    // 戦闘終了後にホームタブに直接遷移するフラグ
+    const [returnToHome, setReturnToHome] = useState<boolean>(false);
 
     // Portrait mode detection
     const isPortrait = useIsPortrait();
@@ -160,11 +167,21 @@ function App() {
 
                 // プレイヤーデータを取得/作成
                 try {
-                    await getOrCreatePlayerData(
+                    // localStorageから現在のプレイヤー名を取得
+                    const currentLocalName = localStorage.getItem('playerName') || '';
+                    const playerData = await getOrCreatePlayerData(
                         user.uid,
                         extractedUserId || 'anonymous',
-                        playerName || 'プレイヤー'
+                        currentLocalName || 'プレイヤー'
                     );
+                    // Firebaseからプレイヤー名を復元（ただし、ローカルに有効な名前がある場合は上書きしない）
+                    // ローカルが空 or デフォルト値で、Firebaseに有効な名前がある場合のみ復元
+                    if (playerData.playerName && playerData.playerName !== 'プレイヤー') {
+                        if (!currentLocalName || currentLocalName === 'プレイヤー') {
+                            setPlayerName(playerData.playerName);
+                            localStorage.setItem('playerName', playerData.playerName);
+                        }
+                    }
                 } catch (error) {
                     console.error('Failed to create player data:', error);
                 }
@@ -176,11 +193,20 @@ function App() {
                     setIsAnonymous(true);
                     setUserEmail(null);
                     setUserId(null);
-                    await getOrCreatePlayerData(
+                    // localStorageから現在のプレイヤー名を取得
+                    const currentLocalName = localStorage.getItem('playerName') || '';
+                    const playerData = await getOrCreatePlayerData(
                         anonymousUser.uid,
                         'anonymous',
-                        playerName || 'プレイヤー'
+                        currentLocalName || 'プレイヤー'
                     );
+                    // Firebaseからプレイヤー名を復元（ただし、ローカルに有効な名前がある場合は上書きしない）
+                    if (playerData.playerName && playerData.playerName !== 'プレイヤー') {
+                        if (!currentLocalName || currentLocalName === 'プレイヤー') {
+                            setPlayerName(playerData.playerName);
+                            localStorage.setItem('playerName', playerData.playerName);
+                        }
+                    }
                 } catch (error) {
                     console.error('Failed to sign in:', error);
                 }
@@ -206,6 +232,8 @@ function App() {
         networkAdapterRef.current = adapter;
         setNetworkConnected(true);
         if (oppClass) setOpponentClass(oppClass);
+        // 新しいゲームセッションを開始（GameScreenをリマウント）
+        setGameSessionId(prev => prev + 1);
         setCurrentScreen('GAME');
     }, []);
 
@@ -215,13 +243,17 @@ function App() {
         oppClass: ClassType,
         _isHost: boolean,
         oppPlayerId?: string,
-        oppRating?: number
+        oppRating?: number,
+        oppName?: string
     ) => {
         networkAdapterRef.current = adapter;
         setNetworkConnected(true);
         setOpponentClass(oppClass);
         setOpponentPlayerId(oppPlayerId);
         setOpponentRating(oppRating);
+        setOpponentName(oppName);
+        // 新しいゲームセッションを開始（GameScreenをリマウント）
+        setGameSessionId(prev => prev + 1);
         setCurrentScreen('GAME');
     }, []);
 
@@ -306,12 +338,16 @@ function App() {
         setGameMode(mode);
         if (id) setRoomId(id);
         if (aiDifficulty) setAiDifficulty(aiDifficulty);
+        // ホーム画面からゲームを開始したら、returnToHomeフラグをリセット
+        setReturnToHome(false);
 
         // classTypeが指定されている場合は、ClassSelectScreenをスキップ
         if (classType) {
             setSelectedClass(classType);
             // 直接適切な画面に遷移
             if (mode === 'CPU') {
+                // 新しいゲームセッションを開始（GameScreenをリマウント）
+                setGameSessionId(prev => prev + 1);
                 setCurrentScreen('GAME');
             } else if (mode === 'CASUAL_MATCH' || mode === 'RANKED_MATCH') {
                 setCurrentScreen('MATCHMAKING');
@@ -331,6 +367,8 @@ function App() {
         // CASUAL_MATCH/RANKED_MATCH: go to matchmaking screen
         // HOST/JOIN mode: go to lobby first to wait for connection
         if (gameMode === 'CPU') {
+            // 新しいゲームセッションを開始（GameScreenをリマウント）
+            setGameSessionId(prev => prev + 1);
             setCurrentScreen('GAME');
         } else if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
             // カジュアル/ランクマッチ → マッチメイキング画面へ
@@ -341,7 +379,7 @@ function App() {
         }
     }, [gameMode]);
 
-    const backToTitle = useCallback(() => {
+    const backToTitle = useCallback((toHomeScreen: boolean = false) => {
         // Disconnect network if connected
         if (networkAdapterRef.current) {
             networkAdapterRef.current.disconnect();
@@ -349,6 +387,8 @@ function App() {
         }
         setNetworkConnected(false);
         setCurrentScreen('TITLE');
+        // 戦闘終了後はホーム画面に直接遷移
+        setReturnToHome(toHomeScreen);
         // Reset state
         setRoomId('');
         setGameMode('CPU');
@@ -504,12 +544,13 @@ function App() {
                     onNavigateToLogin={handleNavigateToLogin}
                     onNavigateToProfile={handleNavigateToProfile}
                     onLogout={handleLogout}
+                    returnToHome={returnToHome}
                 />
             )}
             {currentScreen === 'CLASS_SELECT' && (
                 <ClassSelectScreen
                     onSelectClass={startGame}
-                    onBack={backToTitle}
+                    onBack={() => backToTitle(true)}
                     gameMode={gameMode}
                     aiDifficulty={aiDifficulty}
                     onDifficultyChange={setAiDifficulty}
@@ -532,7 +573,7 @@ function App() {
                     targetRoomId={roomId}
                     playerClass={selectedClass}
                     onGameStart={handleLobbyGameStart}
-                    onBack={backToTitle}
+                    onBack={() => backToTitle(true)}
                 />
             )}
             {currentScreen === 'MATCHMAKING' && (
@@ -542,16 +583,17 @@ function App() {
                     playerName={playerName || 'プレイヤー'}
                     playerId={playerId}
                     onGameStart={handleMatchmakingGameStart}
-                    onCancel={backToTitle}
+                    onCancel={() => backToTitle(true)}
                 />
             )}
             {currentScreen === 'GAME' && (
                 <GameScreen
+                    key={gameSessionId}
                     playerClass={selectedClass}
                     opponentType={gameMode === 'CPU' ? 'CPU' : 'ONLINE'}
                     gameMode={gameMode}
                     targetRoomId={roomId}
-                    onLeave={backToTitle}
+                    onLeave={() => backToTitle(true)}
                     onRematching={handleRematching}
                     networkAdapter={networkAdapterRef.current}
                     networkConnected={networkConnected}
@@ -562,6 +604,7 @@ function App() {
                     playerId={playerId}
                     opponentPlayerId={opponentPlayerId}
                     opponentRating={opponentRating}
+                    opponentName={opponentName}
                 />
             )}
             {currentScreen === 'REGISTER' && (

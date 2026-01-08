@@ -9,7 +9,7 @@ import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
 import { usePerformanceMode } from '../hooks/usePerformanceMode';
 import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType, getRankFromRating, RANK_THRESHOLDS } from '../firebase/rating';
-import { getClassRating, updateRatingAfterMatch } from '../firebase/playerData';
+import { getClassRating, updateRatingAfterMatch, saveMatchRecord, SaveMatchRecordParams } from '../firebase/playerData';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -139,6 +139,8 @@ interface GameScreenProps {
     playerId?: string | null;
     opponentPlayerId?: string;
     opponentRating?: number;
+    // マッチング時に取得した相手の名前（HANDSHAKEより確実）
+    opponentName?: string;
 }
 
 
@@ -944,6 +946,11 @@ interface EvolutionAnimationProps {
 }
 
 const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedImageUrl, startX, startY, phase, onPhaseChange, onShake, useSep, playSE, scale, isLightMode = false }) => {
+    // モバイル判定: タッチデバイスかつ画面幅が小さい場合
+    const isMobile = React.useMemo(() => {
+        return ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1024;
+    }, []);
+
     const [rotateY, setRotateY] = React.useState(0);
     const [rotateZ, setRotateZ] = React.useState(0); // Z-axis tilt for evolution enhancement
     const [chargeRotate, setChargeRotate] = React.useState(0); // Slow 0-10deg rotation during charge
@@ -1040,10 +1047,11 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 playSERef.current?.('magic_charge.mp3', 0.3); // 0.6 → 0.3 (半分)
 
                 // Create charge particles that will converge toward the card
-                // 80 particles evenly distributed in 360 degrees, various distances
-                const particles = Array(80).fill(0).map((_, i) => {
+                // モバイル: 20個、4K軽量: 40個、通常: 80個
+                const chargeParticleCount = isMobile ? 20 : (isLightMode ? 40 : 80);
+                const particles = Array(chargeParticleCount).fill(0).map((_, i) => {
                     // Even distribution across 360 degrees with slight randomness
-                    const baseAngle = (i / 80) * 360;
+                    const baseAngle = (i / chargeParticleCount) * 360;
                     const angleVariation = (Math.random() - 0.5) * 10; // ±5 degrees variation
                     const angle = baseAngle + angleVariation;
 
@@ -1117,6 +1125,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 // Phase 1: Rapid rotation from 10 to 170 degrees with scale increase
                 // Phase 2: Slow rotation from 170 to 180 degrees
                 const flipStartTime = Date.now();
+                // モバイル: 16個、4K軽量: 40個、通常: 120個
+                const burstParticleCount = isMobile ? 16 : (isLightMode ? 40 : 120);
                 const rapidDuration = 400; // Fast flip to 170
                 const slowDuration = 1200; // Linger longer while slowly rotating (Increased from 600ms)
 
@@ -1146,17 +1156,17 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         // Burst at 90 degrees (approx halfway through rotation)
                         if (currentRotateY > 90 && !burstCreatedRef.current) {
                             burstCreatedRef.current = true;
-                            // 120 particles bursting out in all directions
-                            const burst = Array(120).fill(0).map((_, i) => {
-                                const baseAngle = (i / 120) * 360;
+                            // モバイル/軽量モード対応のパーティクル生成
+                            const burst = Array(burstParticleCount).fill(0).map((_, i) => {
+                                const baseAngle = (i / burstParticleCount) * 360;
                                 const angleVariation = (Math.random() - 0.5) * 8;
-                                // Size increased by 3x (Total 9x from original base)
-                                const baseSize = 18 + Math.random() * 42;
+                                // モバイル時はサイズを小さめに
+                                const baseSize = isMobile ? (24 + Math.random() * 36) : (18 + Math.random() * 42);
                                 return {
                                     id: i,
                                     angle: baseAngle + angleVariation,
                                     dist: 200 + Math.random() * 400,
-                                    size: baseSize * 3,
+                                    size: isMobile ? baseSize * 2 : baseSize * 3,
                                     delay: Math.random() * 0.05
                                 };
                             });
@@ -1180,15 +1190,16 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         // Safety check for burst (if frame skip caused miss)
                         if (!burstCreatedRef.current) {
                             burstCreatedRef.current = true;
-                            const burst = Array(120).fill(0).map((_, i) => {
-                                const baseAngle = (i / 120) * 360;
+                            // モバイル/軽量モード対応のパーティクル生成
+                            const burst = Array(burstParticleCount).fill(0).map((_, i) => {
+                                const baseAngle = (i / burstParticleCount) * 360;
                                 const angleVariation = (Math.random() - 0.5) * 8;
-                                const baseSize = 18 + Math.random() * 42;
+                                const baseSize = isMobile ? (24 + Math.random() * 36) : (18 + Math.random() * 42);
                                 return {
                                     id: i,
                                     angle: baseAngle + angleVariation,
                                     dist: 200 + Math.random() * 400,
-                                    size: baseSize * 3,
+                                    size: isMobile ? baseSize * 2 : baseSize * 3,
                                     delay: Math.random() * 0.05
                                 };
                             });
@@ -1314,8 +1325,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             `}</style>
 
             {/* Charge Particles - Converging toward card center */}
-            {/* 軽量モード: パーティクル数を減らし、box-shadowとfilterを簡略化 */}
-            {(isLightMode ? chargeParticles.filter((_, i) => i % 2 === 0) : chargeParticles).map(p => (
+            {/* モバイル/軽量モード: パーティクル生成時に削減済み、レンダリング時にスタイル簡略化 */}
+            {chargeParticles.map(p => (
                 <div
                     key={`charge-${p.id}`}
                     style={{
@@ -1326,9 +1337,12 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         width: p.size * scale,
                         height: p.size * scale,
                         borderRadius: '50%',
-                        background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
-                        boxShadow: isLightMode ? '0 0 8px white' : '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)',
-                        filter: isLightMode ? undefined : 'blur(1px)',
+                        // モバイル: シンプルな白円、軽量: グラデーションのみ、通常: フルエフェクト
+                        background: isMobile
+                            ? 'rgba(255, 255, 255, 0.9)'
+                            : 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,230,255,0.6) 40%, transparent 70%)',
+                        boxShadow: isMobile ? 'none' : (isLightMode ? '0 0 8px white' : '0 0 10px white, 0 0 20px rgba(100,200,255,0.5)'),
+                        filter: (isMobile || isLightMode) ? undefined : 'blur(1px)',
                         animation: `chargeParticleIn-${p.id} ${p.duration}s ease-in ${p.delay}s forwards`,
                         transform: `rotate(${p.angle}deg) translateX(${p.dist * scale}px)`,
                         opacity: 0,
@@ -1338,8 +1352,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             ))}
 
             {/* Energy Rings (Hula Hoop Effect) - Visible during WHITE_FADE */}
-            {/* 軽量モード: box-shadowを簡略化 */}
-            {phase === 'WHITE_FADE' && (
+            {/* モバイル: リング非表示、軽量: シンプルリング、通常: フルエフェクト */}
+            {phase === 'WHITE_FADE' && !isMobile && (
                 <div style={{
                     position: 'absolute',
                     left: position.x + vibrateOffset.x,
@@ -1387,8 +1401,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
             )}
 
             {/* Burst Particles - Exploding outward on evolve (centered on card) */}
-            {/* 軽量モード: パーティクル数を半分に、box-shadowを簡略化 */}
-            {(isLightMode ? burstParticles.filter((_, i) => i % 2 === 0) : burstParticles).map(p => (
+            {/* モバイル/軽量モード: パーティクル生成時に削減済み、レンダリング時にスタイル簡略化 */}
+            {burstParticles.map(p => (
                 <div
                     key={`burst-${p.id}`}
                     style={{
@@ -1399,12 +1413,17 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                         width: p.size * scale, // Scaled
                         height: p.size * scale, // Scaled
                         borderRadius: '50%',
-                        background: useSep
-                            ? `radial-gradient(circle, rgba(183, 148, 244, 1) 0%, rgba(159, 122, 234, 0.8) 50%, transparent 100%)`
-                            : `radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(251, 211, 141, 0.8) 50%, transparent 100%)`,
-                        boxShadow: isLightMode
-                            ? (useSep ? '0 0 8px #b794f4' : '0 0 8px #fbd38d')
-                            : (useSep ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)' : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)'),
+                        // モバイル: シンプルな円、軽量/通常: グラデーション
+                        background: isMobile
+                            ? (useSep ? 'rgba(183, 148, 244, 0.9)' : 'rgba(255, 220, 150, 0.9)')
+                            : (useSep
+                                ? `radial-gradient(circle, rgba(183, 148, 244, 1) 0%, rgba(159, 122, 234, 0.8) 50%, transparent 100%)`
+                                : `radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(251, 211, 141, 0.8) 50%, transparent 100%)`),
+                        boxShadow: isMobile
+                            ? 'none'
+                            : (isLightMode
+                                ? (useSep ? '0 0 8px #b794f4' : '0 0 8px #fbd38d')
+                                : (useSep ? '0 0 10px #b794f4, 0 0 20px rgba(159,122,234,0.6)' : '0 0 10px #fbd38d, 0 0 20px rgba(251,211,141,0.6)')),
                         animation: `burstParticleOut-${p.id} 0.4s ease-out ${p.delay}s forwards`,
                         pointerEvents: 'none'
                     }}
@@ -1423,8 +1442,8 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 transformStyle: 'preserve-3d'
             }}>
                 {/* Consolidated Background Glow - Optimized */}
-                {/* 軽量モード: filterのblurを削除し、背景グロー自体を非表示 */}
-                {!isLightMode && (
+                {/* モバイル/軽量モード: filterのblurを削除し、背景グロー自体を非表示 */}
+                {!isLightMode && !isMobile && (
                 <div style={{
                     position: 'absolute',
                     left: '50%',
@@ -1443,15 +1462,17 @@ const EvolutionAnimation: React.FC<EvolutionAnimationProps> = ({ card, evolvedIm
                 )}
 
                 {/* Card */}
-                {/* 軽量モード: box-shadowを簡略化 */}
+                {/* モバイル/軽量モード: box-shadowを簡略化 */}
                 <div style={{
                     width: cardWidth,
                     height: cardHeight,
                     borderRadius: 16,
                     overflow: 'hidden',
-                    boxShadow: isLightMode
-                        ? (useSep ? `0 0 20px rgba(159, 122, 234, 0.5)` : `0 0 20px rgba(251, 211, 141, 0.5)`)
-                        : (useSep ? `0 0 40px rgba(159, 122, 234, 0.7)` : `0 0 40px rgba(251, 211, 141, 0.7)`),
+                    boxShadow: isMobile
+                        ? (useSep ? `0 0 10px rgba(159, 122, 234, 0.4)` : `0 0 10px rgba(251, 211, 141, 0.4)`)
+                        : (isLightMode
+                            ? (useSep ? `0 0 20px rgba(159, 122, 234, 0.5)` : `0 0 20px rgba(251, 211, 141, 0.5)`)
+                            : (useSep ? `0 0 40px rgba(159, 122, 234, 0.7)` : `0 0 40px rgba(251, 211, 141, 0.7)`)),
                     position: 'relative',
                     transformStyle: 'preserve-3d' // Required for backface-visibility to work
                 }}>
@@ -1599,6 +1620,8 @@ interface GameOverScreenProps {
     // ランクマッチ用
     isRankedMatch?: boolean;
     ratingResult?: RatingCalculationResult | null;
+    // モバイル対応スケール
+    scale?: number;
 }
 
 // リザルト画面のアニメーションフェーズ
@@ -1611,8 +1634,11 @@ type ResultAnimPhase =
     | 'buttons'         // ボタン
     | 'complete';       // 完了
 
-const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematching, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick, victoryReason = 'normal', isRankedMatch = false, ratingResult }: GameOverScreenProps) => {
+const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematching, onLeave, isOnline, isRoomMatch = true, myRematchRequested, opponentRematchRequested, battleStats, selectedCardInfo, onCardInfoClick, victoryReason = 'normal', isRankedMatch = false, ratingResult, scale = 1 }: GameOverScreenProps) => {
     const isVictory = winnerId === playerId;
+
+    // モバイル判定（scaleが小さい場合はモバイルとみなす）
+    const isMobile = scale < 0.7;
 
     // レートゲージアニメーション用の状態
     const [animatedRating, setAnimatedRating] = React.useState(ratingResult ? (ratingResult.newRating - ratingResult.ratingChange) : 0);
@@ -1620,12 +1646,15 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
     const ANIMATION_DURATION = 1500; // 1.5秒でアニメーション
 
     // レートからゲージ進捗を計算（0-1の範囲）
-    const getRatingProgress = (rating: number): { rank: RankType; progress: number; ratingInRank: number; rankMax: number } => {
+    const getRatingProgress = (rating: number): { rank: RankType; progress: number; ratingInRank: number; rankMax: number; isMaster: boolean } => {
         const threshold = RANK_THRESHOLDS.find(t => rating >= t.min && rating <= t.max) || RANK_THRESHOLDS[0];
-        const rankMax = threshold.rank === 'MASTER' ? 2000 : (threshold.max - threshold.min + 1); // 各ランク2000ポイント
+        const isMaster = threshold.rank === 'MASTER';
+        // ブロンズ: 0-2000, シルバー: 2001-4000, etc. 各ランク2000ポイント
+        const rankMax = isMaster ? Infinity : threshold.max;
         const ratingInRank = rating - threshold.min;
-        const progress = Math.min(1, ratingInRank / rankMax);
-        return { rank: threshold.rank, progress, ratingInRank, rankMax };
+        const rankRange = threshold.max - threshold.min + 1; // ブロンズなら2001 (0-2000)
+        const progress = isMaster ? 0 : Math.min(1, ratingInRank / rankRange);
+        return { rank: threshold.rank, progress, ratingInRank: rating, rankMax, isMaster };
     };
 
     // レートアニメーション
@@ -1724,12 +1753,13 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
             return isVictory ? yorukaWinImg : yorukaLoseImg;
         }
     };
-    const [timeLeft, setTimeLeft] = React.useState(15);
-    const [showDeckSelect, setShowDeckSelect] = React.useState(false);
-    const [selectedDeck, setSelectedDeck] = React.useState<ClassType | null>(null);
+    const [timeLeft, setTimeLeft] = React.useState(30);
+    const [showClassChangeOverlay, setShowClassChangeOverlay] = React.useState(false);
+    // 選択中のクラス（初期値は現在のプレイヤークラス）
+    const [selectedRematchClass, setSelectedRematchClass] = React.useState<ClassType>(playerClass);
 
-    // For online: stop countdown when either player requests rematch or deck selection is shown
-    const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : (myRematchRequested || showDeckSelect);
+    // For online: stop countdown when either player requests rematch or class change overlay is shown
+    const shouldStopCountdown = isOnline ? (myRematchRequested || opponentRematchRequested) : (myRematchRequested || showClassChangeOverlay);
 
     React.useEffect(() => {
         if (shouldStopCountdown) return;
@@ -1746,15 +1776,20 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
         return () => clearInterval(timer);
     }, [onLeave, shouldStopCountdown]);
 
-    // Handle deck selection and start rematch
-    const handleDeckSelect = (deckType: ClassType) => {
-        setSelectedDeck(deckType);
+    // クラス変更オーバーレイでクラスを選択
+    const handleClassChange = (deckType: ClassType) => {
+        setSelectedRematchClass(deckType);
+        setShowClassChangeOverlay(false);
+    };
+
+    // 再マッチングボタンを押した時の処理
+    const handleRematchStart = () => {
         // ランダムマッチ（オンライン＆非ルームマッチ）：onRematching
         // CPU戦・ルームマッチ：onRematch
         if (isOnline && !isRoomMatch && onRematching) {
-            onRematching(deckType);
+            onRematching(selectedRematchClass);
         } else {
-            onRematch(deckType);
+            onRematch(selectedRematchClass);
         }
     };
 
@@ -1779,8 +1814,10 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
 
     const getRematchButtonStyle = () => {
         const base = {
-            padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold' as const,
-            border: 'none', borderRadius: 12,
+            padding: `${Math.max(15 * scale, 6)}px ${Math.max(40 * scale, 14)}px`,
+            fontSize: `${Math.max(1.5 * scale, 0.65)}rem`,
+            fontWeight: 'bold' as const,
+            border: 'none', borderRadius: Math.max(12 * scale, 4),
             cursor: myRematchRequested ? 'default' : 'pointer',
             transform: 'scale(1)', transition: 'transform 0.1s, background 0.2s'
         };
@@ -1811,12 +1848,12 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
         };
     };
 
-    // Deck selection button style - larger size (220px)
-    const getDeckButtonStyle = (deckType: ClassType, isHovered: boolean) => ({
-        width: 220,
-        height: 220,
+    // Deck selection button style - larger size (220px), with scale support
+    const getDeckButtonStyle = (deckType: ClassType, isHovered: boolean, buttonScale: number = 1) => ({
+        width: Math.max(220 * buttonScale, 70),
+        height: Math.max(220 * buttonScale, 70),
         borderRadius: '50%',
-        border: selectedDeck === deckType ? '5px solid #f6e05e' : '4px solid rgba(255,255,255,0.4)',
+        border: selectedRematchClass === deckType ? '5px solid #f6e05e' : '4px solid rgba(255,255,255,0.4)',
         background: deckType === 'AJA'
             ? `url(${getLeaderImg(deckType)}) center top/cover`
             : `url(${getLeaderImg(deckType)}) center/cover`,
@@ -1855,12 +1892,12 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
 
             {/* Left Column: Card Info / Future character images (せんか/あじゃ) */}
             <div style={{
-                flex: 1,
+                flex: isMobile ? 0.6 : 1,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 40,
+                padding: Math.max(40 * scale, 10),
                 borderRight: '1px solid rgba(255,255,255,0.1)'
             }}>
                 {selectedCardInfo ? (
@@ -1868,23 +1905,23 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 16,
-                        maxWidth: 320
+                        gap: Math.max(16 * scale, 6),
+                        maxWidth: Math.max(320 * scale, 120)
                     }}>
                         {/* Card image - no hover zoom */}
                         <div style={{
-                            width: 200,
-                            height: 280,
+                            width: Math.max(200 * scale, 80),
+                            height: Math.max(280 * scale, 112),
                             backgroundImage: `url(${getAssetUrl(`/cards/${selectedCardInfo.id}.png`)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
-                            borderRadius: 12,
+                            borderRadius: Math.max(12 * scale, 4),
                             boxShadow: '0 8px 30px rgba(0,0,0,0.6)'
                         }} />
                         {/* Card name */}
                         <div style={{
                             fontFamily: 'var(--font-tamanegi)',
-                            fontSize: '1.6rem',
+                            fontSize: `${Math.max(1.6 * scale, 0.7)}rem`,
                             color: 'white',
                             textShadow: '0 2px 6px rgba(0,0,0,0.6)',
                             textAlign: 'center'
@@ -1894,8 +1931,8 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                         {/* Card stats */}
                         <div style={{
                             display: 'flex',
-                            gap: 20,
-                            fontSize: '1.2rem',
+                            gap: Math.max(20 * scale, 8),
+                            fontSize: `${Math.max(1.2 * scale, 0.55)}rem`,
                             color: 'rgba(255,255,255,0.9)'
                         }}>
                             <span>コスト: {selectedCardInfo.cost}</span>
@@ -1908,11 +1945,11 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                         </div>
                         {/* Card description */}
                         <div style={{
-                            fontSize: '1rem',
+                            fontSize: `${Math.max(1 * scale, 0.5)}rem`,
                             color: 'rgba(255,255,255,0.7)',
                             textAlign: 'center',
                             lineHeight: 1.5,
-                            maxHeight: 120,
+                            maxHeight: Math.max(120 * scale, 50),
                             overflow: 'auto'
                         }}>
                             {selectedCardInfo.description || 'テキストなし'}
@@ -1921,14 +1958,14 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                         <button
                             onClick={() => onCardInfoClick(null)}
                             style={{
-                                padding: '8px 24px',
-                                fontSize: '1rem',
+                                padding: `${Math.max(8 * scale, 4)}px ${Math.max(24 * scale, 10)}px`,
+                                fontSize: `${Math.max(1 * scale, 0.5)}rem`,
                                 background: 'transparent',
                                 border: '1px solid rgba(255,255,255,0.3)',
                                 color: 'white',
-                                borderRadius: 8,
+                                borderRadius: Math.max(8 * scale, 4),
                                 cursor: 'pointer',
-                                marginTop: 10
+                                marginTop: Math.max(10 * scale, 4)
                             }}
                         >
                             閉じる
@@ -1956,18 +1993,18 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 40,
+                padding: Math.max(40 * scale, 10),
                 position: 'relative'
             }}>
                 {/* Result Text with Tamanegi font - phase 2 (result-text) */}
                 <div style={{
                     fontFamily: 'var(--font-tamanegi)',
-                    fontSize: '5rem',
+                    fontSize: `${Math.max(5 * scale, 1.8)}rem`,
                     color: isVictory ? '#f6e05e' : '#a0aec0',
                     textShadow: isVictory
                         ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
                         : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
-                    marginBottom: 20,
+                    marginBottom: Math.max(20 * scale, 8),
                     opacity: phaseIndex >= 2 ? 1 : 0,
                     transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(30px)',
                     transition: 'opacity 0.4s ease-out, transform 0.4s ease-out',
@@ -1979,10 +2016,10 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                 {/* Victory reason message (disconnect/surrender) */}
                 {victoryReasonMessage && (
                     <div style={{
-                        fontSize: '1.1rem',
+                        fontSize: `${Math.max(1.1 * scale, 0.6)}rem`,
                         color: 'rgba(255, 255, 255, 0.8)',
-                        marginTop: -10,
-                        marginBottom: 20,
+                        marginTop: Math.max(-10 * scale, -4),
+                        marginBottom: Math.max(20 * scale, 8),
                         opacity: phaseIndex >= 2 ? 1 : 0,
                         transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(20px)',
                         transition: 'opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s'
@@ -1996,39 +2033,39 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                     display: 'flex',
                     flexWrap: 'wrap',
                     justifyContent: 'center',
-                    gap: 16,
-                    marginBottom: 30,
-                    padding: '16px 24px',
+                    gap: Math.max(16 * scale, 6),
+                    marginBottom: Math.max(30 * scale, 10),
+                    padding: `${Math.max(16 * scale, 6)}px ${Math.max(24 * scale, 8)}px`,
                     background: 'rgba(0,0,0,0.3)',
-                    borderRadius: 12,
+                    borderRadius: Math.max(12 * scale, 4),
                     border: '1px solid rgba(255,255,255,0.1)',
                     opacity: phaseIndex >= 3 ? 1 : 0,
                     transform: phaseIndex >= 3 ? 'translateY(0)' : 'translateY(30px)',
                     transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
                 }}>
-                    <div style={{ textAlign: 'center', minWidth: 80 }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f6e05e' }}>
+                    <div style={{ textAlign: 'center', minWidth: Math.max(80 * scale, 35) }}>
+                        <div style={{ fontSize: `${Math.max(1.8 * scale, 0.8)}rem`, fontWeight: 'bold', color: '#f6e05e' }}>
                             {battleStats.turnCount}
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>ターン</div>
+                        <div style={{ fontSize: `${Math.max(0.9 * scale, 0.45)}rem`, color: 'rgba(255,255,255,0.6)' }}>ターン</div>
                     </div>
-                    <div style={{ textAlign: 'center', minWidth: 80 }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#48bb78' }}>
+                    <div style={{ textAlign: 'center', minWidth: Math.max(80 * scale, 35) }}>
+                        <div style={{ fontSize: `${Math.max(1.8 * scale, 0.8)}rem`, fontWeight: 'bold', color: '#48bb78' }}>
                             {battleStats.damageDealtToOpponent}
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>与ダメージ</div>
+                        <div style={{ fontSize: `${Math.max(0.9 * scale, 0.45)}rem`, color: 'rgba(255,255,255,0.6)' }}>与ダメージ</div>
                     </div>
-                    <div style={{ textAlign: 'center', minWidth: 80 }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#e53e3e' }}>
+                    <div style={{ textAlign: 'center', minWidth: Math.max(80 * scale, 35) }}>
+                        <div style={{ fontSize: `${Math.max(1.8 * scale, 0.8)}rem`, fontWeight: 'bold', color: '#e53e3e' }}>
                             {battleStats.damageReceivedFromOpponent}
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>被ダメージ</div>
+                        <div style={{ fontSize: `${Math.max(0.9 * scale, 0.45)}rem`, color: 'rgba(255,255,255,0.6)' }}>被ダメージ</div>
                     </div>
-                    <div style={{ textAlign: 'center', minWidth: 80 }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#63b3ed' }}>
+                    <div style={{ textAlign: 'center', minWidth: Math.max(80 * scale, 35) }}>
+                        <div style={{ fontSize: `${Math.max(1.8 * scale, 0.8)}rem`, fontWeight: 'bold', color: '#63b3ed' }}>
                             {battleStats.followersDestroyed}
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>撃破数</div>
+                        <div style={{ fontSize: `${Math.max(0.9 * scale, 0.45)}rem`, color: 'rgba(255,255,255,0.6)' }}>撃破数</div>
                     </div>
                 </div>
 
@@ -2042,33 +2079,33 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            gap: 12,
-                            marginTop: 16,
+                            gap: Math.max(12 * scale, 4),
+                            marginTop: Math.max(16 * scale, 6),
                             opacity: phaseIndex >= 4 ? 1 : 0,
                             transform: phaseIndex >= 4 ? 'translateY(0)' : 'translateY(20px)',
                             transition: 'opacity 0.4s ease-out, transform 0.4s ease-out',
                             width: '90%',
-                            maxWidth: 500
+                            maxWidth: Math.max(500 * scale, 180)
                         }}>
                             {/* レート変動表示 */}
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 12,
+                                gap: Math.max(12 * scale, 4),
                                 background: 'rgba(0, 0, 0, 0.5)',
-                                padding: '12px 24px',
-                                borderRadius: 12,
+                                padding: `${Math.max(12 * scale, 4)}px ${Math.max(24 * scale, 8)}px`,
+                                borderRadius: Math.max(12 * scale, 4),
                                 border: `2px solid ${ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e'}`
                             }}>
                                 <span style={{
-                                    fontSize: '1.2rem',
+                                    fontSize: `${Math.max(1.2 * scale, 0.6)}rem`,
                                     color: 'rgba(255,255,255,0.8)',
                                     fontFamily: 'var(--font-tamanegi)'
                                 }}>
                                     レート
                                 </span>
                                 <span style={{
-                                    fontSize: '2rem',
+                                    fontSize: `${Math.max(2 * scale, 0.9)}rem`,
                                     fontWeight: 'bold',
                                     color: ratingResult.ratingChange >= 0 ? '#48bb78' : '#e53e3e',
                                     fontFamily: 'var(--font-tamanegi)'
@@ -2081,15 +2118,15 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                             {ratingResult.ratingChange > 0 && (ratingResult.bonusBreakdown.winStreakBonus > 0 || ratingResult.bonusBreakdown.rankDiffBonus > 0) && (
                                 <div style={{
                                     display: 'flex',
-                                    gap: 16,
-                                    fontSize: '0.85rem',
+                                    gap: Math.max(16 * scale, 6),
+                                    fontSize: `${Math.max(0.85 * scale, 0.45)}rem`,
                                     color: 'rgba(255,255,255,0.6)',
                                     fontFamily: 'var(--font-tamanegi)'
                                 }}>
                                     <span>基本: +{ratingResult.bonusBreakdown.base}</span>
                                     {ratingResult.bonusBreakdown.winStreakBonus > 0 && (
                                         <span style={{ color: '#f6e05e' }}>
-                                            連勝: +{ratingResult.bonusBreakdown.winStreakBonus}
+                                            連勝: +{ratingResult.bonusBreakdown.winStreakBonus}（{ratingResult.newWinStreak}連勝中！）
                                         </span>
                                     )}
                                     {ratingResult.bonusBreakdown.rankDiffBonus > 0 && (
@@ -2105,10 +2142,10 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                 width: '100%',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: 8,
+                                gap: Math.max(8 * scale, 3),
                                 background: 'rgba(0, 0, 0, 0.5)',
-                                padding: 16,
-                                borderRadius: 12,
+                                padding: Math.max(16 * scale, 6),
+                                borderRadius: Math.max(12 * scale, 4),
                                 border: '2px solid rgba(255, 255, 255, 0.2)'
                             }}>
                                 {/* ランク名 */}
@@ -2118,7 +2155,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                     alignItems: 'center'
                                 }}>
                                     <span style={{
-                                        fontSize: '1.4rem',
+                                        fontSize: `${Math.max(1.4 * scale, 0.65)}rem`,
                                         fontWeight: 'bold',
                                         color: getRankColor(currentProgress.rank),
                                         fontFamily: 'var(--font-tamanegi)',
@@ -2127,20 +2164,22 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                         {RANK_DISPLAY_NAMES[currentProgress.rank]}
                                     </span>
                                     <span style={{
-                                        fontSize: '1rem',
+                                        fontSize: `${Math.max(1 * scale, 0.5)}rem`,
                                         color: 'rgba(255,255,255,0.8)',
                                         fontFamily: 'var(--font-tamanegi)'
                                     }}>
-                                        {Math.floor(animatedRating)} / {currentProgress.rank === 'MASTER' ? '∞' : (RANK_THRESHOLDS.find(t => t.rank === currentProgress.rank)?.max || 0)}
+                                        {currentProgress.isMaster
+                                            ? Math.floor(animatedRating)
+                                            : `${Math.floor(animatedRating)} / ${currentProgress.rankMax}`}
                                     </span>
                                 </div>
 
                                 {/* ゲージ本体 */}
                                 <div style={{
                                     width: '100%',
-                                    height: 24,
+                                    height: Math.max(24 * scale, 10),
                                     background: 'rgba(0, 0, 0, 0.7)',
-                                    borderRadius: 12,
+                                    borderRadius: Math.max(12 * scale, 5),
                                     overflow: 'hidden',
                                     border: '2px solid rgba(255, 255, 255, 0.3)',
                                     position: 'relative'
@@ -2150,7 +2189,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                         width: `${currentProgress.progress * 100}%`,
                                         height: '100%',
                                         background: `linear-gradient(90deg, ${getRankColor(currentProgress.rank)}cc, ${getRankColor(currentProgress.rank)})`,
-                                        borderRadius: 10,
+                                        borderRadius: Math.max(10 * scale, 4),
                                         transition: 'width 0.05s linear',
                                         boxShadow: `0 0 10px ${getRankColor(currentProgress.rank)}80`
                                     }} />
@@ -2165,13 +2204,15 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: '0.75rem',
+                                        fontSize: `${Math.max(0.75 * scale, 0.4)}rem`,
                                         fontWeight: 'bold',
                                         color: 'white',
                                         textShadow: '0 1px 2px rgba(0,0,0,0.8)',
                                         fontFamily: 'var(--font-tamanegi)'
                                     }}>
-                                        {Math.floor(currentProgress.ratingInRank)} / {currentProgress.rankMax}
+                                        {currentProgress.isMaster
+                                            ? Math.floor(currentProgress.ratingInRank)
+                                            : `${Math.floor(currentProgress.ratingInRank)} / ${currentProgress.rankMax}`}
                                     </div>
                                 </div>
                             </div>
@@ -2179,7 +2220,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                             {/* ランク昇格/降格メッセージ */}
                             {ratingResult.isRankUp && animatedRating >= ratingResult.newRating - 10 && (
                                 <div style={{
-                                    fontSize: '1.4rem',
+                                    fontSize: `${Math.max(1.4 * scale, 0.65)}rem`,
                                     fontWeight: 'bold',
                                     color: '#f6e05e',
                                     textShadow: '0 0 20px rgba(246, 224, 94, 0.8)',
@@ -2191,7 +2232,7 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                             )}
                             {ratingResult.isRankDown && (
                                 <div style={{
-                                    fontSize: '1.2rem',
+                                    fontSize: `${Math.max(1.2 * scale, 0.55)}rem`,
                                     color: '#e53e3e',
                                     fontFamily: 'var(--font-tamanegi)'
                                 }}>
@@ -2202,81 +2243,82 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                     );
                 })()}
 
-                {/* yoRuka message - positioned above the yoRuka image */}
-                <div style={{
-                    position: 'absolute',
-                    right: 20,
-                    bottom: 270,
-                    width: 180,
-                    textAlign: 'center',
-                    fontFamily: 'var(--font-tamanegi)',
-                    fontSize: '1.4rem',
-                    color: isVictory ? '#f6e05e' : '#e53e3e',
-                    textShadow: isVictory
-                        ? '0 0 20px rgba(246, 224, 94, 0.8), 2px 2px 4px rgba(0,0,0,0.8)'
-                        : '0 0 20px rgba(229, 62, 62, 0.8), 2px 2px 4px rgba(0,0,0,0.8)',
-                    zIndex: 10,
-                    opacity: phaseIndex >= 5 ? 1 : 0,
-                    transition: 'opacity 0.4s ease-out'
-                }}>
-                    {isVictory ? 'あなたの勝ち！' : 'お前の負け！'}
-                </div>
+                {/* yoRuka message - 隠し要素のため非表示 */}
 
-                {/* Deck Selection UI */}
-                {showDeckSelect && !myRematchRequested ? (
-                    <div style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        animation: 'fadeIn 0.3s ease-out'
-                    }}>
+                {/* 再マッチング用UI: クラス表示 + クラス変更ボタン + 再マッチング/ホームへ戻る */}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: Math.max(16 * scale, 6),
+                    opacity: phaseIndex >= 5 ? 1 : 0,
+                    transform: phaseIndex >= 5 ? 'translateY(0)' : 'translateY(30px)',
+                    transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
+                }}>
+                    {/* 選択中のクラス表示 + クラス変更ボタン */}
+                    {!myRematchRequested && (
                         <div style={{
-                            fontFamily: 'var(--font-tamanegi)',
-                            fontSize: '1.6rem', color: 'white',
-                            marginBottom: 24, textShadow: '0 2px 6px rgba(0,0,0,0.6)'
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: Math.max(12 * scale, 5),
+                            background: 'rgba(0, 0, 0, 0.5)',
+                            padding: `${Math.max(10 * scale, 4)}px ${Math.max(16 * scale, 6)}px`,
+                            borderRadius: Math.max(10 * scale, 4),
+                            border: '1px solid rgba(255, 255, 255, 0.2)'
                         }}>
-                            デッキを選択してください
+                            <span style={{
+                                fontFamily: 'var(--font-tamanegi)',
+                                fontSize: `${Math.max(1.1 * scale, 0.55)}rem`,
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }}>
+                                使用クラス:
+                            </span>
+                            <span style={{
+                                fontFamily: 'var(--font-tamanegi)',
+                                fontSize: `${Math.max(1.3 * scale, 0.6)}rem`,
+                                fontWeight: 'bold',
+                                color: selectedRematchClass === 'SENKA' ? '#e74c3c'
+                                    : selectedRematchClass === 'AJA' ? '#3498db'
+                                    : '#9b59b6'
+                            }}>
+                                {selectedRematchClass === 'SENKA' ? 'せんか'
+                                    : selectedRematchClass === 'AJA' ? 'あじゃ'
+                                    : 'Y'}
+                            </span>
+                            <button
+                                onClick={() => setShowClassChangeOverlay(true)}
+                                style={{
+                                    padding: `${Math.max(6 * scale, 3)}px ${Math.max(12 * scale, 5)}px`,
+                                    fontSize: `${Math.max(0.9 * scale, 0.5)}rem`,
+                                    fontWeight: 'bold',
+                                    background: 'rgba(168, 85, 247, 0.3)',
+                                    border: '1px solid rgba(168, 85, 247, 0.6)',
+                                    color: '#d8b4fe',
+                                    borderRadius: Math.max(6 * scale, 3),
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.5)';
+                                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.8)';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.3)';
+                                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.6)';
+                                }}
+                            >
+                                変更
+                            </button>
                         </div>
-                        <div style={{ display: 'flex', gap: 40, marginBottom: 24 }}>
-                            {/* せんかデッキ */}
-                            <DeckSelectButton
-                                deckType="SENKA"
-                                label="せんか"
-                                onSelect={handleDeckSelect}
-                                getStyle={getDeckButtonStyle}
-                            />
-                            {/* あじゃデッキ */}
-                            <DeckSelectButton
-                                deckType="AJA"
-                                label="あじゃ"
-                                onSelect={handleDeckSelect}
-                                getStyle={getDeckButtonStyle}
-                            />
-                        </div>
-                        <button
-                            onClick={() => setShowDeckSelect(false)}
-                            style={{
-                                padding: '10px 36px', fontSize: '1.1rem', fontWeight: 'bold',
-                                background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
-                                color: 'white', borderRadius: 10,
-                                cursor: 'pointer', marginTop: 8
-                            }}
-                        >
-                            キャンセル
-                        </button>
-                    </div>
-                ) : (
+                    )}
+
+                    {/* 再マッチング / ホームへ戻るボタン */}
                     <div style={{
-                        display: 'flex', gap: 20,
-                        opacity: phaseIndex >= 5 ? 1 : 0,
-                        transform: phaseIndex >= 5 ? 'translateY(0)' : 'translateY(30px)',
-                        transition: 'opacity 0.4s ease-out, transform 0.4s ease-out'
+                        display: 'flex',
+                        gap: Math.max(20 * scale, 8)
                     }}>
                         <button
-                            onClick={() => {
-                                if (!myRematchRequested) {
-                                    // ルームマッチ・ランダムマッチ共通：デッキ選択画面を表示
-                                    setShowDeckSelect(true);
-                                }
-                            }}
+                            onClick={handleRematchStart}
                             disabled={myRematchRequested}
                             style={getRematchButtonStyle()}
                             onMouseDown={e => { if (!myRematchRequested) e.currentTarget.style.transform = 'scale(0.95)'; }}
@@ -2287,40 +2329,101 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                         <button
                             onClick={onLeave}
                             style={{
-                                padding: '15px 40px', fontSize: '1.5rem', fontWeight: 'bold',
-                                background: 'transparent', border: '2px solid rgba(255,255,255,0.3)',
-                                color: 'white', borderRadius: 12,
+                                padding: `${Math.max(15 * scale, 6)}px ${Math.max(40 * scale, 14)}px`,
+                                fontSize: `${Math.max(1.5 * scale, 0.65)}rem`,
+                                fontWeight: 'bold',
+                                background: 'transparent',
+                                border: '2px solid rgba(255,255,255,0.3)',
+                                color: 'white',
+                                borderRadius: Math.max(12 * scale, 4),
                                 cursor: 'pointer'
                             }}
                         >
                             ホームへ戻る {!shouldStopCountdown && `(${timeLeft})`}
                         </button>
                     </div>
+                </div>
+
+                {/* クラス変更オーバーレイ */}
+                {showClassChangeOverlay && (
+                    <div style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0, 0, 0, 0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 100,
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(30, 30, 50, 0.95) 0%, rgba(20, 20, 40, 0.95) 100%)',
+                            border: '2px solid rgba(168, 85, 247, 0.5)',
+                            borderRadius: Math.max(16 * scale, 6),
+                            padding: Math.max(32 * scale, 12),
+                            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: Math.max(24 * scale, 8)
+                        }}>
+                            <div style={{
+                                fontFamily: 'var(--font-tamanegi)',
+                                fontSize: `${Math.max(1.8 * scale, 0.75)}rem`,
+                                color: 'white',
+                                textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)'
+                            }}>
+                                クラスを選択
+                            </div>
+                            <div style={{
+                                display: 'flex',
+                                gap: Math.max(24 * scale, 8)
+                            }}>
+                                {/* せんか */}
+                                <DeckSelectButton
+                                    deckType="SENKA"
+                                    label="せんか"
+                                    onSelect={handleClassChange}
+                                    getStyle={getDeckButtonStyle}
+                                    scale={scale}
+                                />
+                                {/* あじゃ */}
+                                <DeckSelectButton
+                                    deckType="AJA"
+                                    label="あじゃ"
+                                    onSelect={handleClassChange}
+                                    getStyle={getDeckButtonStyle}
+                                    scale={scale}
+                                />
+                                {/* Y */}
+                                <DeckSelectButton
+                                    deckType="YORUKA"
+                                    label="Y"
+                                    onSelect={handleClassChange}
+                                    getStyle={getDeckButtonStyle}
+                                    scale={scale}
+                                />
+                            </div>
+                            <button
+                                onClick={() => setShowClassChangeOverlay(false)}
+                                style={{
+                                    padding: `${Math.max(10 * scale, 4)}px ${Math.max(36 * scale, 12)}px`,
+                                    fontSize: `${Math.max(1.1 * scale, 0.55)}rem`,
+                                    fontWeight: 'bold',
+                                    background: 'transparent',
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    color: 'white',
+                                    borderRadius: Math.max(10 * scale, 4),
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                キャンセル
+                            </button>
+                        </div>
+                    </div>
                 )}
 
-                {/* yoRuka Image - Hidden element at right side, no border/hover effects */}
-                <div
-                    onClick={() => {
-                        if (showDeckSelect && !myRematchRequested) {
-                            handleDeckSelect('YORUKA');
-                        }
-                    }}
-                    style={{
-                        position: 'absolute',
-                        right: 20,
-                        bottom: 20,
-                        width: 180,
-                        height: 240,
-                        backgroundImage: `url(${isVictory ? yorukaWinImg : yorukaLoseImg})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        borderRadius: 12,
-                        cursor: showDeckSelect && !myRematchRequested ? 'pointer' : 'default',
-                        opacity: phaseIndex >= 5 ? 0.7 : 0,
-                        transition: 'opacity 0.4s ease',
-                        boxShadow: '0 8px 20px rgba(0,0,0,0.4)'
-                    }}
-                />
+                {/* yoRuka Image - 隠し要素のため非表示 */}
             </div>
         </div>
     );
@@ -2331,24 +2434,25 @@ interface DeckSelectButtonProps {
     deckType: ClassType;
     label: string;
     onSelect: (deckType: ClassType) => void;
-    getStyle: (deckType: ClassType, isHovered: boolean) => React.CSSProperties;
+    getStyle: (deckType: ClassType, isHovered: boolean, scale?: number) => React.CSSProperties;
+    scale?: number;
 }
 
-const DeckSelectButton = ({ deckType, label, onSelect, getStyle }: DeckSelectButtonProps) => {
+const DeckSelectButton = ({ deckType, label, onSelect, getStyle, scale = 1 }: DeckSelectButtonProps) => {
     const [isHovered, setIsHovered] = React.useState(false);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: Math.max(12 * scale, 4) }}>
             <button
                 onClick={() => onSelect(deckType)}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                style={getStyle(deckType, isHovered)}
+                style={getStyle(deckType, isHovered, scale)}
             />
             <span style={{
                 color: 'white',
                 fontFamily: 'var(--font-tamanegi)',
-                fontSize: '1.4rem',
+                fontSize: `${Math.max(1.4 * scale, 0.6)}rem`,
                 textShadow: '0 2px 6px rgba(0,0,0,0.6)'
             }}>
                 {label}
@@ -2445,7 +2549,7 @@ const useVisualBoard = (realBoard: (CardModel | any | null)[], isProcessingEffec
     return visualBoard;
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, onRematching, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName, timerEnabled = true, playerId: authPlayerId, opponentPlayerId: _authOpponentPlayerId, opponentRating: propOpponentRating }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentType, gameMode, targetRoomId, onLeave, onRematching, networkAdapter, networkConnected, opponentClass: propOpponentClass, aiDifficulty = 'NORMAL', playerName, timerEnabled = true, playerId: authPlayerId, opponentPlayerId: _authOpponentPlayerId, opponentRating: propOpponentRating, opponentName: propOpponentName }) => {
     // For online play, use the adapter passed from LobbyScreen
     // Only use useGameNetwork hook for CPU mode (where it returns nothing)
     // If networkAdapter is provided (HOST/JOIN from LobbyScreen), skip creating a new one
@@ -2469,6 +2573,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         };
         checkMobile();
     }, []);
+
+    // ランクマッチ: 対戦開始時刻を記録（同一相手との連続マッチング防止用）
+    useEffect(() => {
+        if (gameMode === 'RANKED_MATCH' && _authOpponentPlayerId) {
+            const matchStartKey = `rankedMatchStart_${_authOpponentPlayerId}`;
+            localStorage.setItem(matchStartKey, Date.now().toString());
+            console.log(`[GameScreen] Saved match start time for opponent: ${_authOpponentPlayerId}`);
+        }
+    }, [gameMode, _authOpponentPlayerId]);
 
     // Helper to convert screen coordinates to game container coordinates
     // Since we now use independent X/Y scaling that fills the entire screen,
@@ -2511,12 +2624,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // CPU対戦時は相手クラスを決定
     // For online play, use propOpponentClass if provided
-    // プレイヤーがYORUKAの場合、CPUはSENKAかAJAをランダム選択
+    // CPUは自分のクラスと重複しない3クラス（SENKA, AJA, YORUKA）からランダム選択
     const opponentClass: ClassType = propOpponentClass || (() => {
-        if (playerClass === 'YORUKA') {
-            return Math.random() < 0.5 ? 'SENKA' : 'AJA';
-        }
-        return playerClass === 'SENKA' ? 'AJA' : 'SENKA';
+        const allClasses: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+        const availableClasses = allClasses.filter(c => c !== playerClass);
+        return availableClasses[Math.floor(Math.random() * availableClasses.length)];
     })();
 
     // Game state initialization
@@ -2525,7 +2637,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const isJoinSide = gameMode === 'JOIN' ||
                        ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && !isHost);
     const [gameState, dispatch] = useReducer(gameReducer, null, () => {
-        const opponentDefaultName = gameMode === 'CPU' ? 'CPU' : '対戦相手';
+        // Use propOpponentName if available (from MatchmakingScreen), otherwise use default
+        const opponentDefaultName = propOpponentName || (gameMode === 'CPU' ? 'CPU' : '対戦相手');
+        console.log('[GameScreen] Initializing game with opponentName:', opponentDefaultName, 'propOpponentName:', propOpponentName);
         if (isJoinSide) {
             // JOIN side: Create empty placeholder state, will be replaced by SYNC_STATE
             return initializeGame(opponentDefaultName, opponentClass, playerName, playerClass);
@@ -2545,6 +2659,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     );
     const [boardFadeIn, setBoardFadeIn] = React.useState(false); // 盤面フェードイン制御（BattleIntro終了前に開始）
     const [leaderUiFadeIn, setLeaderUiFadeIn] = React.useState(false); // リーダーUIのフェードイン制御
+    const [showDuelStart, setShowDuelStart] = React.useState(false); // 「決闘 開始！」表示
+    const [timerStarted, setTimerStarted] = React.useState(false); // タイマー開始フラグ
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
 
     // CASUAL_MATCH/RANKED_MATCH: Sync state for coordinated BattleIntro start
@@ -2614,7 +2730,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // ランクマッチ用：レート計算結果
     const [ratingResult, setRatingResult] = React.useState<RatingCalculationResult | null>(null);
-    const [ratingUpdateDone, setRatingUpdateDone] = React.useState(false);
+    const [ratingUpdateDone, setRatingUpdateDone] = React.useState(() => {
+        console.log('%c[RatingUpdate] Initializing ratingUpdateDone to FALSE', 'background: #00ff00; color: #000000; font-size: 12px;');
+        return false;
+    });
 
     // BattleIntro用：ランク情報
     const [myRank, setMyRank] = React.useState<RankType | undefined>(undefined);
@@ -2648,50 +2767,143 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         fetchRanks();
     }, [gameMode, authPlayerId, currentPlayerClass, propOpponentRating]);
 
-    // ランクマッチ終了時のレート更新処理
+    // ゲーム終了時にOutro演出を開始 + ランクマッチのレート更新
     React.useEffect(() => {
-        if (gameMode !== 'RANKED_MATCH' || !authPlayerId || !gameState.winnerId || ratingUpdateDone) {
-            return;
+        console.log('[GameScreen] winnerId changed:', {
+            winnerId: gameState.winnerId,
+            outroCompleted,
+            showBattleOutro,
+            gameMode,
+            phase: gameState.phase,
+            authPlayerId,
+            currentPlayerId,
+            ratingUpdateDone,
+            propOpponentRating
+        });
+
+        // ランクマッチのレート更新処理 + 対戦履歴保存（CASUAL_MATCHも対象）
+        // レート変動は常に適用（ブースティング防止はマッチング時の5分制限で対応）
+        const shouldUpdateRating = gameState.winnerId && gameMode === 'RANKED_MATCH' && authPlayerId && !ratingUpdateDone;
+        const shouldSaveMatchHistory = gameState.winnerId && (gameMode === 'RANKED_MATCH' || gameMode === 'CASUAL_MATCH') && authPlayerId && isHost && !ratingUpdateDone;
+
+        if (shouldUpdateRating || shouldSaveMatchHistory) {
+            console.log('%c[RatingUpdate] Starting rating update...', 'background: #00ff00; color: #000000; font-size: 14px;', {
+                authPlayerId,
+                currentPlayerId,
+                winnerId: gameState.winnerId,
+                propOpponentRating,
+                shouldUpdateRating,
+                shouldSaveMatchHistory,
+                turnCount: gameState.turnCount
+            });
+
+            const updateRatingAndSaveHistory = async () => {
+                try {
+                    const classRating = await getClassRating(authPlayerId, currentPlayerClass);
+                    const isWin = gameState.winnerId === currentPlayerId;
+
+                    console.log('[RatingUpdate] Calculating rating:', {
+                        currentRating: classRating.rating,
+                        winStreak: classRating.winStreak,
+                        opponentRating: propOpponentRating,
+                        winnerId: gameState.winnerId,
+                        currentPlayerId,
+                        isWin
+                    });
+
+                    let result: RatingCalculationResult;
+                    if (isWin) {
+                        result = calculateWinRating(
+                            classRating.rating,
+                            classRating.winStreak,
+                            propOpponentRating ?? 0
+                        );
+                    } else {
+                        result = calculateLossRating(classRating.rating);
+                    }
+
+                    // ランクマッチの場合のみレート更新
+                    if (shouldUpdateRating) {
+                        await updateRatingAfterMatch(authPlayerId, currentPlayerClass, result, isWin);
+                        console.log('%c[RatingUpdate] Rating updated successfully!', 'background: #00ff00; color: #000000; font-size: 14px;', result);
+                    }
+
+                    // HOST側のみ対戦履歴を保存（重複保存を防ぐ）
+                    if (shouldSaveMatchHistory && _authOpponentPlayerId) {
+                        // 相手のレート変動後の値を計算
+                        const opponentIsWin = !isWin;
+                        let opponentRatingAfter = propOpponentRating ?? 0;
+                        if (gameMode === 'RANKED_MATCH') {
+                            if (opponentIsWin) {
+                                const opponentResult = calculateWinRating(propOpponentRating ?? 0, 0, classRating.rating);
+                                opponentRatingAfter = opponentResult.newRating;
+                            } else {
+                                const opponentResult = calculateLossRating(propOpponentRating ?? 0);
+                                opponentRatingAfter = opponentResult.newRating;
+                            }
+                        }
+
+                        // 相手の名前を取得（gameStateから）
+                        const opponentId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                        const opponentPlayerName = gameState.players[opponentId]?.name || propOpponentName || '対戦相手';
+
+                        // 先攻判定：自分が先攻かどうか
+                        const myIsFirst = currentPlayerId === gameState.firstPlayerId;
+
+                        const matchParams: SaveMatchRecordParams = {
+                            gameMode: gameMode as 'CASUAL_MATCH' | 'RANKED_MATCH',
+                            myPlayerId: authPlayerId,
+                            myPlayerName: playerName,
+                            myPlayerClass: currentPlayerClass,
+                            myRatingBefore: classRating.rating,
+                            myRatingAfter: result.newRating,
+                            myIsFirst,
+                            opponentPlayerId: _authOpponentPlayerId,
+                            opponentPlayerName,
+                            opponentPlayerClass: opponentClass,
+                            opponentRatingBefore: propOpponentRating ?? 0,
+                            opponentRatingAfter,
+                            winnerId: gameState.winnerId === currentPlayerId ? authPlayerId : _authOpponentPlayerId,
+                        };
+
+                        try {
+                            await saveMatchRecord(matchParams);
+                            console.log('%c[MatchHistory] Match record saved!', 'background: #00ff00; color: #000000; font-size: 14px;');
+                        } catch (historyError) {
+                            console.error('[MatchHistory] Failed to save match record:', historyError);
+                            // 履歴保存失敗はレート更新には影響させない
+                        }
+                    }
+
+                    setRatingResult(result);
+                    setRatingUpdateDone(true);
+
+                    // 対戦終了情報を保存（ログ追跡用）
+                    if (gameMode === 'RANKED_MATCH' && _authOpponentPlayerId) {
+                        const matchEndKey = `rankedMatchEnd_${_authOpponentPlayerId}`;
+                        const matchTurnsKey = `rankedMatchTurns_${_authOpponentPlayerId}`;
+                        localStorage.setItem(matchEndKey, Date.now().toString());
+                        localStorage.setItem(matchTurnsKey, gameState.turnCount.toString());
+                        console.log(`[RatingUpdate] Saved match info for opponent: ${_authOpponentPlayerId}`, {
+                            endTime: Date.now(),
+                            turnCount: gameState.turnCount
+                        });
+                    }
+                } catch (error) {
+                    console.error('[RatingUpdate] Failed to update rating:', error);
+                    setRatingUpdateDone(true); // エラー時も完了フラグを立てる
+                }
+            };
+
+            updateRatingAndSaveHistory();
         }
 
-        const updateRating = async () => {
-            try {
-                const classRating = await getClassRating(authPlayerId, currentPlayerClass);
-                const isWin = gameState.winnerId === currentPlayerId;
-
-                let result: RatingCalculationResult;
-                if (isWin) {
-                    result = calculateWinRating(
-                        classRating.rating,
-                        classRating.winStreak,
-                        propOpponentRating ?? 0
-                    );
-                } else {
-                    result = calculateLossRating(classRating.rating);
-                }
-
-                // Firebaseにレート更新
-                await updateRatingAfterMatch(authPlayerId, currentPlayerClass, result, isWin);
-
-                setRatingResult(result);
-                setRatingUpdateDone(true);
-                console.log('[RatingUpdate] Rating updated:', result);
-            } catch (error) {
-                console.error('[RatingUpdate] Failed to update rating:', error);
-                setRatingUpdateDone(true); // エラー時も完了フラグを立てる
-            }
-        };
-
-        updateRating();
-    }, [gameMode, authPlayerId, gameState.winnerId, currentPlayerId, currentPlayerClass, propOpponentRating, ratingUpdateDone]);
-
-    // ゲーム終了時にOutro演出を開始
-    React.useEffect(() => {
         if (gameState.winnerId && !outroCompleted && !showBattleOutro) {
             // winnerId が設定されたら演出開始
+            console.log('[GameScreen] Starting BattleOutro animation');
             setShowBattleOutro(true);
         }
-    }, [gameState.winnerId, outroCompleted, showBattleOutro]);
+    }, [gameState.winnerId, outroCompleted, showBattleOutro, gameMode, gameState.phase, authPlayerId, currentPlayerId, currentPlayerClass, propOpponentRating, ratingUpdateDone, isHost, _authOpponentPlayerId, opponentClass, playerName, propOpponentName, gameState.players, gameState.firstPlayerId]);
 
     // 爆散時の画面振動オフセットをリアルタイムで計算
     React.useEffect(() => {
@@ -2748,7 +2960,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Prevent multiple HANDSHAKE sends (caused by useEffect re-running on gameState changes)
     const handshakeSentRef = useRef(false);
     // Store opponent's name received via HANDSHAKE to re-apply after INIT_GAME sync
-    const opponentNameRef = useRef<string | null>(null);
+    // Initialize with propOpponentName if available (from MatchmakingScreen)
+    const opponentNameRef = useRef<string | null>(propOpponentName ?? null);
     useEffect(() => {
         const isHostSide = gameMode === 'HOST' ||
                            ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && isHost);
@@ -3406,6 +3619,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         audio.play().catch(e => console.warn("SE Play prevented", e));
     }, [audioSettings]);
 
+    // 爆散フェーズでSE再生
+    React.useEffect(() => {
+        if (outroPhase === 'explode') {
+            playSE('explosion.mp3', 0.6);
+        }
+    }, [outroPhase, playSE]);
+
     // マーカー表示時にSE再生（ドラッグ中かつ新しいターゲットにホバーした時）
     const markerHoveredRef = React.useRef<any>(null);
     React.useEffect(() => {
@@ -3445,9 +3665,40 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // 降参処理
     const handleSurrender = React.useCallback(() => {
-        console.log('[GameScreen] handleSurrender called');
+        console.log('[GameScreen] handleSurrender called', {
+            gameMode,
+            currentPlayerId,
+            isHost,
+            adapterExists: !!adapter
+        });
         setShowSurrenderConfirm(false);
         setShowMenu(false);
+
+        // Task 4: ランクマッチでの降参タイムスタンプを保存（不正対策）
+        if (gameMode === 'RANKED_MATCH') {
+            const surrenderTimestampsKey = 'rankedSurrenderTimestamps';
+            const existingData = localStorage.getItem(surrenderTimestampsKey);
+            let timestamps: number[] = [];
+            try {
+                timestamps = existingData ? JSON.parse(existingData) : [];
+            } catch (e) {
+                console.error('[GameScreen] Failed to parse surrender timestamps, resetting:', e);
+                timestamps = [];
+            }
+            timestamps.push(Date.now());
+            // 10分より古いタイムスタンプは削除
+            const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+            const recentTimestamps = timestamps.filter(t => t > tenMinutesAgo);
+            localStorage.setItem(surrenderTimestampsKey, JSON.stringify(recentTimestamps));
+            console.log(`[GameScreen] Surrender recorded. Recent surrenders in 10min: ${recentTimestamps.length}`);
+
+            // 3回以上降参した場合、クールダウン開始
+            if (recentTimestamps.length >= 3) {
+                const cooldownEndTime = Date.now() + 5 * 60 * 1000; // 5分間のクールダウン
+                localStorage.setItem('rankedSurrenderCooldownEnd', cooldownEndTime.toString());
+                console.log('%c[GameScreen] Surrender cooldown activated until:', 'background: #ff0000; color: #ffffff;', new Date(cooldownEndTime).toLocaleTimeString());
+            }
+        }
 
         // オンライン対戦時は相手にSURRENDERメッセージを送信
         if (gameMode !== 'CPU' && adapter) {
@@ -3455,11 +3706,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 type: 'SURRENDER',
                 payload: { playerId: currentPlayerId }
             });
+            console.log('[GameScreen] SURRENDER message sent to opponent');
         }
 
         // CONCEDEアクションをディスパッチ
+        console.log('[GameScreen] Dispatching CONCEDE for player:', currentPlayerId);
         dispatch({ type: 'CONCEDE', playerId: currentPlayerId });
-    }, [gameMode, adapter, currentPlayerId]);
+    }, [gameMode, adapter, currentPlayerId, isHost]);
 
     // coinTossPhase, coinTossResult, isGameStartAnim are declared earlier (near line 1145)
     const [isHandExpanded, setIsHandExpanded] = React.useState(false);
@@ -3649,12 +3902,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             setIsProcessingEffect(false);
                             isProcessingEffectRef.current = false;
                             // Resolve ALL batched effects at once
-                            if (gameMode === 'CPU' || gameMode === 'HOST') {
+                            // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
+                            const shouldProcessEffects = gameMode === 'CPU' || isHost;
+                            if (shouldProcessEffects) {
                                 generateEffects.forEach(eff => {
                                     dispatch({ type: 'RESOLVE_EFFECT', playerId: eff.sourcePlayerId, payload: { targetId: eff.targetId } });
                                 });
 
-                                if (gameMode === 'HOST' && connected && adapter) {
+                                // Send state to JOIN side (for any online mode where we're HOST)
+                                const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
+                                if (isOnlineHost) {
                                     setTimeout(() => {
                                         const updatedState = gameStateRef.current;
                                         adapter.send({ type: 'GAME_STATE', payload: updatedState });
@@ -3702,22 +3959,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, c.instanceId);
                         }
                     });
-                } else if ((current as any).targetIds) {
-                    // RANDOM_DAMAGE_BY_TURN: 高速エフェクト再生（300ms間隔）
+                } else if ((current as any).targetIds && (current as any).targetIds.length > 0) {
+                    // RANDOM_DAMAGE / RANDOM_DAMAGE_BY_TURN: targetIdsに基づいてエフェクト再生
+                    const targetIds = (current as any).targetIds as string[];
+                    console.log(`[GameScreen] ${current.effect.type}: Playing effect for ${targetIds.length} targets:`, targetIds);
+                    console.log(`[GameScreen] vBoard instanceIds:`, vBoard.map(v => v?.instanceId));
                     if (current.effect.type === 'RANDOM_DAMAGE_BY_TURN') {
-                        const targetIds = (current as any).targetIds as string[];
+                        // RANDOM_DAMAGE_BY_TURN: 高速エフェクト再生（300ms間隔）
                         targetIds.forEach((tid: string, i: number) => {
                             setTimeout(() => {
                                 const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                                console.log(`[GameScreen] RANDOM_DAMAGE_BY_TURN: tid=${tid}, vIdx=${vIdx}`);
                                 if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
                             }, i * 300); // 300ms間隔で連続再生
                         });
                     } else {
-                        (current as any).targetIds.forEach((tid: string) => {
+                        // RANDOM_DAMAGE: 全ターゲットに同時にエフェクト再生
+                        targetIds.forEach((tid: string) => {
                             const vIdx = vBoard.findIndex(v => v?.instanceId === tid);
+                            console.log(`[GameScreen] RANDOM_DAMAGE: tid=${tid}, vIdx=${vIdx}`);
                             if (vIdx !== -1) playEffectWithSync(effectType, targetPid, vIdx, tid);
                         });
                     }
+                } else if (current.effect.type === 'RANDOM_DAMAGE' || current.effect.type === 'RANDOM_DAMAGE_BY_TURN') {
+                    // RANDOM_DAMAGE/RANDOM_DAMAGE_BY_TURN: targetIdsがない場合はスキップ（エンジン側で事前計算されるべき）
+                    console.warn(`[GameScreen] ${current.effect.type} effect without targetIds - skipping visual effect. current:`, current);
                 } else if (current.effect.targetType === 'OPPONENT') {
                     // OPPONENT targets the enemy leader - play effect on leader
                     playEffectWithSync(effectType, targetPid, -1); // -1 indicates leader
@@ -3866,12 +4132,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Online mode synchronization:
                 // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
                 // - JOIN waits for state sync from HOST to avoid RNG desync
-                if (gameMode === 'CPU' || gameMode === 'HOST') {
+                // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
+                const shouldProcessEffects = gameMode === 'CPU' || isHost;
+                if (shouldProcessEffects) {
                     // HOST/CPU: dispatch locally and send updated state to network
                     dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
 
-                    // Send updated state to JOIN after processing
-                    if (gameMode === 'HOST' && connected && adapter) {
+                    // Send updated state to JOIN after processing (for any online mode where we're HOST)
+                    const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
+                    if (isOnlineHost) {
                         // Use setTimeout to ensure dispatch is processed first
                         setTimeout(() => {
                             const updatedState = gameStateRef.current;
@@ -4300,6 +4569,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         setCoinTossPhase('DONE');
+
+        // リーダーUIフェードイン完了後に「決闘 開始！」を表示（フェードイン0.5s + 少し待機）
+        setTimeout(() => {
+            setShowDuelStart(true);
+            // 「決闘 開始！」表示後、1.5秒後にタイマー開始
+            setTimeout(() => {
+                setShowDuelStart(false);
+                setTimerStarted(true);
+            }, 1500);
+        }, 600); // リーダーUIフェードイン完了を待つ
     }, [gameState, isFirstPlayer, currentPlayerId]);
 
     // Coin Toss and Game Start Animation Sequence - DISABLED (replaced by BattleIntro)
@@ -4839,27 +5118,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         }
 
         adapter.onClose(() => {
+            // Use ref to get latest gameState (avoid stale closure)
+            const currentGameState = gameStateRef.current;
+
+            // ゲームが既に終了している場合（phase === 'GAME_OVER' または winnerId が設定済み）
+            // 切断メッセージを表示せず、静かに切断する
+            const isGameOver = currentGameState.phase === 'GAME_OVER' || currentGameState.winnerId;
+
             // For CASUAL_MATCH/RANKED_MATCH, don't show alert if game is already over
             // The player will naturally go back to title after viewing results
-            if ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && gameState.phase === 'GAME_OVER') {
+            if ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && isGameOver) {
                 console.log('[GameScreen] Connection closed after game over (casual match) - silent disconnect');
                 return; // Don't force return to title, let player view results
             }
 
             // For online play: If game is still in progress, treat disconnect as opponent surrender
             // The remaining player wins
-            if (gameMode !== 'CPU' && gameState.phase !== 'GAME_OVER') {
+            if (gameMode !== 'CPU' && !isGameOver) {
                 console.log('[GameScreen] Opponent disconnected during game - treating as surrender, player wins');
 
-                // Set victory reason to disconnect
+                // Set victory reason to disconnect (切断による勝利)
                 setVictoryReason('disconnect');
 
                 // Set game state to game over with current player as winner
                 const newState = {
-                    ...gameState,
+                    ...currentGameState,
                     phase: 'GAME_OVER' as const,
                     winnerId: currentPlayerId,
-                    logs: [...gameState.logs, '相手との接続が切断されました。あなたの勝利です！']
+                    logs: [...currentGameState.logs, '相手との接続が切断されました。あなたの勝利です！']
                 };
                 dispatch({ type: 'SYNC_STATE', payload: newState });
                 return; // Don't show alert or force return - let victory animation play
@@ -4874,7 +5160,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         return () => {
             // Note: PeerJS replaces the callback when onMessage is called again
         };
-    }, [adapter, gameState, playSE, playEffect, gameMode, onLeave, currentPlayerId]);  // Removed 'connected' from deps to avoid re-registering
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [adapter, playSE, playEffect, gameMode, onLeave, currentPlayerId]);  // gameState removed to prevent infinite loop - accessed via ref instead
 
     // AI Logic State
     const aiProcessing = React.useRef(false);
@@ -7801,6 +8088,64 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 />
             )}
 
+            {/* 決闘 開始！ 表示 */}
+            {showDuelStart && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: (isMobile ? 280 : 340) * scale, // 左サイドバーの右端から開始
+                    width: `calc(100vw - ${(isMobile ? 280 : 340) * scale}px)`, // 左サイドバーを除いた幅
+                    height: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{
+                        fontSize: `${4 * scale}rem`,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        textShadow: `
+                            0 0 20px rgba(255, 215, 0, 0.8),
+                            0 0 40px rgba(255, 215, 0, 0.6),
+                            0 0 60px rgba(255, 215, 0, 0.4),
+                            2px 2px 0 #000,
+                            -2px -2px 0 #000,
+                            2px -2px 0 #000,
+                            -2px 2px 0 #000
+                        `,
+                        animation: 'duelStartPop 1.5s ease-out forwards',
+                        fontFamily: 'var(--font-tamanegi)',
+                    }}>
+                        決闘 開始！
+                    </div>
+                    <style>{`
+                        @keyframes duelStartPop {
+                            0% {
+                                transform: scale(0.5);
+                                opacity: 0;
+                            }
+                            20% {
+                                transform: scale(1.2);
+                                opacity: 1;
+                            }
+                            40% {
+                                transform: scale(1);
+                            }
+                            80% {
+                                transform: scale(1);
+                                opacity: 1;
+                            }
+                            100% {
+                                transform: scale(1.1);
+                                opacity: 0;
+                            }
+                        }
+                    `}</style>
+                </div>
+            )}
+
             <div className="game-screen"
                 style={{
                     width: '100%',
@@ -8802,10 +9147,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 onTimeUp={handleTimerTimeUp}
                                 timerEnabled={timerEnabled}
                                 isGameOver={!!gameState.winnerId}
-                                isPaused={showBattleIntro}
+                                isPaused={showBattleIntro || !timerStarted || !!evolveAnimation}
                                 scale={scale}
                                 buttonSize={160}
-                                timerDuration={60}
+                                timerDuration={gameState.turnCount >= (isFirstPlayer ? 5 : 4) ? 75 : 60}
                             />
                             <button
                                 ref={endTurnButtonRef}
@@ -10787,6 +11132,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             isRankedMatch={gameMode === 'RANKED_MATCH'}
                             ratingResult={ratingResult}
                             onRematching={onRematching}
+                            scale={scale}
                             onRematch={(deckType: ClassType) => {
                                 if (opponentType === 'ONLINE') {
                                     // Online mode: Send rematch request to opponent

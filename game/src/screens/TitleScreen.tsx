@@ -4,7 +4,7 @@ import { GalleryCardListScreen } from './GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './GalleryRelatedCardScreen';
 import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE } from '../core/engine';
-import { getAllClassRatings, updatePlayerName } from '../firebase/playerData';
+import { getAllClassRatings, updatePlayerName, getAllClassRankings, RankingEntry } from '../firebase/playerData';
 import { getRankFromRating, RANK_DISPLAY_NAMES, ClassRating, RankType } from '../firebase/rating';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
@@ -54,13 +54,14 @@ interface TitleScreenProps {
     onNavigateToLogin?: () => void; // ログイン画面への遷移
     onNavigateToProfile?: () => void; // プロフィール設定画面への遷移（削除予定）
     onLogout?: () => void; // ログアウト処理
+    returnToHome?: boolean; // 戦闘終了後にホームタブに直接遷移するフラグ
 }
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({
     onStartConfig,
     audioSettings,
     onAudioSettingsChange,
-    playerId: _playerId,
+    playerId,
     onSetHomeCard,
     homeCardId = null,
     isAnonymous = true,
@@ -70,10 +71,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     onNavigateToRegister,
     onNavigateToLogin,
     onNavigateToProfile: _onNavigateToProfile,
-    onLogout
+    onLogout,
+    returnToHome = false
 }) => {
     // 画面フェーズ: 'title' = GAME START画面, 'home' = ホーム画面
-    const [phase, setPhase] = useState<'title' | 'home'>('title');
+    // returnToHomeがtrueの場合、直接ホーム画面を表示
+    const [phase, setPhase] = useState<'title' | 'home'>(returnToHome ? 'home' : 'title');
     const [titleAnimating, setTitleAnimating] = useState(false);
 
     // デバッグ用：設定タブの状態を確認
@@ -85,6 +88,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     useEffect(() => {
         console.log('🎴 TitleScreen homeCardId changed:', homeCardId);
     }, [homeCardId]);
+
+    // ホームカード未設定時のランダム表示用（マウント時に一度だけ抽選）
+    const [randomCardId] = useState<string>(() => {
+        const randomIndex = Math.floor(Math.random() * MOCK_CARDS.length);
+        return MOCK_CARDS[randomIndex].id;
+    });
 
     // ホーム画面の状態
     const [activeTab, setActiveTab] = useState<MenuTab>('home');
@@ -127,6 +136,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const [playerNameError, setPlayerNameError] = useState('');
     const [playerNameLoading, setPlayerNameLoading] = useState(false);
 
+    // ランキングの状態
+    const [rankingData, setRankingData] = useState<Record<ClassType, RankingEntry[]>>({
+        SENKA: [],
+        AJA: [],
+        YORUKA: [],
+    });
+    const [rankingLoading, setRankingLoading] = useState(false);
+    const [rankingError, setRankingError] = useState('');
+
     // Responsive scaling
     const [scale, setScale] = useState(1);
 
@@ -144,13 +162,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     // レーティング取得（ランクマッチ用）
     useEffect(() => {
         const fetchRatings = async () => {
-            if (!_playerId) {
+            if (!playerId) {
                 setLoadingRatings(false);
                 return;
             }
             setLoadingRatings(true);
             try {
-                const ratings = await getAllClassRatings(_playerId);
+                const ratings = await getAllClassRatings(playerId);
                 setClassRatings(ratings);
             } catch (error) {
                 console.error('Failed to fetch class ratings:', error);
@@ -159,7 +177,27 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             }
         };
         fetchRatings();
-    }, [_playerId]);
+    }, [playerId]);
+
+    // ランキングデータ取得（ランキングタブ表示時）
+    useEffect(() => {
+        const fetchRankings = async () => {
+            if (displayedTab !== 'ranking') return;
+
+            setRankingLoading(true);
+            setRankingError('');
+            try {
+                const data = await getAllClassRankings(5);
+                setRankingData(data);
+            } catch (error) {
+                console.error('Failed to fetch rankings:', error);
+                setRankingError('ランキングの取得に失敗しました');
+            } finally {
+                setRankingLoading(false);
+            }
+        };
+        fetchRankings();
+    }, [displayedTab]);
 
     // タイトル→ホームへの遷移
     const handleGameStart = () => {
@@ -320,15 +358,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             return;
         }
 
-        if (!userId) {
-            setPlayerNameError('ユーザーIDが見つかりません');
+        if (!playerId) {
+            setPlayerNameError('ログインしていません');
             return;
         }
 
         setPlayerNameLoading(true);
 
         try {
-            await updatePlayerName(userId, editPlayerName.trim());
+            await updatePlayerName(playerId, editPlayerName.trim());
             // 成功時はコールバックで親コンポーネントに通知
             onPlayerNameUpdate?.(editPlayerName.trim());
             setIsEditingPlayerName(false);
@@ -575,7 +613,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     fontSize: `${0.8 * scale}rem`,
                     zIndex: 2
                 }}>
-                    Ver 1.04 Beta
+                    Ver 1.1 Beta
                 </p>
 
                 <style>{`
@@ -651,11 +689,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             }}>
                 {/* 左側: お気に入りカード表示 - ホームタブでのみ表示 */}
                 {displayedTab === 'home' && (() => {
-                    console.log('🎴 Rendering home card, homeCardId:', homeCardId);
-                    // カードデータを取得
-                    const homeCard = homeCardId ? MOCK_CARDS.find(c => c.id === homeCardId) : null;
-                    const normalImageUrl = homeCard?.imageUrl || `/cards/${homeCardId}.png`;
-                    const evolvedImageUrl = homeCard?.type === 'FOLLOWER' ? (homeCard?.evolvedImageUrl || `/cards/${homeCardId}_evolved.png`) : null;
+                    console.log('🎴 Rendering home card, homeCardId:', homeCardId, 'randomCardId:', randomCardId);
+                    // カードデータを取得（homeCardId未設定時はランダムカードを表示）
+                    const displayCardId = homeCardId || randomCardId;
+                    const homeCard = MOCK_CARDS.find(c => c.id === displayCardId) || null;
+                    const normalImageUrl = homeCard?.imageUrl || `/cards/${displayCardId}.png`;
+                    const evolvedImageUrl = homeCard?.type === 'FOLLOWER' ? (homeCard?.evolvedImageUrl || `/cards/${displayCardId}_evolved.png`) : null;
+                    const isRandomCard = !homeCardId; // ランダムカード表示中かどうか
                     return (
                 <div style={{
                     position: 'absolute',
@@ -682,27 +722,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             height: '100%',
                             backfaceVisibility: 'hidden',
                             borderRadius: 12 * scale,
-                            background: homeCardId
-                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`
-                                : 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)',
-                            border: `3px solid ${homeCardId ? '#e94560' : '#4a5568'}`,
+                            background: `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`,
+                            border: `3px solid ${isRandomCard ? '#718096' : '#e94560'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}>
-                            {!homeCardId && (
-                                <span style={{
-                                    fontSize: `${0.9 * scale}rem`,
-                                    color: '#718096',
-                                    textAlign: 'center',
-                                    padding: 20 * scale,
-                                }}>
-                                    ギャラリーで<br />ホームカードを<br />設定してください
-                                </span>
-                            )}
                         </div>
-                        {/* カード裏面 */}
+                        {/* カード裏面（進化後または通常画像を再表示） */}
                         <div style={{
                             position: 'absolute',
                             width: '100%',
@@ -710,34 +738,28 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             backfaceVisibility: 'hidden',
                             transform: 'rotateY(180deg)',
                             borderRadius: 12 * scale,
-                            background: homeCardId && evolvedImageUrl
+                            background: evolvedImageUrl
                                 ? `#2d3748 url(${getAssetUrl(evolvedImageUrl)}) center/cover no-repeat`
-                                : homeCardId
-                                ? `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`
-                                : `url(${getAssetUrl('/cards/sleeve_default.png')}) center/cover no-repeat`,
-                            border: `3px solid ${homeCardId ? '#a855f7' : '#4a5568'}`,
+                                : `#2d3748 url(${getAssetUrl(normalImageUrl)}) center/cover no-repeat`,
+                            border: `3px solid ${isRandomCard ? '#718096' : '#a855f7'}`,
                             boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}>
-                            {!homeCardId && (
-                                <span style={{
-                                    fontSize: `${0.8 * scale}rem`,
-                                    color: '#718096',
-                                }}>
-                                    スリーブ
-                                </span>
-                            )}
                         </div>
                     </div>
                     <p style={{
                         textAlign: 'center',
                         marginTop: 10 * scale,
                         fontSize: `${0.75 * scale}rem`,
-                        color: '#888',
+                        color: isRandomCard ? '#a0aec0' : '#888',
                     }}>
-                        ドラッグで回転
+                        {isRandomCard ? (
+                            <>ランダム表示中<br /><span style={{ fontSize: `${0.65 * scale}rem` }}>ギャラリーでホームカードを設定</span></>
+                        ) : (
+                            'ドラッグで回転'
+                        )}
                     </p>
                 </div>
                     );
@@ -778,7 +800,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 color: '#e2e8f0',
                             }}>
                                 <div style={{ marginBottom: `${8 * scale}px` }}>
-                                    <span style={{ color: '#aaa' }}>表示名:</span> {userId || 'ゲスト'}
+                                    <span style={{ color: '#aaa' }}>表示名:</span> {currentPlayerName || 'ゲスト'}
                                 </div>
                             </div>
                         </div>
@@ -918,7 +940,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     {/* ひとりで遊ぶ - 難易度選択パネル */}
                     {displayedTab === 'solo' && (
                         <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#e94560' }}>
+                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#e94560', fontFamily: 'var(--font-tamanegi)' }}>
                                 ひとりで遊ぶ
                             </h2>
                             <div style={{
@@ -1085,7 +1107,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     {/* ルームマッチ - ドア風パネル */}
                     {displayedTab === 'room' && (
                         <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#60a5fa' }}>
+                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#60a5fa', fontFamily: 'var(--font-tamanegi)' }}>
                                 ルームマッチ
                             </h2>
                             {!showJoinInput ? (
@@ -1255,7 +1277,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     {/* ランダムマッチ - ドア風パネル */}
                     {displayedTab === 'random' && (
                         <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#4ade80' }}>
+                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#4ade80', fontFamily: 'var(--font-tamanegi)' }}>
                                 ランダムマッチ
                             </h2>
                             <div style={{
@@ -1315,41 +1337,53 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 </div>
 
                                 {/* ランクマッチパネル - 右側なので左に傾ける */}
+                                {/* 匿名ユーザーは無効化 */}
                                 <div
-                                    onClick={() => handleMatchTypeSelect('ranked')}
+                                    onClick={() => !isAnonymous && handleMatchTypeSelect('ranked')}
                                     style={{
                                         width: 200 * scale,
                                         height: 280 * scale,
-                                        background: 'linear-gradient(135deg, #3a1a1a 0%, #2d0d0d 100%)',
-                                        border: '3px solid #e94560',
+                                        background: isAnonymous
+                                            ? 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)'
+                                            : 'linear-gradient(135deg, #3a1a1a 0%, #2d0d0d 100%)',
+                                        border: `3px solid ${isAnonymous ? '#555' : '#e94560'}`,
                                         borderRadius: 16 * scale,
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        cursor: 'pointer',
+                                        cursor: isAnonymous ? 'not-allowed' : 'pointer',
                                         transform: 'rotateY(-15deg)',
                                         transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                                        boxShadow: '0 10px 30px rgba(233, 69, 96, 0.3)',
+                                        boxShadow: isAnonymous
+                                            ? '0 10px 30px rgba(0, 0, 0, 0.3)'
+                                            : '0 10px 30px rgba(233, 69, 96, 0.3)',
+                                        opacity: isAnonymous ? 0.6 : 1,
+                                        position: 'relative',
                                     }}
                                     onMouseOver={(e) => {
-                                        e.currentTarget.style.transform = 'rotateY(0deg) scale(1.05)';
-                                        e.currentTarget.style.boxShadow = '0 15px 40px rgba(233, 69, 96, 0.5)';
+                                        if (!isAnonymous) {
+                                            e.currentTarget.style.transform = 'rotateY(0deg) scale(1.05)';
+                                            e.currentTarget.style.boxShadow = '0 15px 40px rgba(233, 69, 96, 0.5)';
+                                        }
                                     }}
                                     onMouseOut={(e) => {
                                         e.currentTarget.style.transform = 'rotateY(-15deg)';
-                                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(233, 69, 96, 0.3)';
+                                        e.currentTarget.style.boxShadow = isAnonymous
+                                            ? '0 10px 30px rgba(0, 0, 0, 0.3)'
+                                            : '0 10px 30px rgba(233, 69, 96, 0.3)';
                                     }}
                                 >
                                     <div style={{
                                         fontSize: `${3 * scale}rem`,
                                         marginBottom: `${0.5 * scale}rem`,
+                                        filter: isAnonymous ? 'grayscale(100%)' : 'none',
                                     }}>
                                         ⚔️
                                     </div>
                                     <h3 style={{
                                         fontSize: `${1.4 * scale}rem`,
-                                        color: '#e94560',
+                                        color: isAnonymous ? '#666' : '#e94560',
                                         margin: 0,
                                         marginBottom: `${0.5 * scale}rem`,
                                     }}>
@@ -1357,26 +1391,279 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                     </h3>
                                     <p style={{
                                         fontSize: `${0.8 * scale}rem`,
-                                        color: '#aaa',
+                                        color: isAnonymous ? '#ffcc00' : '#aaa',
                                         textAlign: 'center',
                                         padding: `0 ${1 * scale}rem`,
+                                        fontWeight: isAnonymous ? 'bold' : 'normal',
+                                        textShadow: isAnonymous ? '0 0 8px rgba(255, 204, 0, 0.5)' : 'none',
                                     }}>
-                                        勝敗でレート変動<br />真剣勝負
+                                        {isAnonymous ? (
+                                            <>設定からアカウント登録<br />をしてください</>
+                                        ) : (
+                                            <>勝敗でレート変動<br />真剣勝負</>
+                                        )}
                                     </p>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ランキング（未実装） */}
+                    {/* ランキング */}
                     {displayedTab === 'ranking' && (
-                        <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1 * scale}rem`, color: '#a855f7' }}>
+                        <div style={{ width: '100%' }}>
+                            <h2 style={{
+                                fontSize: `${1.8 * scale}rem`,
+                                marginBottom: `${1 * scale}rem`,
+                                color: '#a855f7',
+                                textAlign: 'center',
+                                fontFamily: 'var(--font-tamanegi)',
+                            }}>
                                 ランキング
                             </h2>
-                            <p style={{ fontSize: `${1 * scale}rem`, color: '#888' }}>
-                                Coming Soon...
-                            </p>
+
+                            {/* ローディング */}
+                            {rankingLoading && (
+                                <p style={{ fontSize: `${1 * scale}rem`, color: '#888', textAlign: 'center' }}>
+                                    読み込み中...
+                                </p>
+                            )}
+
+                            {/* エラー */}
+                            {rankingError && !rankingLoading && (
+                                <p style={{ fontSize: `${1 * scale}rem`, color: '#ff5050', textAlign: 'center' }}>
+                                    {rankingError}
+                                </p>
+                            )}
+
+                            {/* ランキングテーブル */}
+                            {!rankingLoading && !rankingError && (
+                                <div style={{
+                                    display: 'flex',
+                                    gap: `${1.5 * scale}rem`,
+                                    justifyContent: 'center',
+                                    width: '100%',
+                                }}>
+                                    {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((playerClass) => {
+                                        const classConfig: Record<ClassType, { name: string; color: string; bgColor: string }> = {
+                                            SENKA: { name: '盞華', color: '#e94560', bgColor: 'rgba(233, 69, 96, 0.15)' },
+                                            AJA: { name: 'あじゃ', color: '#45a2e9', bgColor: 'rgba(69, 162, 233, 0.15)' },
+                                            YORUKA: { name: 'Y', color: '#a855f7', bgColor: 'rgba(168, 85, 247, 0.15)' },
+                                        };
+                                        const config = classConfig[playerClass];
+                                        const entries = rankingData[playerClass];
+
+                                        // 自分のレート情報を取得
+                                        const myRating = classRatings[playerClass];
+                                        const myRank = myRating ? getRankFromRating(myRating.rating) : 'BRONZE';
+
+                                        // 1行の高さ（padding上下 + フォント高さ + marginBottom）
+                                        // padding: 10*2 = 20, フォント約16px(1rem), marginBottom: 3 → 約40px per row
+                                        const rowHeight = 40 * scale;
+
+                                        return (
+                                            <div
+                                                key={playerClass}
+                                                style={{
+                                                    width: 320 * scale,
+                                                    minWidth: 320 * scale,
+                                                    background: config.bgColor,
+                                                    borderRadius: 12 * scale,
+                                                    padding: `${16 * scale}px`,
+                                                    boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                                                    border: `1px solid ${config.color}33`,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                }}
+                                            >
+                                                {/* クラス名ヘッダー */}
+                                                <h3 style={{
+                                                    fontSize: `${1.4 * scale}rem`,
+                                                    fontWeight: 'bold',
+                                                    color: config.color,
+                                                    marginBottom: `${0.8 * scale}rem`,
+                                                    textAlign: 'center',
+                                                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                                }}>
+                                                    {config.name}
+                                                </h3>
+
+                                                {/* テーブルヘッダー */}
+                                                <div style={{
+                                                    display: 'flex',
+                                                    padding: `${6 * scale}px ${10 * scale}px`,
+                                                    borderBottom: `2px solid ${config.color}44`,
+                                                    marginBottom: `${6 * scale}px`,
+                                                }}>
+                                                    <div style={{ width: 32 * scale, fontSize: `${0.7 * scale}rem`, color: '#888', fontWeight: 'bold' }}>#</div>
+                                                    <div style={{ width: 120 * scale, fontSize: `${0.7 * scale}rem`, color: '#888', fontWeight: 'bold' }}>プレイヤー</div>
+                                                    <div style={{ width: 80 * scale, fontSize: `${0.7 * scale}rem`, color: '#888', fontWeight: 'bold', textAlign: 'center' }}>ランク</div>
+                                                    <div style={{ width: 60 * scale, fontSize: `${0.7 * scale}rem`, color: '#888', fontWeight: 'bold', textAlign: 'right' }}>レート</div>
+                                                </div>
+
+                                                {/* ランキングエントリ（5名分の高さを確保） */}
+                                                <div style={{
+                                                    minHeight: rowHeight * 5,
+                                                }}>
+                                                    {entries.length === 0 ? (
+                                                        <div style={{
+                                                            padding: `${16 * scale}px`,
+                                                            textAlign: 'center',
+                                                            color: '#666',
+                                                            fontSize: `${0.8 * scale}rem`,
+                                                        }}>
+                                                            データなし
+                                                        </div>
+                                                    ) : (
+                                                        entries.map((entry, index) => {
+                                                            const positionColors = ['#FFD700', '#C0C0C0', '#CD7F32', '#888', '#888'];
+                                                            const bgGradients = [
+                                                                'linear-gradient(90deg, rgba(255,215,0,0.2) 0%, transparent 100%)',
+                                                                'linear-gradient(90deg, rgba(192,192,192,0.15) 0%, transparent 100%)',
+                                                                'linear-gradient(90deg, rgba(205,127,50,0.15) 0%, transparent 100%)',
+                                                            ];
+
+                                                            return (
+                                                                <div
+                                                                    key={entry.playerId}
+                                                                    style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        padding: `${10 * scale}px ${10 * scale}px`,
+                                                                        borderRadius: 6 * scale,
+                                                                        marginBottom: 3 * scale,
+                                                                        background: bgGradients[index] || 'transparent',
+                                                                    }}
+                                                                >
+                                                                    {/* 順位 */}
+                                                                    <div style={{
+                                                                        width: 32 * scale,
+                                                                        fontSize: `${1 * scale}rem`,
+                                                                        fontWeight: 'bold',
+                                                                        color: positionColors[index] || '#888',
+                                                                        textShadow: index < 3 ? '0 1px 2px rgba(0,0,0,0.5)' : 'none',
+                                                                    }}>
+                                                                        {index + 1}
+                                                                    </div>
+
+                                                                    {/* プレイヤー名 */}
+                                                                    <div style={{
+                                                                        width: 120 * scale,
+                                                                        fontSize: `${0.9 * scale}rem`,
+                                                                        color: '#fff',
+                                                                        fontWeight: index < 3 ? 'bold' : 'normal',
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis',
+                                                                        whiteSpace: 'nowrap',
+                                                                    }}>
+                                                                        {entry.playerName}
+                                                                    </div>
+
+                                                                    {/* ランク */}
+                                                                    <div style={{
+                                                                        width: 80 * scale,
+                                                                        textAlign: 'center',
+                                                                    }}>
+                                                                        <span style={{
+                                                                            display: 'inline-block',
+                                                                            padding: `${3 * scale}px ${6 * scale}px`,
+                                                                            borderRadius: 4 * scale,
+                                                                            fontSize: `${0.65 * scale}rem`,
+                                                                            fontWeight: 'bold',
+                                                                            color: '#fff',
+                                                                            background: RANK_COLORS[entry.rank],
+                                                                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                                                        }}>
+                                                                            {RANK_DISPLAY_NAMES[entry.rank]}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* レート */}
+                                                                    <div style={{
+                                                                        width: 60 * scale,
+                                                                        fontSize: `${0.9 * scale}rem`,
+                                                                        fontWeight: 'bold',
+                                                                        color: RANK_COLORS[entry.rank],
+                                                                        textAlign: 'right',
+                                                                    }}>
+                                                                        {entry.rating}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
+
+                                                {/* 自分のレート表示 */}
+                                                <div style={{
+                                                    marginTop: `${12 * scale}px`,
+                                                    paddingTop: `${10 * scale}px`,
+                                                    borderTop: `1px solid ${config.color}33`,
+                                                }}>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        padding: `${8 * scale}px ${10 * scale}px`,
+                                                        borderRadius: 6 * scale,
+                                                        background: 'rgba(255,255,255,0.05)',
+                                                    }}>
+                                                        {/* 自分ラベル */}
+                                                        <div style={{
+                                                            width: 32 * scale,
+                                                            fontSize: `${0.8 * scale}rem`,
+                                                            fontWeight: 'bold',
+                                                            color: config.color,
+                                                        }}>
+                                                            自分
+                                                        </div>
+
+                                                        {/* プレイヤー名 */}
+                                                        <div style={{
+                                                            width: 120 * scale,
+                                                            fontSize: `${0.85 * scale}rem`,
+                                                            color: '#fff',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                        }}>
+                                                            {currentPlayerName}
+                                                        </div>
+
+                                                        {/* ランク */}
+                                                        <div style={{
+                                                            width: 80 * scale,
+                                                            textAlign: 'center',
+                                                        }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                padding: `${3 * scale}px ${6 * scale}px`,
+                                                                borderRadius: 4 * scale,
+                                                                fontSize: `${0.65 * scale}rem`,
+                                                                fontWeight: 'bold',
+                                                                color: '#fff',
+                                                                background: RANK_COLORS[myRank],
+                                                                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                                            }}>
+                                                                {RANK_DISPLAY_NAMES[myRank]}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* レート */}
+                                                        <div style={{
+                                                            width: 60 * scale,
+                                                            fontSize: `${0.85 * scale}rem`,
+                                                            fontWeight: 'bold',
+                                                            color: RANK_COLORS[myRank],
+                                                            textAlign: 'right',
+                                                        }}>
+                                                            {myRating ? myRating.rating : 0}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1385,7 +1672,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         <>
                             {galleryView === 'class' && (
                                 <div style={{ textAlign: 'center' }}>
-                                    <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899' }}>
+                                    <h2 style={{ fontSize: `${1.8 * scale}rem`, marginBottom: `${1.5 * scale}rem`, color: '#ec4899', fontFamily: 'var(--font-tamanegi)' }}>
                                         ギャラリー - クラス選択
                                     </h2>
 
@@ -1639,6 +1926,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                 marginBottom: `${1.5 * scale}rem`,
                                 color: '#6b7280',
                                 textAlign: 'center',
+                                fontFamily: 'var(--font-tamanegi)',
                             }}>
                                 設定
                             </h2>
@@ -1783,6 +2071,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                                 boxSizing: 'border-box'
                                             }}
                                         />
+                                        <div style={{
+                                            fontSize: `${0.65 * scale}rem`,
+                                            color: '#888',
+                                            marginTop: `${0.2 * scale}rem`
+                                        }}>
+                                            1〜20文字
+                                        </div>
                                         {playerNameError && (
                                             <div style={{
                                                 fontSize: `${0.7 * scale}rem`,
@@ -1968,20 +2263,20 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 </div>
             </div>
 
-            {/* 下部メニューバー */}
+            {/* 下部メニューバー - モバイル向け最小サイズ保証 */}
             <div style={{
                 position: 'absolute',
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: 70 * scale,
+                height: Math.max(70 * scale, 44), // 最小44px（Apple推奨タップ領域）
                 background: 'rgba(0, 0, 0, 0.8)',
                 borderTop: '2px solid rgba(255, 255, 255, 0.1)',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                gap: `${0.5 * scale}rem`,
-                padding: `0 ${1 * scale}rem`,
+                gap: Math.max(0.5 * scale, 0.25) + 'rem',
+                padding: `0 ${Math.max(1 * scale, 0.5)}rem`,
                 zIndex: 3,
             }}>
                 {menuItems.map((item) => (
@@ -1990,16 +2285,17 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         onClick={() => handleTabChange(item.id)}
                         style={{
                             flex: 1,
-                            maxWidth: 140 * scale,
-                            padding: `${0.6 * scale}rem ${0.5 * scale}rem`,
-                            fontSize: `${0.85 * scale}rem`,
+                            maxWidth: Math.max(140 * scale, 70),
+                            padding: `${Math.max(0.6 * scale, 0.35)}rem ${Math.max(0.5 * scale, 0.25)}rem`,
+                            fontSize: Math.max(0.85 * scale, 0.55) + 'rem', // 最小0.55rem（約9px）
                             background: activeTab === item.id ? item.color : 'transparent',
                             border: activeTab === item.id ? 'none' : `2px solid ${item.color}`,
-                            borderRadius: 8 * scale,
+                            borderRadius: Math.max(8 * scale, 4),
                             color: activeTab === item.id ? 'white' : item.color,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                             fontWeight: activeTab === item.id ? 'bold' : 'normal',
+                            minHeight: 32, // 最小タップ領域
                         }}
                     >
                         {item.label}
@@ -2118,6 +2414,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         fontSize: `${2 * scale}rem`,
                         marginBottom: `${2 * scale}rem`,
                         color: '#fff',
+                        fontFamily: 'var(--font-tamanegi)',
                     }}>
                         クラスを選択
                     </h2>

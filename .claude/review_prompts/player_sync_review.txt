@@ -1,0 +1,103 @@
+以下の問題についてレビューしてください。
+
+## 問題の概要
+ランクマッチ（RANKED_MATCH）でマッチングしたとき、プレイヤー名の表示に不整合が発生する：
+- 片方の画面: 「プレイヤー VS 対戦相手」
+- もう片方の画面: 「プレイヤー VS プレイヤー」
+
+本来は両方とも「相手の名前」が表示されるべき。
+
+## 関連コード
+
+### 1. MatchmakingScreen.tsx - マッチング時の情報送受信
+```typescript
+// JOIN側が接続時に送信
+conn.send({
+    type: 'PLAYER_INFO',
+    playerName,
+    playerClass,
+    playerId: matchType === 'ranked' ? playerId : undefined,
+    rating: matchType === 'ranked' ? currentMyRating : undefined
+});
+
+// HOST側が受信後に送信
+conn.on('data', (data: any) => {
+    if (data.type === 'PLAYER_INFO') {
+        console.log('[Matchmaking] Received player info:', data);
+        // 自分の情報を送信
+        conn.send({
+            type: 'PLAYER_INFO',
+            playerName,
+            playerClass,
+            playerId: matchType === 'ranked' ? playerId : undefined,
+            rating: matchType === 'ranked' ? currentMyRating : undefined
+        });
+        // ... ゲーム開始
+        onGameStart(adapter, data.playerClass, true, data.playerId, data.rating);
+    }
+});
+```
+
+### 2. GameScreen.tsx - HANDSHAKE送受信
+```typescript
+// 接続時にHANDSHAKEを送信
+if (gameMode !== 'CPU' && !handshakeSentRef.current) {
+    handshakeSentRef.current = true;
+    adapter.send({
+        type: 'HANDSHAKE',
+        payload: { name: playerName, class: playerClass }
+    });
+}
+
+// HANDSHAKEを受信
+if (msg.type === 'HANDSHAKE') {
+    const rawName = msg.payload?.name;
+    const sanitizedName = typeof rawName === 'string'
+        ? rawName.trim().slice(0, 12) || '対戦相手'
+        : '対戦相手';
+
+    opponentNameRef.current = sanitizedName;
+
+    const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+    dispatch({
+        type: 'UPDATE_PLAYER_NAME',
+        payload: { playerId: targetPlayerId, name: sanitizedName }
+    });
+}
+```
+
+### 3. GameScreen.tsx - INIT_GAME受信時の名前再適用
+```typescript
+if (msg.type === 'INIT_GAME') {
+    dispatch({ type: 'SYNC_STATE', payload: msg.payload as GameState });
+
+    // 自分の名前を再適用
+    dispatch({
+        type: 'UPDATE_PLAYER_NAME',
+        payload: { playerId: currentPlayerId, name: playerName }
+    });
+
+    // HANDSHAKEで受信した相手の名前を再適用
+    const opponentId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+    if (opponentNameRef.current) {
+        dispatch({
+            type: 'UPDATE_PLAYER_NAME',
+            payload: { playerId: opponentId, name: opponentNameRef.current }
+        });
+    }
+}
+```
+
+## 問題の仮説
+1. HANDSHAKEの送信タイミングが早すぎて、相手がまだ接続完了していない
+2. INIT_GAMEで状態同期した後、相手の名前がデフォルト値で上書きされている
+3. HOST/JOIN側でHANDSHAKEの送受信順序が異なり、片方だけ受信できていない
+4. `handshakeSentRef`のリセットタイミングに問題がある
+
+## レビュー観点
+1. HANDSHAKEの送受信タイミングに問題はないか
+2. INIT_GAMEによる状態同期と名前の適用順序に問題はないか
+3. HOST側とJOIN側で処理の整合性が取れているか
+4. refやstateの初期化・リセットタイミングに問題はないか
+
+問題点と修正案を具体的に提示してください。

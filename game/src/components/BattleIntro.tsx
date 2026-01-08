@@ -465,7 +465,7 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                overflow: 'hidden',
+                overflow: phaseIndex >= 6 ? 'visible' : 'hidden', // 光の玉フェーズ以降はoverflow:visibleでグローが切れないように
                 animation: shakeScreen ? 'screenShake 0.3s ease-in-out' : undefined,
                 pointerEvents: phaseIndex >= 9 ? 'none' : 'auto', // leader-appear以降はクリック透過
             }}
@@ -789,9 +789,10 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
             )}
 
             {/* 光の玉（リーダー縮小時から表示、背景フェードアウト中も表示し続ける） */}
+            {/* boxShadowの代わりにradial-gradientでグローを表現（clipPathの影響を受けない） */}
             {phaseIndex >= 6 && phaseIndex <= 9 && (
                 <>
-                    {/* 自分の光の玉 */}
+                    {/* 自分の光の玉 - グローをradial-gradientで表現 */}
                     <div
                         style={{
                             position: 'fixed',
@@ -799,19 +800,18 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                             top: orbPosition.myY,
                             transform: `translate(-50%, -50%) scale(${orbScale})`,
                             opacity: orbOpacity,
-                            width: 150 * scale,
-                            height: 150 * scale,
+                            width: 400 * scale, // グロー込みの全体サイズ
+                            height: 400 * scale,
                             borderRadius: '50%',
-                            background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(100,180,255,0.8) 40%, rgba(59,130,246,0.4) 70%, transparent 100%)',
-                            boxShadow: isLightMode
-                                ? `0 0 ${30 * scale}px rgba(59, 130, 246, 0.8)`
-                                : `0 0 ${40 * scale}px rgba(255,255,255,0.9), 0 0 ${80 * scale}px rgba(59, 130, 246, 0.8), 0 0 ${120 * scale}px rgba(59, 130, 246, 0.5)`,
+                            background: isLightMode
+                                ? 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(100,180,255,0.9) 15%, rgba(59,130,246,0.6) 30%, rgba(59,130,246,0.2) 50%, transparent 70%)'
+                                : 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(100,180,255,0.9) 12%, rgba(59,130,246,0.7) 25%, rgba(59,130,246,0.4) 40%, rgba(59,130,246,0.15) 60%, transparent 80%)',
                             zIndex: 500,
                             pointerEvents: 'none',
                         }}
                     />
 
-                    {/* 相手の光の玉 */}
+                    {/* 相手の光の玉 - グローをradial-gradientで表現 */}
                     <div
                         style={{
                             position: 'fixed',
@@ -819,13 +819,12 @@ export const BattleIntro: React.FC<BattleIntroProps> = ({
                             top: orbPosition.opY,
                             transform: `translate(-50%, -50%) scale(${orbScale})`,
                             opacity: orbOpacity,
-                            width: 150 * scale,
-                            height: 150 * scale,
+                            width: 400 * scale, // グロー込みの全体サイズ
+                            height: 400 * scale,
                             borderRadius: '50%',
-                            background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,150,150,0.8) 40%, rgba(239,68,68,0.4) 70%, transparent 100%)',
-                            boxShadow: isLightMode
-                                ? `0 0 ${30 * scale}px rgba(239, 68, 68, 0.8)`
-                                : `0 0 ${40 * scale}px rgba(255,255,255,0.9), 0 0 ${80 * scale}px rgba(239, 68, 68, 0.8), 0 0 ${120 * scale}px rgba(239, 68, 68, 0.5)`,
+                            background: isLightMode
+                                ? 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,150,150,0.9) 15%, rgba(239,68,68,0.6) 30%, rgba(239,68,68,0.2) 50%, transparent 70%)'
+                                : 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,150,150,0.9) 12%, rgba(239,68,68,0.7) 25%, rgba(239,68,68,0.4) 40%, rgba(239,68,68,0.15) 60%, transparent 80%)',
                             zIndex: 500,
                             pointerEvents: 'none',
                         }}

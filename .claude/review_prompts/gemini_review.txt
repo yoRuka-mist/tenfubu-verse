@@ -1,0 +1,108 @@
+以下の変更をレビューしてください。
+
+## 変更概要
+ランクマッチ（CASUAL_MATCH/RANKED_MATCH）モードにおけるカード効果の同期処理バグを修正。
+`gameMode === 'HOST'`という条件でHOST/JOIN判定していたが、CASUAL_MATCH/RANKED_MATCHモードでは
+gameModeは'CASUAL_MATCH'や'RANKED_MATCH'のまま変わらないため、isHost変数を使用するように修正。
+
+## 変更ファイル
+- game/src/screens/GameScreen.tsx
+
+## 差分
+```diff
+diff --git a/game/src/screens/GameScreen.tsx b/game/src/screens/GameScreen.tsx
+index 6e566a9..5c52fa3 100644
+--- a/game/src/screens/GameScreen.tsx
++++ b/game/src/screens/GameScreen.tsx
+@@ -2650,15 +2650,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+
+     // ランクマッチ終了時のレート更新処理
+     React.useEffect(() => {
++        // デバッグログ: useEffectの発火条件を確認
++        console.log('[RatingUpdate] useEffect triggered:', {
++            gameMode,
++            authPlayerId,
++            winnerId: gameState.winnerId,
++            currentPlayerId,
++            ratingUpdateDone,
++            willSkip: gameMode !== 'RANKED_MATCH' || !authPlayerId || !gameState.winnerId || ratingUpdateDone
++        });
++
+         if (gameMode !== 'RANKED_MATCH' || !authPlayerId || !gameState.winnerId || ratingUpdateDone) {
+             return;
+         }
+
++        console.log('[RatingUpdate] Starting rating update process...');
++
+         const updateRating = async () => {
+             try {
+                 const classRating = await getClassRating(authPlayerId, currentPlayerClass);
+                 const isWin = gameState.winnerId === currentPlayerId;
+
++                console.log('[RatingUpdate] Calculating rating:', {
++                    currentRating: classRating.rating,
++                    winStreak: classRating.winStreak,
++                    opponentRating: propOpponentRating,
++                    winnerId: gameState.winnerId,
++                    currentPlayerId,
++                    isWin
++                });
++
+                 let result: RatingCalculationResult;
+                 if (isWin) {
+                     result = calculateWinRating(
+@@ -3649,12 +3670,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+                             setIsProcessingEffect(false);
+                             isProcessingEffectRef.current = false;
+                             // Resolve ALL batched effects at once
+-                            if (gameMode === 'CPU' || gameMode === 'HOST') {
++                            // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
++                            const shouldProcessEffects = gameMode === 'CPU' || isHost;
++                            if (shouldProcessEffects) {
+                                 generateEffects.forEach(eff => {
+                                     dispatch({ type: 'RESOLVE_EFFECT', playerId: eff.sourcePlayerId, payload: { targetId: eff.targetId } });
+                                 });
+
+-                                if (gameMode === 'HOST' && connected && adapter) {
++                                // Send state to JOIN side (for any online mode where we're HOST)
++                                const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
++                                if (isOnlineHost) {
+                                     setTimeout(() => {
+                                         const updatedState = gameStateRef.current;
+                                         adapter.send({ type: 'GAME_STATE', payload: updatedState });
+@@ -3866,12 +3891,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+                 // Online mode synchronization:
+                 // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
+                 // - JOIN waits for state sync from HOST to avoid RNG desync
+-                if (gameMode === 'CPU' || gameMode === 'HOST') {
++                // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
++                const shouldProcessEffects = gameMode === 'CPU' || isHost;
++                if (shouldProcessEffects) {
+                     // HOST/CPU: dispatch locally and send updated state to network
+                     dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
+
+-                    // Send updated state to JOIN after processing
+-                    if (gameMode === 'HOST' && connected && adapter) {
++                    // Send updated state to JOIN after processing (for any online mode where we're HOST)
++                    const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
++                    if (isOnlineHost) {
+                         // Use setTimeout to ensure dispatch is processed first
+                         setTimeout(() => {
+                             const updatedState = gameStateRef.current;
+```
+
+## isHost変数の定義（参考）
+```typescript
+const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
+               ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter?.isHost === true);
+```
+
+## レビュー観点
+1. バグ・不具合の可能性
+2. パフォーマンス上の問題
+3. セキュリティ上の問題
+4. 可読性・保守性
+5. 設計上の問題
+
+問題点があれば具体的に指摘してください。
+問題がなければ「LGTM」と回答してください。

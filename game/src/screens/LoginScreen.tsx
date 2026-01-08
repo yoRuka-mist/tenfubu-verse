@@ -105,12 +105,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack
                 </h1>
 
                 {/* フォーム */}
-                <div style={{
-                    width: 400 * scale,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 20 * scale
-                }}>
+                <form
+                    onSubmit={(e) => { e.preventDefault(); handleLogin(); }}
+                    style={{
+                        width: 400 * scale,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 20 * scale
+                    }}
+                >
                     {/* ユーザーID */}
                     <div>
                         <label style={{
@@ -124,11 +127,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack
                         </label>
                         <input
                             type="text"
+                            name="username"
                             value={userId}
                             onChange={(e) => setUserId(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="player123"
                             disabled={loading}
+                            autoComplete="username"
                             style={{
                                 width: '100%',
                                 padding: `${12 * scale}px ${16 * scale}px`,
@@ -159,11 +164,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack
                         </label>
                         <input
                             type="password"
+                            name="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="••••••"
                             disabled={loading}
+                            autoComplete="current-password"
                             style={{
                                 width: '100%',
                                 padding: `${12 * scale}px ${16 * scale}px`,
@@ -260,7 +267,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack
                     }}>
                         ⚠ ログインすると、登録済みアカウントのデータに切り替わります
                     </div>
-                </div>
+                </form>
             </div>
         </div>
     );
