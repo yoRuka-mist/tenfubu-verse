@@ -7925,7 +7925,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
     // Check if evolution is currently usable (on player's turn with remaining evolves)
     const canEvolveUI = player?.canEvolveThisTurn && remainingEvolves > 0 && gameState.activePlayerId === currentPlayerId && isEvolveUnlocked;
-    const canSuperEvolveUI = player?.canEvolveThisTurn && player.sep > 0 && gameState.activePlayerId === currentPlayerId && isSuperEvolveUnlocked;
+    // BUGFIX: Use canSuperEvolve() directly to ensure UI state matches the actual check in handleEvolveMouseDown
+    const canSuperEvolveUI = gameState.activePlayerId === currentPlayerId && player && canSuperEvolve(player, gameState.turnCount, isPlayerFirstPlayer);
 
     // Opponent's evolve unlock status
     const isOpponentFirstPlayer = opponentPlayerId === gameState.firstPlayerId;
