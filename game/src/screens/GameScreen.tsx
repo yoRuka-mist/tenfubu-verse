@@ -10,6 +10,10 @@ import { canEvolve, canSuperEvolve } from '../core/abilities';
 import { usePerformanceMode } from '../hooks/usePerformanceMode';
 import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType, getRankFromRating, RANK_THRESHOLDS } from '../firebase/rating';
 import { getClassRating, updateRatingAfterMatch, saveMatchRecord, SaveMatchRecordParams } from '../firebase/playerData';
+import { tryFindLethalWithLookahead, LethalInfo } from '../ai/aiLookahead';
+
+// AI先読み機能の有効化フラグ（HARD難易度でのみ使用）
+const AI_LOOKAHEAD_ENABLED = true;
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -7659,9 +7663,32 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     let continueAttacking = true;
                     let attempts = 0;
 
+                    // === AI LOOKAHEAD LETHAL CHECK (HARD only): 先読みでリーサル判定 ===
+                    let lookaheadLethalInfo: LethalInfo | null = null;
+
+                    if (aiDifficulty === 'HARD' && AI_LOOKAHEAD_ENABLED) {
+                        try {
+                            const state = gameStateRef.current;
+                            lookaheadLethalInfo = tryFindLethalWithLookahead(state, opponentPlayerId, currentPlayerId);
+                            if (lookaheadLethalInfo.canLethal) {
+                                console.log('[AI Lookahead] リーサル発見！', {
+                                    totalDamage: lookaheadLethalInfo.totalDamage,
+                                    actions: lookaheadLethalInfo.requiredActions.length,
+                                    breakdown: lookaheadLethalInfo.damageBreakdown
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('[AI Lookahead] Error in lethal calculation, falling back:', e);
+                            lookaheadLethalInfo = null;
+                        }
+                    }
+
                     // === LETHAL CHECK (HARD only): Go face if we can kill ===
                     const checkForLethal = (state: any): boolean => {
                         if (aiDifficulty !== 'HARD') return false;
+                        // 先読みでリーサル判定済みならそれを使用
+                        if (lookaheadLethalInfo?.canLethal) return true;
+                        // フォールバック: 従来の盤面ダメージ計算
                         const playerHp = state.players[currentPlayerId].hp;
                         const potentialDamage = calculatePotentialDamage(state);
                         return potentialDamage >= playerHp;
