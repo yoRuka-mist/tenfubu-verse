@@ -334,7 +334,7 @@ function App() {
         return () => document.removeEventListener('click', handleClick);
     }, [currentScreen, audioSettings.bgmEnabled]);
 
-    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType, aiDifficulty?: AIDifficulty) => {
+    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType, aiDifficulty?: AIDifficulty, cpuClass?: ClassType) => {
         setGameMode(mode);
         if (id) setRoomId(id);
         if (aiDifficulty) setAiDifficulty(aiDifficulty);
@@ -344,6 +344,10 @@ function App() {
         // classTypeが指定されている場合は、ClassSelectScreenをスキップ
         if (classType) {
             setSelectedClass(classType);
+            // CPU対戦でopponentClassが指定されている場合は設定
+            if (mode === 'CPU' && cpuClass) {
+                setOpponentClass(cpuClass);
+            }
             // 直接適切な画面に遷移
             if (mode === 'CPU') {
                 // 新しいゲームセッションを開始（GameScreenをリマウント）
@@ -361,8 +365,12 @@ function App() {
         }
     }, []);
 
-    const startGame = useCallback((cls: ClassType) => {
+    const startGame = useCallback((cls: ClassType, cpuClass?: ClassType) => {
         setSelectedClass(cls);
+        // CPU戦でopponentClassが指定されている場合は設定
+        if (gameMode === 'CPU' && cpuClass) {
+            setOpponentClass(cpuClass);
+        }
         // CPU mode: go directly to game
         // CASUAL_MATCH/RANKED_MATCH: go to matchmaking screen
         // HOST/JOIN mode: go to lobby first to wait for connection

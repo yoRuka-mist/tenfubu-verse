@@ -1775,18 +1775,8 @@ function processSingleEffect(
                 }
                 if (target.currentHealth <= 0) {
                     target.currentHealth = 0;
-                    const ownerId = Object.keys(newState.players).find(pid => newState.players[pid] === newState.players[targetPid]) || targetPid;
-                    // ラストワード発動
-                    const lastWordTrigger = target.triggers?.find(t => t.trigger === 'LAST_WORD');
-                    if (lastWordTrigger) {
-                        lastWordTrigger.effects.forEach(e => {
-                            newState.pendingEffects.push({
-                                sourceCard: target,
-                                effect: e,
-                                sourcePlayerId: ownerId
-                            });
-                        });
-                    }
+                    // ラストワード発動（triggerLastWordヘルパーを使用して変更検出を確実にする）
+                    triggerLastWord(target, targetPid);
                     newState.players[targetPid].graveyard.push(target);
                     targetBoard[idx] = null;
                     newState.logs.push(`${target.name} は破壊されました`);

@@ -1,72 +1,105 @@
-以下の変更をレビューしてください。
+以下のAI先読み機能の設計書をレビューしてください。
 
 ## 変更概要
-BattleIntro（対戦開始演出）に新しいアニメーションフェーズを追加しました。
+カードゲームAIの「先読み」機能の設計。現在のAIは現在の盤面状態のみを見て判断しているが、超進化で得られるカードやスペルダメージを考慮したリーサル判定ができない問題がある。シミュレーション方式で解決する設計。
 
-### 追加機能
-1. VS表示を演出最後まで延長（以前は途中で消えていた）
-2. リーダー→光の玉への変化アニメーション
-3. 背景（対戦カード画面）のフェードアウト
-4. 光の玉が弧を描いてリーダー枠へ飛行するアニメーション
-5. リーダー枠への着地・リーダー画像再生成アニメーション
-6. 4K対応の軽量モード（box-shadow削減）
+## 設計書内容
 
-### 技術的詳細
-- 新フェーズ: 'leader-to-orb' → 'orb-pause' → 'orb-fly' → 'leader-appear' を追加
-- requestAnimationFrameを使用したスムーズなアニメーション
-- 二次ベジェ曲線による弧軌道の実装
-- GameScreenのレイアウト定数を使用した座標計算（BASE_WIDTH, BASE_HEIGHT, LEADER_SIZE）
-- useMemoによるリーダー枠座標の計算最適化
+# AI先読み機能（Lookahead System）設計書
 
-## 変更ファイル
-- game/src/components/BattleIntro.tsx（大幅改修）
-- game/src/screens/GameScreen.tsx（BattleIntroへの新props追加）
+## 1. 概要
 
-## 主要な変更点
+### 1.1 現状の問題
+1. 超進化で得られるカードが計算されない（盞華超進化 → 0コストスペル3枚）
+2. リーサル計算が不完全（盤面攻撃力のみ、手札スペル・進化ボーナス未考慮）
+3. 行動順序の最適化ができない
 
-### BattleIntro.tsx
+### 1.2 解決方針
+「仮想的にアクションをシミュレーションする」レイヤーを追加し、最適な行動順序を計画する。
+
+## 2. 設計
+
+### 2.1 アーキテクチャ
+- AI Turn Manager: 現在の状態を取得、ActionPlannerでシミュレーション、計画に従って実行
+- ActionPlanner: simulateAction, calculateLethalPotential, planOptimalSequence, evaluateBoardState
+- SimulatedState: 仮想的な盤面/手札/PP/EP/SEP状態
+
+### 2.2 データ構造
 ```typescript
-// 新しいAnimationPhase
-type AnimationPhase =
-    | 'fade-in' | 'leaders-enter' | 'nameplate' | 'vs-display'
-    | 'coin-toss' | 'turn-order'
-    | 'leader-to-orb'     // 新規: リーダー→光の玉
-    | 'orb-pause'         // 新規: 背景フェードアウト
-    | 'orb-fly'           // 新規: 光の玉飛行
-    | 'leader-appear'     // 新規: リーダー再生成
-    | 'complete';
+interface SimulatedGameState {
+    aiHand: SimulatedCard[];
+    aiBoard: SimulatedCard[];
+    playerBoard: SimulatedCard[];
+    playerHp: number;
+    aiHp: number;
+    aiPp: number;
+    aiEp: number;
+    aiSep: number;
+}
 
-// リーダー枠座標の計算
-const leaderTargetPositions = useMemo(() => {
-    const windowW = window.innerWidth;
-    const windowH = window.innerHeight;
-    const gameScale = Math.min(windowW / BASE_WIDTH, windowH / BASE_HEIGHT);
-    const sidebarWidth = (isMobile ? 280 : 340) * gameScale;
-    const boardCenterX = sidebarWidth + (windowW - sidebarWidth) / 2;
-    // プレイヤーリーダー/相手リーダーの座標計算...
-    return { player: {...}, opponent: {...}, leaderSize: ... };
-}, [isMobile]);
+interface SimulatedCard {
+    id: string;
+    instanceId: string;
+    name: string;
+    cost: number;
+    type: 'FOLLOWER' | 'SPELL';
+    currentAttack: number;
+    currentHealth: number;
+    canAttack: boolean;
+    canEvolve: boolean;
+    hasEvolved: boolean;
+    passiveAbilities: string[];
+    hasBarrier: boolean;
+    evolveEffects?: SimulatedEffect[];
+    superEvolveEffects?: SimulatedEffect[];
+    superEvolveGeneratesCards?: string[];
+}
 
-// 二次ベジェ曲線による弧軌道
-const myX = (1-t)² * start + 2(1-t)t * control + t² * end;
+type ActionType =
+    | { type: 'PLAY_CARD'; cardIndex: number; targetId?: string }
+    | { type: 'EVOLVE'; boardIndex: number; useSuperEvolve: boolean; targetId?: string }
+    | { type: 'ATTACK'; attackerIndex: number; targetIndex: number; isLeader: boolean }
+    | { type: 'END_TURN' };
+
+interface LethalInfo {
+    canLethal: boolean;
+    requiredActions: ActionPlan[];
+    totalDamage: number;
+    wardsToRemove: SimulatedCard[];
+    damageBreakdown: { boardDamage: number; spellDamage: number; evolveDamage: number; };
+}
 ```
 
-### GameScreen.tsx
-```typescript
-<BattleIntro
-    // 既存props...
-    onOrbLand={() => playSE('gan.mp3', 0.8)}  // 新規
-    isMobile={isMobile}                        // 新規
-/>
-```
+### 2.3 主要関数
+- createSimulatedState(): ゲーム状態から軽量シミュレーション状態を作成
+- simulateAction(): アクションを仮想実行
+- calculateLethalPotential(): リーサル可能性を計算
+- planOptimalSequence(): 最適行動順序を計画
+
+## 3. 実装計画
+- Phase 1: データ構造とユーティリティ
+- Phase 2: シミュレーション関数
+- Phase 3: リーサル計算
+- Phase 4: 行動計画と統合
+
+## 4. 設計上の考慮事項
+- パフォーマンス: 軽量構造体、探索深度制限（5-6手）、早期枝刈り
+- 正確性トレードオフ: 主要効果のみ対応、ランダム効果は最悪/最良/平均で評価
+- 既存コード整合性: 新規関数追加、HARD難易度のみ、段階的有効化フラグ
+- 拡張性: カード定義から効果を読み取る汎用的仕組み
+
+## 5. 設計理由
+- シミュレーション方式: 汎用的、新カード追加にも対応しやすい
+- 軽量構造体: フルGameStateは巨大、1ターンに数十回シミュレーション可能性
+- HARD難易度限定: 人間らしいミス、計算コスト削減、バグリスク低減
 
 ## レビュー観点
 1. バグ・不具合の可能性
-2. パフォーマンス上の問題（requestAnimationFrameの使用、状態更新頻度）
-3. 座標計算のロジック（GameScreenとの整合性）
-4. アニメーションのクリーンアップ漏れ
-5. メモリリークの可能性
-6. 可読性・保守性
+2. パフォーマンス上の問題
+3. セキュリティ上の問題
+4. 可読性・保守性
+5. 設計上の問題
+6. 見落としているエッジケース
 
 問題点があれば具体的に指摘してください。
 問題がなければ「LGTM」と回答してください。

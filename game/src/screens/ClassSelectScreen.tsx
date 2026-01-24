@@ -21,7 +21,7 @@ const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
 interface ClassSelectScreenProps {
-    onSelectClass: (cls: ClassType) => void;
+    onSelectClass: (playerClass: ClassType, opponentClass?: ClassType) => void;
     onBack: () => void;
     gameMode?: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH';
     aiDifficulty?: AIDifficulty;
@@ -57,6 +57,10 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
 }) => {
     // Responsive scaling (same approach as GameScreen)
     const [scale, setScale] = useState(1);
+
+    // CPU戦用：プレイヤーとCPUのクラス選択状態
+    const [selectedPlayerClass, setSelectedPlayerClass] = useState<ClassType | null>(null);
+    const [selectedOpponentClass, setSelectedOpponentClass] = useState<ClassType | 'RANDOM' | null>('RANDOM');
 
     // クラス別レーティング
     const [classRatings, setClassRatings] = useState<Partial<Record<ClassType, ClassRating>>>({});
@@ -149,6 +153,380 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
         );
     };
 
+    // CPU戦モード用：ゲームスタートハンドラ
+    const handleGameStart = () => {
+        if (!selectedPlayerClass) return;
+
+        // CPUのクラスを決定（ランダムの場合はランダムに選択）
+        let opponentClassResult: ClassType;
+        if (selectedOpponentClass === 'RANDOM') {
+            const classes: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+            opponentClassResult = classes[Math.floor(Math.random() * classes.length)];
+        } else if (selectedOpponentClass) {
+            opponentClassResult = selectedOpponentClass;
+        } else {
+            return;
+        }
+
+        // onSelectClassを呼び出す（プレイヤーのクラスとCPUのクラスを渡す）
+        onSelectClass(selectedPlayerClass, opponentClassResult);
+    };
+
+    // クラスパネルをレンダリングするヘルパー関数
+    const renderClassPanel = (
+        classType: ClassType,
+        isSelected: boolean,
+        onClick: () => void,
+        showRating: boolean = false
+    ) => {
+        const classConfig = {
+            SENKA: {
+                img: senkaLeaderImg,
+                name: '盞華',
+                color: '#e94560',
+                gradient: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)',
+                shadow: 'rgba(233, 69, 96, 0.2)',
+                subtitle: 'アグロ / ラッシュ',
+                desc: '突進フォロワーと多面展開で相手を圧倒する。'
+            },
+            AJA: {
+                img: azyaLeaderImg,
+                name: 'あじゃ',
+                color: '#45a2e9',
+                gradient: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)',
+                shadow: 'rgba(69, 162, 233, 0.2)',
+                subtitle: 'コントロール / テクニカル',
+                desc: '強力な除去と堅牢な守護で盤面を支配する。'
+            },
+            YORUKA: {
+                img: yorukaLeaderImg,
+                name: 'Y',
+                color: '#a855f7',
+                gradient: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)',
+                shadow: 'rgba(168, 85, 247, 0.2)',
+                subtitle: 'ミッドレンジ / トリッキー',
+                desc: '墓地をリソースにする変則的な戦法で相手を翻弄する。'
+            }
+        };
+        const config = classConfig[classType];
+        const panelScale = isSelected ? 1.08 : 1;
+
+        return (
+            <div
+                key={classType}
+                onClick={onClick}
+                style={{
+                    width: cardWidth * 0.85,
+                    height: cardHeight * 0.85,
+                    border: isSelected ? `3px solid ${config.color}` : '1px solid #444',
+                    borderRadius: 10 * scale,
+                    background: config.gradient,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, border 0.2s, box-shadow 0.2s',
+                    boxShadow: isSelected
+                        ? `0 8px 30px ${config.shadow}, 0 0 20px ${config.color}40`
+                        : `0 4px 20px ${config.shadow}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    transform: `scale(${panelScale})`
+                }}
+            >
+                <img
+                    src={config.img}
+                    alt={config.name}
+                    style={{
+                        width: '100%',
+                        height: '55%',
+                        objectFit: 'cover',
+                        objectPosition: classType === 'AJA' ? 'center top' : 'center'
+                    }}
+                />
+                <div style={{ padding: `${5 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: `${classNameSize * 0.9}rem`, color: config.color, margin: 0 }}>{config.name}</h3>
+                    <p style={{ color: '#aaa', margin: `${2 * scale}px 0`, fontSize: `${subtitleSize * 0.9}rem`, fontFamily: 'Tamanegi, sans-serif' }}>
+                        {config.subtitle}
+                    </p>
+                    {showRating && renderRatingBadge(classType)}
+                </div>
+            </div>
+        );
+    };
+
+    // ランダムパネルをレンダリング
+    const renderRandomPanel = (isSelected: boolean, onClick: () => void) => {
+        const panelScale = isSelected ? 1.08 : 1;
+        return (
+            <div
+                onClick={onClick}
+                style={{
+                    width: cardWidth * 0.85,
+                    height: cardHeight * 0.4,
+                    border: isSelected ? '3px solid #ffd700' : '1px solid #444',
+                    borderRadius: 10 * scale,
+                    background: 'linear-gradient(180deg, #2d2d0a 0%, #1a1a2e 100%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, border 0.2s, box-shadow 0.2s',
+                    boxShadow: isSelected
+                        ? '0 8px 30px rgba(255, 215, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.4)'
+                        : '0 4px 20px rgba(255, 215, 0, 0.1)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    transform: `scale(${panelScale})`
+                }}
+            >
+                <div style={{ fontSize: `${2.5 * scale}rem`, marginBottom: `${5 * scale}px` }}>🎲</div>
+                <h3 style={{ fontSize: `${classNameSize * 0.9}rem`, color: '#ffd700', margin: 0 }}>ランダム</h3>
+                <p style={{ color: '#aaa', margin: `${3 * scale}px 0`, fontSize: `${subtitleSize * 0.85}rem`, fontFamily: 'Tamanegi, sans-serif' }}>
+                    ランダムに決定
+                </p>
+            </div>
+        );
+    };
+
+    // CPU戦モードの場合は左右分割レイアウト
+    if (gameMode === 'CPU') {
+        return (
+            <div className="screen" style={{
+                height: '100dvh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#1a1a2e',
+                color: 'white',
+                padding: `${20 * scale}px`
+            }}>
+                {/* Player Name Input */}
+                <div style={{
+                    marginBottom: `${0.6 * scale}rem`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: `${0.3 * scale}rem`
+                }}>
+                    <label style={{
+                        fontSize: `${0.85 * scale}rem`,
+                        opacity: 0.8,
+                        fontFamily: 'Tamanegi, sans-serif'
+                    }}>
+                        プレイヤー名
+                    </label>
+                    <input
+                        type="text"
+                        value={playerName}
+                        onChange={(e) => onPlayerNameChange(e.target.value)}
+                        maxLength={12}
+                        placeholder="名前を入力"
+                        style={{
+                            padding: `${5 * scale}px ${10 * scale}px`,
+                            fontSize: `${0.85 * scale}rem`,
+                            background: '#2d3748',
+                            border: '2px solid #4a5568',
+                            borderRadius: 6 * scale,
+                            color: 'white',
+                            outline: 'none',
+                            width: 160 * scale,
+                            textAlign: 'center',
+                            fontFamily: 'Tamanegi, sans-serif'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#63b3ed'}
+                        onBlur={(e) => e.target.style.borderColor = '#4a5568'}
+                    />
+                </div>
+
+                {/* Left-Right Split Layout */}
+                <div style={{
+                    display: 'flex',
+                    gap: `${3 * scale}rem`,
+                    alignItems: 'flex-start',
+                    marginBottom: `${1 * scale}rem`
+                }}>
+                    {/* Left Column: Player Class Selection */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: `${0.5 * scale}rem`
+                    }}>
+                        <h3 style={{
+                            fontSize: `${1.3 * scale}rem`,
+                            margin: 0,
+                            color: '#63b3ed',
+                            fontFamily: 'Tamanegi, sans-serif'
+                        }}>
+                            あなた
+                        </h3>
+                        <div style={{
+                            display: 'flex',
+                            gap: `${0.6 * scale}rem`,
+                            flexWrap: 'wrap',
+                            justifyContent: 'center',
+                            maxWidth: cardWidth * 3
+                        }}>
+                            {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((cls) =>
+                                renderClassPanel(
+                                    cls,
+                                    selectedPlayerClass === cls,
+                                    () => setSelectedPlayerClass(cls),
+                                    false
+                                )
+                            )}
+                        </div>
+                    </div>
+
+                    {/* VS Divider */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: `${20 * scale}px 0`
+                    }}>
+                        <div style={{
+                            fontSize: `${2 * scale}rem`,
+                            fontWeight: 'bold',
+                            color: '#e94560',
+                            textShadow: '0 0 20px rgba(233, 69, 96, 0.5)',
+                            fontFamily: 'Tamanegi, sans-serif'
+                        }}>
+                            VS
+                        </div>
+                    </div>
+
+                    {/* Right Column: CPU Class Selection */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: `${0.5 * scale}rem`
+                    }}>
+                        <h3 style={{
+                            fontSize: `${1.3 * scale}rem`,
+                            margin: 0,
+                            color: '#e94560',
+                            fontFamily: 'Tamanegi, sans-serif'
+                        }}>
+                            CPU
+                        </h3>
+                        <div style={{
+                            display: 'flex',
+                            gap: `${0.6 * scale}rem`,
+                            flexWrap: 'wrap',
+                            justifyContent: 'center',
+                            maxWidth: cardWidth * 3
+                        }}>
+                            {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((cls) =>
+                                renderClassPanel(
+                                    cls,
+                                    selectedOpponentClass === cls,
+                                    () => setSelectedOpponentClass(cls),
+                                    false
+                                )
+                            )}
+                        </div>
+                        {/* Random Panel */}
+                        <div style={{ marginTop: `${0.4 * scale}rem` }}>
+                            {renderRandomPanel(
+                                selectedOpponentClass === 'RANDOM',
+                                () => setSelectedOpponentClass('RANDOM')
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Difficulty Selector */}
+                {onDifficultyChange && (
+                    <div style={{
+                        marginBottom: `${0.5 * scale}rem`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: `${0.25 * scale}rem`
+                    }}>
+                        <p style={{ fontSize: `${0.8 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', margin: 0 }}>
+                            難易度
+                        </p>
+                        <div style={{ display: 'flex', gap: `${0.5 * scale}rem` }}>
+                            {(['EASY', 'NORMAL', 'HARD'] as AIDifficulty[]).map((diff) => (
+                                <button
+                                    key={diff}
+                                    onClick={() => onDifficultyChange(diff)}
+                                    style={{
+                                        padding: `${5 * scale}px ${12 * scale}px`,
+                                        fontSize: `${0.75 * scale}rem`,
+                                        background: aiDifficulty === diff
+                                            ? (diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea')
+                                            : 'transparent',
+                                        border: `2px solid ${diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea'}`,
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        borderRadius: 4 * scale,
+                                        fontFamily: 'Tamanegi, sans-serif',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {diff === 'EASY' ? 'かんたん' : diff === 'NORMAL' ? 'ふつう' : 'オニ'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Game Start Button */}
+                <button
+                    onClick={handleGameStart}
+                    disabled={!selectedPlayerClass}
+                    style={{
+                        padding: `${12 * scale}px ${40 * scale}px`,
+                        fontSize: `${1.2 * scale}rem`,
+                        background: selectedPlayerClass
+                            ? 'linear-gradient(135deg, #48bb78, #38a169)'
+                            : '#4a5568',
+                        border: 'none',
+                        borderRadius: 8 * scale,
+                        color: 'white',
+                        cursor: selectedPlayerClass ? 'pointer' : 'not-allowed',
+                        fontFamily: 'Tamanegi, sans-serif',
+                        fontWeight: 'bold',
+                        marginBottom: `${0.5 * scale}rem`,
+                        boxShadow: selectedPlayerClass
+                            ? '0 4px 20px rgba(72, 187, 120, 0.4)'
+                            : 'none',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    ゲームスタート
+                </button>
+
+                {/* Back Button */}
+                <button
+                    onClick={onBack}
+                    style={{
+                        background: '#333',
+                        padding: `${8 * scale}px ${20 * scale}px`,
+                        fontSize: `${0.85 * scale}rem`,
+                        border: 'none',
+                        borderRadius: 6 * scale,
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontFamily: 'Tamanegi, sans-serif'
+                    }}
+                >
+                    戻る
+                </button>
+            </div>
+        );
+    }
+
+    // 他のモード（ランクマッチなど）は従来のレイアウト
     return (
         <div className="screen" style={{
             height: '100dvh',
@@ -299,54 +677,6 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                     </div>
                 </div>
             </div>
-
-            {/* Difficulty Selector - Only show for CPU mode */}
-            {gameMode === 'CPU' && onDifficultyChange && (
-                <div style={{
-                    marginBottom: `${0.6 * scale}rem`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: `${0.3 * scale}rem`
-                }}>
-                    <p style={{ fontSize: `${0.85 * scale}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', margin: 0 }}>
-                        難易度を選択
-                    </p>
-                    <div style={{ display: 'flex', gap: `${0.6 * scale}rem` }}>
-                        {(['EASY', 'NORMAL', 'HARD'] as AIDifficulty[]).map((diff) => (
-                            <button
-                                key={diff}
-                                onClick={() => onDifficultyChange(diff)}
-                                style={{
-                                    padding: `${6 * scale}px ${14 * scale}px`,
-                                    fontSize: `${0.8 * scale}rem`,
-                                    background: aiDifficulty === diff
-                                        ? (diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea')
-                                        : 'transparent',
-                                    border: `2px solid ${diff === 'EASY' ? '#48bb78' : diff === 'NORMAL' ? '#e94560' : '#9f7aea'}`,
-                                    color: '#fff',
-                                    cursor: 'pointer',
-                                    borderRadius: 4 * scale,
-                                    fontFamily: 'Tamanegi, sans-serif',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                {diff === 'EASY' ? 'かんたん' : diff === 'NORMAL' ? 'ふつう' : 'オニ'}
-                            </button>
-                        ))}
-                    </div>
-                    <p style={{
-                        fontSize: `${0.65 * scale}rem`,
-                        opacity: 0.6,
-                        fontFamily: 'Tamanegi, sans-serif',
-                        margin: 0
-                    }}>
-                        {aiDifficulty === 'EASY' && '初心者向け。CPUは単純な行動をとります。'}
-                        {aiDifficulty === 'NORMAL' && '標準的な難易度。CPUは基本的な戦略を使います。'}
-                        {aiDifficulty === 'HARD' && '上級者向け。CPUは最適な行動を計算してきます。'}
-                    </p>
-                </div>
-            )}
 
             {/* Turn Timer Toggle */}
             {onTimerEnabledChange && (
