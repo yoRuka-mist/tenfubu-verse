@@ -3446,3 +3446,223 @@ const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
 マッチメイキングでは：
 - 先に待機していたプレイヤー → HOST（isHost: true）
 - 後から参加したプレイヤー → JOIN（isHost: false）
+
+---
+
+## 修正日
+2026年1月21日
+
+## 修正内容
+
+### AIターゲット選択バグの修正
+
+#### 問題
+CPU戦において、相手（AI）が以下のカードを使用した際、自分（AI側）のフォロワーではなくプレイヤー側のフォロワーをターゲットとして選択していた：
+- **しゑこ** (c_shieko): 進化時効果 `SELECT_OTHER_ALLY_FOLLOWER`
+- **翼** (TOKEN_TSUBASA): ファンファーレ効果 `SELECT_ALLY_FOLLOWER`
+
+#### 原因
+`runAiTurn`関数内で、AIがスペル使用時/進化時にターゲットを選択する際、常に `state.players[currentPlayerId].board`（プレイヤー側のボード）を参照していた。
+
+`targetType`が `SELECT_ALLY_FOLLOWER` や `SELECT_OTHER_ALLY_FOLLOWER` の場合は、AI側のボード（`opponentPlayerId`）から選択すべきだった。
+
+#### 修正箇所
+
+##### 1. スペル使用時のターゲット選択（6154-6170行目）
+```typescript
+// カードの効果からtargetTypeを取得
+const cardTriggers = bestCard.triggers || [];
+const fanfareEffects = cardTriggers.find((t: any) => t.trigger === 'FANFARE')?.effects || [];
+const targetEffect = fanfareEffects.find((e: any) => e.targetType);
+const targetType = targetEffect?.targetType;
+
+// targetTypeに応じてボードを選択
+const isAllyTarget = targetType === 'SELECT_ALLY_FOLLOWER' || targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+const targetBoard = isAllyTarget
+    ? state.players[opponentPlayerId].board  // AI側のボード
+    : state.players[currentPlayerId].board;  // プレイヤー側のボード
+```
+
+##### 2. 進化時のターゲット選択（6344-6362行目）
+```typescript
+// 進化するカードの進化トリガーからtargetTypeを取得
+const evolveTriggers = target.c.triggers || [];
+const evolveEffects = evolveTriggers.find((t: any) => t.trigger === 'EVOLVE')?.effects || [];
+const evolveTargetEffect = evolveEffects.find((e: any) => e.targetType);
+const evolveTargetType = evolveTargetEffect?.targetType;
+
+// targetTypeに応じてボードを選択
+const isAllyEvolveTarget = evolveTargetType === 'SELECT_ALLY_FOLLOWER' || evolveTargetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+const evolveTargetBoard = isAllyEvolveTarget
+    ? state.players[opponentPlayerId].board  // AI側のボード
+    : state.players[currentPlayerId].board;  // プレイヤー側のボード
+
+// SELECT_OTHER_ALLY_FOLLOWER の場合、進化するカード自身を除外
+const validTargets = evolveTargetBoard.filter((c: any, idx: number) =>
+    c !== null &&
+    !c.passiveAbilities?.includes('STEALTH') &&
+    !c.passiveAbilities?.includes('AURA') &&
+    !(evolveTargetType === 'SELECT_OTHER_ALLY_FOLLOWER' && idx === target.i)
+);
+```
+
+### AI強化設計ドキュメント作成
+
+#### 作成ファイル
+- `implementation_plan_ai_enhancement.md`
+
+#### 内容
+現在のAI（runAiTurn関数）の詳細分析と、段階的な強化計画を策定。
+
+##### 主な問題点
+1. EASY/NORMALでレサル判定なし
+2. 基本スコア計算が低い（cost×10）
+3. 敵脅威計算が単純（BANE固定+15）
+4. 早期進化の閾値が厳しい
+
+##### 改善計画（Phase別）
+- **Phase 1**: NORMALにレサル判定追加、基本スコア強化、脅威度動的計算
+- **Phase 2**: 進化保留条件緩和、ドロー評価向上、複合脅威評価
+- **Phase 3**: フェーズ別戦術、攻撃順序最適化
+
+### 影響範囲
+- CPU戦でのAIのターゲット選択全般
+- 特に味方フォロワーを対象とする効果（バフ、STORM付与等）
+
+---
+
+## 修正日
+2026年1月21日
+
+## 修正内容
+
+### CPU AI強化: YORUKAデッキ戦術実装 (v1.13)
+
+#### 概要
+CPU AIがYORUKAデッキをプレイする際の高度な戦術を実装。
+超進化温存、リーサル判定、遙コンボを最適化。
+
+#### 修正ファイル
+- `game/src/screens/GameScreen.tsx`
+
+#### Phase 1: calculateYorukaLethal関数（6066-6244行目）
+YORUKAデッキ専用のリーサル計算関数を追加。
+
+```typescript
+const calculateYorukaLethal = (
+    state: any,
+    yorukaPlayerId: string
+): {
+    canLethal: boolean;
+    damage: number;
+    plan: string;
+    requiredCards: string[];
+}
+```
+
+**リーサルパターン**:
+| パターン | 条件 | ダメージ | 計算式 |
+|----------|------|---------|--------|
+| 7T遙SE | 手札遙+SEP≥1+NC4+PP≥5 | 6 | 刹那(1+2)*2 |
+| 遙生存+SE | 盤面遙(攻撃可)+SEP≥1+NC4 | 11-17+ | 遙+刹那6+悠霞3+(疾き+6)+盤面 |
+| NP+遙SE | 10T+NP+盤面遙+SEP+NC4+PP≥7 | 22+ | 遙+刹那*n+盤面 |
+| NP単体 | 10T+NP+NC≥8+PP≥7 | 10+ | 刹那2*n+盤面 |
+
+#### Phase 2: scoreCardForPlayingにYORUKAロジック（6397-6446行目）
+- 遙: リーサル可能→+500、安全時→-150（温存）
+- 疾きこと風の如く: リーサル用温存傾向
+- ナイトパレード: リーサル用
+
+#### Phase 3: shouldEvolveThisTurnにYORUKA温存（6614-6662行目）
+- SEP=1 かつ ハルカ手札 かつ 安全 → 温存
+- yoRuka盤面 かつ 敵2体以上 かつ SEP≥2 → SE実行
+- ハルカ盤面 かつ リーサル可能 → SE実行
+- ハルカ盤面 かつ リーサル不可 かつ 安全 → 温存
+
+#### Phase 4: scoreEvolveTargetにYORUKA判定（6515-6558行目）
+| カード | 条件 | スコア調整 |
+|--------|------|-----------|
+| c_haruka | リーサル可能 | +1000 |
+| c_haruka | リーサル不可 | -500 |
+| c_yuka | 敵2体以上 | +100 |
+| c_yoruka | SE＆敵2体以上 | +150 |
+| c_y | - | +敵数×30 |
+
+#### Phase 5: findBestAttackTargetにYORUKA攻撃優先度（6798-6847行目）
+- 刹那: 守護優先、なければリーダー攻撃
+- 守護なし: リーダー攻撃優先（リーサル狙い）
+- BANE持ち: 守護を処理
+
+### トリプルレビュー結果
+
+#### レビュアー
+- Codex (gpt-5.2-codex)
+- Gemini (gemini-3-pro-preview)
+- GLM-4.7 (zai-coding-plan/glm-4.7)
+- Claude (self-review)
+
+#### 修正したバグ
+1. **`state.turn` → `state.turnCount`** (6459行目)
+   - `s_hayakikoto` のターン判定で存在しないプロパティを参照
+2. **盤面リミット計算** (Pattern 3, 4)
+   - 既存フォロワー数を考慮して空きスロット数を計算
+3. **盤面ダメージ加算** (Pattern 2, 3)
+   - 既存盤面フォロワー（Haruka以外）のダメージをリーサル計算に加算
+
+### 影響範囲
+- CPU戦でYORUKAデッキを使用するAIの意思決定全般
+- 特に遙コンボ、ナイトパレードOTKの判断
+
+---
+
+## 2026-01-23 バグ修正: RANDOM_DAMAGE_BY_TURNでのラストワード不発動
+
+### 概要
+悠長・オブ・ジ・アビス（RANDOM_DAMAGE_BY_TURN）でフォロワーを破壊した際に、
+yoRukaなどのラストワードが発動しない不具合を修正。
+
+### 原因
+`processSingleEffect`内のRANDOM_DAMAGE_BY_TURN処理で、フォロワー破壊時の
+ラストワード発動処理が直接`newState.pendingEffects.push()`を使用していた。
+
+一方、RESOLVE_EFFECTでは以下のロジックで「新しく追加されたエフェクト」を検出していた：
+```typescript
+const newlyAddedEffects = (processedState.pendingEffects || []).filter(
+    e => !newState.pendingEffects?.includes(e)
+);
+```
+
+`push()`は元の配列に直接追加するため、`newState.pendingEffects`と
+`processedState.pendingEffects`が同一参照となり、新しいエフェクトとして検出されなかった。
+
+### 修正
+既存の`triggerLastWord`ヘルパー関数を使用するように変更。
+このヘルパーは新しい配列を作成するため、正しく検出される。
+
+**修正前（engine.ts 1779-1789行目）:**
+```typescript
+const lastWordTrigger = target.triggers?.find(t => t.trigger === 'LAST_WORD');
+if (lastWordTrigger) {
+    lastWordTrigger.effects.forEach(e => {
+        newState.pendingEffects.push({
+            sourceCard: target,
+            effect: e,
+            sourcePlayerId: ownerId
+        });
+    });
+}
+```
+
+**修正後:**
+```typescript
+// ラストワード発動（triggerLastWordヘルパーを使用して変更検出を確実にする）
+triggerLastWord(target, targetPid);
+```
+
+### 修正ファイル
+- `game/src/core/engine.ts`
+  - 1776-1783行目: RANDOM_DAMAGE_BY_TURNの死亡処理
+
+### 影響範囲
+- RANDOM_DAMAGE_BY_TURNエフェクトで破壊されたフォロワーのラストワード
+- 特にyoRuka（c_yoruka）のLAST_WORD: NC8蘇生
