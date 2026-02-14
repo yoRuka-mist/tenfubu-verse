@@ -8,6 +8,7 @@
 
 import { GameState, Player, Card, BoardCard, PassiveAbility, AbilityEffect, TriggerDefinition } from '../core/types';
 import { MOCK_CARDS } from '../core/engine';
+import { canEvolve, canSuperEvolve } from '../core/abilities';
 
 // ============================================================================
 // インターフェース定義
@@ -34,10 +35,14 @@ export interface SimulatedGameState {
     aiEp: number;
     /** AIの残りSEP（消費: 超進化1、回復: なし） */
     aiSep: number;
+    /** このターンに進化権が残っているか */
+    aiCanEvolveThisTurn: boolean;
     /** このターンの進化回数（上限: 2回/ターン） */
     aiEvolveCount: number;
     /** 墓場カード数（ネクロマンス用） */
     aiGraveyard: number;
+    /** プレイヤー側の次ダメージ無効シールド */
+    playerLeaderDamageShield: boolean;
 }
 
 /**
@@ -65,12 +70,16 @@ export interface SimulatedCard {
     canEvolve: boolean;
     /** 進化済みか */
     hasEvolved: boolean;
+    /** このターンに攻撃済み回数（DOUBLE_ATTACK対応） */
+    attacksMade: number;
     /** パッシブ能力（WARD, STEALTH, BANE, STORM, DOUBLE_ATTACK, AURA等） */
     passiveAbilities: PassiveAbility[];
     /** バリア状態（1回ダメージ無効） */
     hasBarrier: boolean;
     /** オーラ状態（対象不可だが攻撃可能） */
     hasAura: boolean;
+    /** 過去にSTEALTHを持っていたか（守護無視の永続判定用） */
+    hadStealth: boolean;
     /** 進化で発動する効果 */
     evolveEffects?: SimulatedEffect[];
     /** 超進化で発動する効果 */
@@ -89,7 +98,7 @@ export interface SimulatedCard {
  */
 export interface SimulatedEffect {
     /** 効果タイプ */
-    type: 'DAMAGE' | 'DESTROY' | 'AOE_DAMAGE' | 'HEAL_LEADER' | 'SUMMON' | 'GENERATE_CARD' | 'BUFF_STATS';
+    type: 'DAMAGE' | 'DAMAGE_LEADER' | 'DESTROY' | 'AOE_DAMAGE' | 'HEAL_LEADER' | 'SUMMON' | 'GENERATE_CARD' | 'BUFF_STATS';
     /** 効果の値（ダメージ量、回復量など） */
     value?: number;
     /** 第2の値（バフの体力値など） */
@@ -226,6 +235,10 @@ export function createSimulatedState(
         .filter((card): card is BoardCard => card !== null)
         .map(boardCard => createSimulatedCardFromBoardCard(boardCard, playerPlayer));
 
+    const isAiFirstPlayer = aiPlayerId === gameState.firstPlayerId;
+    const canUseNormalEvolve = canEvolve(aiPlayer, gameState.turnCount, isAiFirstPlayer);
+    const canUseSuperEvolve = canSuperEvolve(aiPlayer, gameState.turnCount, isAiFirstPlayer);
+
     return {
         aiHand,
         aiBoard,
@@ -233,10 +246,12 @@ export function createSimulatedState(
         playerHp: playerPlayer.hp,
         aiHp: aiPlayer.hp,
         aiPp: aiPlayer.pp,
-        aiEp: aiPlayer.maxPp >= 5 ? 1 : 0, // 5PP以降でEP獲得（簡易計算）
-        aiSep: aiPlayer.sep,
+        aiEp: canUseNormalEvolve ? 1 : 0,
+        aiSep: canUseSuperEvolve ? aiPlayer.sep : 0,
+        aiCanEvolveThisTurn: aiPlayer.canEvolveThisTurn,
         aiEvolveCount: aiPlayer.evolutionsUsed,
         aiGraveyard: aiPlayer.graveyard.length,
+        playerLeaderDamageShield: !!playerPlayer.leaderDamageShield,
     };
 }
 
@@ -256,8 +271,10 @@ export function deepCopySimulatedState(state: SimulatedGameState): SimulatedGame
         aiPp: state.aiPp,
         aiEp: state.aiEp,
         aiSep: state.aiSep,
+        aiCanEvolveThisTurn: state.aiCanEvolveThisTurn,
         aiEvolveCount: state.aiEvolveCount,
         aiGraveyard: state.aiGraveyard,
+        playerLeaderDamageShield: state.playerLeaderDamageShield,
     };
 }
 
@@ -285,9 +302,11 @@ export function createSimulatedCard(cardId: string, instanceId: string): Simulat
             canAttack: false,
             canEvolve: false,
             hasEvolved: false,
+            attacksMade: 0,
             passiveAbilities: [],
             hasBarrier: false,
             hasAura: false,
+            hadStealth: false,
         };
     }
 
@@ -295,6 +314,7 @@ export function createSimulatedCard(cardId: string, instanceId: string): Simulat
     const hasStorm = passiveAbilities.includes('STORM');
     const hasBarrier = passiveAbilities.includes('BARRIER');
     const hasAura = passiveAbilities.includes('AURA');
+    const hadStealth = passiveAbilities.includes('STEALTH');
 
     // 超進化効果の解析
     const superEvolveEffects = extractSimulatedEffects(cardDef.triggers, 'SUPER_EVOLVE');
@@ -314,9 +334,11 @@ export function createSimulatedCard(cardId: string, instanceId: string): Simulat
         canAttack: hasStorm, // 疾走持ちは即座に攻撃可能
         canEvolve: cardDef.type === 'FOLLOWER' && !hasBarrier, // フォロワーで未進化なら進化可能（詳細は状態依存）
         hasEvolved: false,
+        attacksMade: 0,
         passiveAbilities,
         hasBarrier,
         hasAura,
+        hadStealth,
         evolveEffects: evolveEffects.length > 0 ? evolveEffects : undefined,
         superEvolveEffects: superEvolveEffects.length > 0 ? superEvolveEffects : undefined,
         superEvolveGeneratesCards: superEvolveGeneratesCards.length > 0 ? superEvolveGeneratesCards : undefined,
@@ -334,7 +356,7 @@ export function createSimulatedCard(cardId: string, instanceId: string): Simulat
 export function computeStateHash(state: SimulatedGameState): string {
     // 盤面のカードIDをソートして結合
     const aiBoardHash = state.aiBoard
-        .map(c => `${c.id}:${c.currentAttack}:${c.currentHealth}:${c.canAttack ? 1 : 0}:${c.hasEvolved ? 1 : 0}:${c.hasBarrier ? 1 : 0}`)
+        .map(c => `${c.id}:${c.currentAttack}:${c.currentHealth}:${c.canAttack ? 1 : 0}:${c.hasEvolved ? 1 : 0}:${c.hasBarrier ? 1 : 0}:${c.attacksMade || 0}:${c.hadStealth ? 1 : 0}`)
         .sort()
         .join('|');
 
@@ -352,7 +374,8 @@ export function computeStateHash(state: SimulatedGameState): string {
     // リソース状態
     const resourceHash = `${state.playerHp}:${state.aiHp}:${state.aiPp}:${state.aiEp}:${state.aiSep}:${state.aiEvolveCount}:${state.aiGraveyard}`;
 
-    return `${aiBoardHash}||${playerBoardHash}||${handHash}||${resourceHash}`;
+    const flagHash = `${state.aiCanEvolveThisTurn ? 1 : 0}:${state.playerLeaderDamageShield ? 1 : 0}`;
+    return `${aiBoardHash}||${playerBoardHash}||${handHash}||${resourceHash}||${flagHash}`;
 }
 
 // ============================================================================
@@ -374,6 +397,7 @@ function createSimulatedCardFromCard(card: Card, instanceId: string): SimulatedC
     const hasStorm = passiveAbilities.includes('STORM');
     const hasBarrier = passiveAbilities.includes('BARRIER');
     const hasAura = passiveAbilities.includes('AURA');
+    const hadStealth = passiveAbilities.includes('STEALTH');
 
     // 超進化効果の解析
     const superEvolveEffects = extractSimulatedEffects(card.triggers, 'SUPER_EVOLVE');
@@ -391,9 +415,11 @@ function createSimulatedCardFromCard(card: Card, instanceId: string): SimulatedC
         canAttack: hasStorm,
         canEvolve: card.type === 'FOLLOWER',
         hasEvolved: false,
+        attacksMade: 0,
         passiveAbilities,
         hasBarrier,
         hasAura,
+        hadStealth,
         evolveEffects: evolveEffects.length > 0 ? evolveEffects : undefined,
         superEvolveEffects: superEvolveEffects.length > 0 ? superEvolveEffects : undefined,
         superEvolveGeneratesCards: superEvolveGeneratesCards.length > 0 ? superEvolveGeneratesCards : undefined,
@@ -406,7 +432,6 @@ function createSimulatedCardFromCard(card: Card, instanceId: string): SimulatedC
  */
 function createSimulatedCardFromBoardCard(boardCard: BoardCard, player: Player): SimulatedCard {
     const passiveAbilities: PassiveAbility[] = boardCard.passiveAbilities ? [...boardCard.passiveAbilities] : [];
-    const hasStorm = passiveAbilities.includes('STORM');
     // RUSH（突進）は召喚ターンのみフォロワー攻撃可能だが、リーサル計算では canAttack で判断
     // const hasRush = passiveAbilities.includes('RUSH');
     const hasBarrier = boardCard.hasBarrier || false;
@@ -422,13 +447,13 @@ function createSimulatedCardFromBoardCard(boardCard: BoardCard, player: Player):
     // - 召喚酔いでない（canAttack = true）
     // - または疾走持ち
     // - 突進は召喚ターンでもフォロワーにのみ攻撃可能（ここでは canAttack で判断）
-    const canAttack = boardCard.canAttack || hasStorm;
+    const canAttack = boardCard.canAttack;
 
     // 進化可能判定
     // - 未進化
     // - プレイヤーの進化回数が2未満
     // - EP または SEP が残っている
-    const canEvolve = !boardCard.hasEvolved && player.evolutionsUsed < 2 && (player.maxPp >= 5 || player.sep > 0);
+    const canEvolve = !boardCard.hasEvolved && player.evolutionsUsed < 2;
 
     return {
         id: boardCard.id,
@@ -441,9 +466,11 @@ function createSimulatedCardFromBoardCard(boardCard: BoardCard, player: Player):
         canAttack,
         canEvolve,
         hasEvolved: boardCard.hasEvolved || false,
+        attacksMade: boardCard.attacksMade || 0,
         passiveAbilities,
         hasBarrier,
         hasAura,
+        hadStealth: boardCard.hadStealth || passiveAbilities.includes('STEALTH'),
         evolveEffects: evolveEffects.length > 0 ? evolveEffects : undefined,
         superEvolveEffects: superEvolveEffects.length > 0 ? superEvolveEffects : undefined,
         superEvolveGeneratesCards: superEvolveGeneratesCards.length > 0 ? superEvolveGeneratesCards : undefined,
@@ -515,8 +542,9 @@ function mapEffectType(effectType: string): SimulatedEffect['type'] {
         case 'DAMAGE':
         case 'SELECT_DAMAGE':
         case 'RANDOM_DAMAGE':
-        case 'DAMAGE_LEADER':
             return 'DAMAGE';
+        case 'DAMAGE_LEADER':
+            return 'DAMAGE_LEADER';
         case 'AOE_DAMAGE':
             return 'AOE_DAMAGE';
         case 'DESTROY':
@@ -545,11 +573,13 @@ function mapEffectType(effectType: string): SimulatedEffect['type'] {
 
 /**
  * 探索状態を初期化
+ * 
+ * @param maxDepth - 最大探索深度（オプション、動的計算される）
  */
-export function createSearchState(): SearchState {
+export function createSearchState(maxDepth: number = BASE_MAX_DEPTH): SearchState {
     return {
         depth: 0,
-        maxDepth: 6, // 最大6アクション
+        maxDepth,
         visitedStates: new Set(),
         bestLethalPath: null,
         bestLethalDamage: 0,
@@ -653,25 +683,26 @@ export function calculateBoardDamage(
     let totalDamage = 0;
 
     for (const card of state.aiBoard) {
-        // 攻撃可能かチェック（召喚酔い、疾走考慮）
-        const canAttackNow = card.canAttack || card.passiveAbilities.includes('STORM');
-        if (!canAttackNow) continue;
+        if (!card.canAttack) continue;
+
+        const maxAttacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
+        const attacksRemaining = Math.max(0, maxAttacks - (card.attacksMade || 0));
+        if (attacksRemaining <= 0) continue;
 
         // 基本攻撃力
         let attackPower = card.currentAttack;
 
         // 進化ボーナス（未進化で進化可能な場合）
-        if (includeEvolveBonus && card.canEvolve && !card.hasEvolved) {
+        if (includeEvolveBonus && state.aiCanEvolveThisTurn && card.canEvolve && !card.hasEvolved) {
             // 進化リソースがあるかチェック
-            if (state.aiEp > 0 || state.aiSep > 0) {
+            if (state.aiSep > 0) {
+                attackPower += 3;
+            } else if (state.aiEp > 0) {
                 attackPower += 2;
             }
         }
 
-        // ダブルアタック判定
-        const attacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
-
-        totalDamage += attackPower * attacks;
+        totalDamage += attackPower * attacksRemaining;
     }
 
     return totalDamage;
@@ -683,15 +714,23 @@ export function calculateBoardDamage(
  * - DAMAGE効果を持つスペルを対象（リーダーに打てるスペルのみ）
  *
  * @param state - シミュレーション状態
+ * @param remainingPpArg - 利用可能PP（指定時はこの値を使用）
+ * @param excludedSpellInstanceIds - 既に別用途で使用済みのスペルinstanceId
  * @returns スペルダメージの合計
  */
-export function calculateSpellDamage(state: SimulatedGameState): number {
+export function calculateSpellDamage(
+    state: SimulatedGameState,
+    remainingPpArg?: number,
+    excludedSpellInstanceIds?: Set<string>
+): number {
     let totalDamage = 0;
-    let remainingPp = state.aiPp;
+    let remainingPp = remainingPpArg ?? state.aiPp;
+    let shieldActive = state.playerLeaderDamageShield;
+    const hasLeaderDamageCap = hasPlayerLeaderDamageCap(state);
 
     // コストの低い順にソートして、使えるスペルを最大化
     const spells = state.aiHand
-        .filter(card => card.type === 'SPELL')
+        .filter(card => card.type === 'SPELL' && !excludedSpellInstanceIds?.has(card.instanceId))
         .sort((a, b) => a.cost - b.cost);
 
     for (const spell of spells) {
@@ -704,7 +743,14 @@ export function calculateSpellDamage(state: SimulatedGameState): number {
                     for (const effect of fanfareTrigger.effects) {
                         // リーダーダメージ効果
                         if (effect.type === 'DAMAGE_LEADER' && effect.value) {
-                            totalDamage += effect.value;
+                            let damage = effect.value;
+                            if (shieldActive) {
+                                damage = 0;
+                                shieldActive = false;
+                            } else if (hasLeaderDamageCap) {
+                                damage = Math.min(damage, 1);
+                            }
+                            totalDamage += damage;
                             remainingPp -= spell.cost;
                             break;
                         }
@@ -731,11 +777,14 @@ export function calculateSpellDamage(state: SimulatedGameState): number {
  * @returns 有効な攻撃対象リスト（優先度付き）
  */
 export function getValidAttackTargets(
-    _attacker: SimulatedCard | null,
+    attacker: SimulatedCard | null,
     playerBoard: SimulatedCard[],
     _playerHp: number
 ): Array<{ instanceId: string | 'LEADER'; priority: number }> {
     const targets: Array<{ instanceId: string | 'LEADER'; priority: number }> = [];
+    const attackerIgnoresWard = !!attacker && (
+        attacker.passiveAbilities.includes('STEALTH') || attacker.hadStealth
+    );
 
     // 1. 守護チェック（STEALTHでない守護のみ）
     const activeWards = playerBoard.filter(c =>
@@ -743,8 +792,8 @@ export function getValidAttackTargets(
         !c.passiveAbilities.includes('STEALTH')
     );
 
-    // 2. 守護がいる場合は守護のみ攻撃可能
-    if (activeWards.length > 0) {
+    // 2. 守護がいる場合は守護のみ攻撃可能（隠密/hadStealthは守護無視）
+    if (activeWards.length > 0 && !attackerIgnoresWard) {
         for (const ward of activeWards) {
             // バリア持ちは優先度を下げる（必殺で処理したい）
             const priority = ward.hasBarrier ? 80 : 100;
@@ -790,6 +839,23 @@ export function applyDamageToCard(
     target.currentHealth -= damage;
     const destroyed = target.currentHealth <= 0;
     return { actualDamage: damage, barrierConsumed: false, destroyed };
+}
+
+function hasPlayerLeaderDamageCap(state: SimulatedGameState): boolean {
+    return state.playerBoard.some(c => c.passiveAbilities.includes('LEADER_DAMAGE_CAP'));
+}
+
+function applyDamageToPlayerLeader(state: SimulatedGameState, rawDamage: number): number {
+    if (rawDamage <= 0) return 0;
+
+    if (state.playerLeaderDamageShield) {
+        state.playerLeaderDamageShield = false;
+        return 0;
+    }
+
+    const actualDamage = hasPlayerLeaderDamageCap(state) ? Math.min(rawDamage, 1) : rawDamage;
+    state.playerHp -= actualDamage;
+    return actualDamage;
 }
 
 /**
@@ -844,12 +910,13 @@ export function findWardRemovalOptions(state: SimulatedGameState): ActionPlan[] 
     }
 
     // 攻撃可能なフォロワーを分類
-    const attackers = state.aiBoard.filter(c => c.canAttack || c.passiveAbilities.includes('STORM'));
+    const attackers = state.aiBoard.filter(c => c.canAttack);
     const baneAttackers = attackers.filter(c => c.passiveAbilities.includes('BANE'));
     const normalAttackers = attackers.filter(c => !c.passiveAbilities.includes('BANE'));
 
     // 使用可能なリソースを追跡
     const usedAttackers = new Set<string>();
+    const usedSpells = new Set<string>();
     let remainingPp = state.aiPp;
 
     for (const ward of wards) {
@@ -876,6 +943,7 @@ export function findWardRemovalOptions(state: SimulatedGameState): ActionPlan[] 
         const damageSpells = state.aiHand.filter(c =>
             c.type === 'SPELL' &&
             c.cost <= remainingPp &&
+            !usedSpells.has(c.instanceId) &&
             getSpellDirectDamage(c.id) > 0
         );
 
@@ -894,6 +962,7 @@ export function findWardRemovalOptions(state: SimulatedGameState): ActionPlan[] 
                 expectedOutcome: {}
             });
             remainingPp -= cheapestSpell.cost;
+            usedSpells.add(cheapestSpell.instanceId);
         }
 
         // スペルで倒せるか計算
@@ -912,7 +981,8 @@ export function findWardRemovalOptions(state: SimulatedGameState): ActionPlan[] 
                     expectedOutcome: { cardsRemoved: [ward.instanceId] }
                 });
                 remainingPp -= spell.cost;
-                continue;
+                usedSpells.add(spell.instanceId);
+                break;
             }
         }
 
@@ -1018,17 +1088,13 @@ export function calculateLethalPotential(state: SimulatedGameState): LethalInfo 
     const boardDamage = calculateBoardDamage(state);
     lethalInfo.damageBreakdown.boardDamage = boardDamage;
 
-    // 3. 手札スペルからのダメージを計算（リーダーに打てるもの）
-    const spellDamage = calculateSpellDamage(state);
-    lethalInfo.damageBreakdown.spellDamage = spellDamage;
-
     // 4. 疾走フォロワーからのダメージを分けて計算
     let stormDamage = 0;
     for (const card of state.aiBoard) {
-        if (card.passiveAbilities.includes('STORM') && !card.canAttack) {
-            // 召喚酔いだが疾走で攻撃可能
-            const attacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
-            stormDamage += card.currentAttack * attacks;
+        if (card.passiveAbilities.includes('STORM') && card.canAttack) {
+            const maxAttacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
+            const attacksRemaining = Math.max(0, maxAttacks - (card.attacksMade || 0));
+            stormDamage += card.currentAttack * attacksRemaining;
         }
     }
     lethalInfo.damageBreakdown.stormDamage = stormDamage;
@@ -1037,6 +1103,8 @@ export function calculateLethalPotential(state: SimulatedGameState): LethalInfo 
     let wardRemovalPlans: ActionPlan[] = [];
     let attackersUsedForWards = 0;
     let damageUsedForWards = 0;
+    let ppUsedForWards = 0;
+    const usedSpellIdsForWards = new Set<string>();
 
     if (wards.length > 0) {
         wardRemovalPlans = findWardRemovalOptions(state);
@@ -1050,16 +1118,26 @@ export function calculateLethalPotential(state: SimulatedGameState): LethalInfo 
                     c => c.instanceId === action.attackerInstanceId
                 );
                 if (attackerCard) {
-                    // この攻撃者の攻撃力は顔面に行かない
-                    const attacks = attackerCard.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
-                    damageUsedForWards += attackerCard.currentAttack * attacks;
+                    // この攻撃アクション1回分は顔面に行かない
+                    damageUsedForWards += attackerCard.currentAttack;
+                }
+            } else if (action.type === 'USE_SPELL') {
+                const spellCard = state.aiHand.find(c => c.instanceId === action.cardInstanceId);
+                if (spellCard) {
+                    ppUsedForWards += spellCard.cost;
+                    usedSpellIdsForWards.add(spellCard.instanceId);
                 }
             }
         }
     }
 
+    // 3. 手札スペルからのダメージを計算（守護突破で使用済みのPP/スペルを除外）
+    const remainingPpForFace = Math.max(0, state.aiPp - ppUsedForWards);
+    const spellDamage = calculateSpellDamage(state, remainingPpForFace, usedSpellIdsForWards);
+    lethalInfo.damageBreakdown.spellDamage = spellDamage;
+
     // 6. 顔面に行けるダメージを計算
-    const effectiveBoardDamage = boardDamage - damageUsedForWards;
+    const effectiveBoardDamage = Math.max(0, boardDamage - damageUsedForWards);
     const totalDamage = effectiveBoardDamage + spellDamage;
     lethalInfo.totalDamage = totalDamage;
 
@@ -1083,31 +1161,37 @@ export function calculateLethalPotential(state: SimulatedGameState): LethalInfo 
 
         for (const card of state.aiBoard) {
             if (usedAttackerIds.has(card.instanceId)) continue;
-            if (!card.canAttack && !card.passiveAbilities.includes('STORM')) continue;
+            if (!card.canAttack) continue;
 
-            lethalInfo.requiredActions.push({
-                action: {
-                    type: 'ATTACK',
-                    attackerInstanceId: card.instanceId,
-                    targetInstanceId: 'LEADER'
-                },
-                priority: 50,
-                reason: `リーダー攻撃（${card.name}: ${card.currentAttack}ダメージ）`,
-                expectedOutcome: {
-                    damageToPlayer: card.currentAttack,
-                    lethalAchieved: true
-                }
-            });
+            const maxAttacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
+            const attacksRemaining = Math.max(0, maxAttacks - (card.attacksMade || 0));
+            for (let i = 0; i < attacksRemaining; i++) {
+                lethalInfo.requiredActions.push({
+                    action: {
+                        type: 'ATTACK',
+                        attackerInstanceId: card.instanceId,
+                        targetInstanceId: 'LEADER'
+                    },
+                    priority: 50,
+                    reason: `リーダー攻撃（${card.name}: ${card.currentAttack}ダメージ）`,
+                    expectedOutcome: {
+                        damageToPlayer: card.currentAttack,
+                        lethalAchieved: true
+                    }
+                });
+            }
         }
 
         // 8.3 リーダーダメージスペル
+        let remainingPpForSpellActions = remainingPpForFace;
         for (const spell of state.aiHand) {
             if (spell.type !== 'SPELL') continue;
+            if (usedSpellIdsForWards.has(spell.instanceId)) continue;
             const cardDef = MOCK_CARDS.find(c => c.id === spell.id);
             const fanfareTrigger = cardDef?.triggers?.find(t => t.trigger === 'FANFARE');
             const leaderDamageEffect = fanfareTrigger?.effects.find(e => e.type === 'DAMAGE_LEADER');
 
-            if (leaderDamageEffect && leaderDamageEffect.value && spell.cost <= state.aiPp) {
+            if (leaderDamageEffect && leaderDamageEffect.value && spell.cost <= remainingPpForSpellActions) {
                 lethalInfo.requiredActions.push({
                     action: {
                         type: 'USE_SPELL',
@@ -1120,6 +1204,7 @@ export function calculateLethalPotential(state: SimulatedGameState): LethalInfo 
                         lethalAchieved: true
                     }
                 });
+                remainingPpForSpellActions -= spell.cost;
             }
         }
     }
@@ -1313,6 +1398,10 @@ export function simulateEvolve(
         console.warn('[AI Lookahead] Evolution limit reached');
         return null;
     }
+    if (!state.aiCanEvolveThisTurn) {
+        console.warn('[AI Lookahead] Evolution already used this turn');
+        return null;
+    }
 
     // EP/SEPチェック
     if (useSuperEvolve) {
@@ -1337,11 +1426,13 @@ export function simulateEvolve(
     } else {
         newState.aiEp -= 1;
     }
+    newState.aiCanEvolveThisTurn = false;
     newState.aiEvolveCount += 1;
 
-    // ステータス上昇（+2/+2）
-    evolvedCard.currentAttack += 2;
-    evolvedCard.currentHealth += 2;
+    // ステータス上昇（進化:+2/+2、超進化:+3/+3）
+    const statBoost = useSuperEvolve ? 3 : 2;
+    evolvedCard.currentAttack += statBoost;
+    evolvedCard.currentHealth += statBoost;
     evolvedCard.hasEvolved = true;
     evolvedCard.canAttack = true; // 進化で攻撃可能になる
 
@@ -1388,10 +1479,11 @@ export function simulateAttack(
     const attacker = state.aiBoard[attackerIndex];
 
     // 攻撃可能チェック
-    if (!attacker.canAttack && !attacker.passiveAbilities.includes('STORM')) {
+    if (!attacker.canAttack) {
         console.warn('[AI Lookahead] Attacker cannot attack:', attacker.name);
         return null;
     }
+    const attackerIgnoresWard = attacker.passiveAbilities.includes('STEALTH') || attacker.hadStealth;
 
     // 守護チェック
     const wards = state.playerBoard.filter(c =>
@@ -1400,7 +1492,7 @@ export function simulateAttack(
     );
 
     // 守護がいる場合、守護以外を攻撃できない
-    if (wards.length > 0 && targetInstanceId !== 'LEADER') {
+    if (wards.length > 0 && targetInstanceId !== 'LEADER' && !attackerIgnoresWard) {
         const isAttackingWard = wards.some(w => w.instanceId === targetInstanceId);
         if (!isAttackingWard) {
             console.warn('[AI Lookahead] Must attack ward first');
@@ -1409,7 +1501,7 @@ export function simulateAttack(
     }
 
     // 守護がいる場合、リーダーを攻撃できない
-    if (wards.length > 0 && targetInstanceId === 'LEADER') {
+    if (wards.length > 0 && targetInstanceId === 'LEADER' && !attackerIgnoresWard) {
         console.warn('[AI Lookahead] Cannot attack leader while wards exist');
         return null;
     }
@@ -1417,11 +1509,11 @@ export function simulateAttack(
     // 状態をディープコピー
     const newState = deepCopySimulatedState(state);
     const attackerCard = newState.aiBoard[attackerIndex];
+    attackerCard.attacksMade = (attackerCard.attacksMade || 0) + 1;
 
     if (targetInstanceId === 'LEADER') {
-        // リーダーへのダメージ
-        const attacks = attackerCard.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
-        newState.playerHp -= attackerCard.currentAttack * attacks;
+        // リーダーへのダメージ（1回分）
+        applyDamageToPlayerLeader(newState, attackerCard.currentAttack);
     } else {
         // フォロワーへの攻撃
         const defenderIndex = newState.playerBoard.findIndex(c => c.instanceId === targetInstanceId);
@@ -1446,35 +1538,13 @@ export function simulateAttack(
             // 相手の墓場は追跡しない（v1）
         }
 
-        // ダブルアタック持ちで相手が生存、かつ自分も生存の場合は2回目の攻撃
-        if (attackerCard.passiveAbilities.includes('DOUBLE_ATTACK') &&
-            !combatResult.attackerDestroyed &&
-            !combatResult.defenderDestroyed) {
-            // 2回目の戦闘
-            const defender2 = newState.playerBoard[defenderIndex];
-            const combatResult2 = resolveCombat(attackerCard, defender2);
-
-            if (combatResult2.attackerDestroyed) {
-                const newAttackerIndex = newState.aiBoard.findIndex(c => c.instanceId === attackerInstanceId);
-                if (newAttackerIndex !== -1) {
-                    newState.aiBoard.splice(newAttackerIndex, 1);
-                    newState.aiGraveyard += 1;
-                }
-            }
-
-            if (combatResult2.defenderDestroyed) {
-                const newDefenderIndex = newState.playerBoard.findIndex(c => c.instanceId === targetInstanceId);
-                if (newDefenderIndex !== -1) {
-                    newState.playerBoard.splice(newDefenderIndex, 1);
-                }
-            }
-        }
     }
 
-    // 攻撃後はcanAttackをfalseに（攻撃者がまだ生存している場合）
+    // 攻撃後の攻撃可能状態を更新（DOUBLE_ATTACK対応）
     const survivingAttacker = newState.aiBoard.find(c => c.instanceId === attackerInstanceId);
     if (survivingAttacker) {
-        survivingAttacker.canAttack = false;
+        const maxAttacks = survivingAttacker.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
+        survivingAttacker.canAttack = (survivingAttacker.attacksMade || 0) < maxAttacks;
     }
 
     return newState;
@@ -1593,6 +1663,7 @@ export function canPerformAction(state: SimulatedGameState, action: ActionType):
             if (!card) return false;
             if (card.hasEvolved) return false;
             if (state.aiEvolveCount >= 2) return false;
+            if (!state.aiCanEvolveThisTurn) return false;
             if (action.useSuperEvolve) {
                 return state.aiSep >= 1;
             } else {
@@ -1603,7 +1674,8 @@ export function canPerformAction(state: SimulatedGameState, action: ActionType):
         case 'ATTACK': {
             const attacker = findCardOnBoard(state, action.attackerInstanceId);
             if (!attacker) return false;
-            if (!attacker.canAttack && !attacker.passiveAbilities.includes('STORM')) return false;
+            if (!attacker.canAttack) return false;
+            const attackerIgnoresWard = attacker.passiveAbilities.includes('STEALTH') || attacker.hadStealth;
 
             // 守護チェック
             const wards = state.playerBoard.filter(c =>
@@ -1611,7 +1683,7 @@ export function canPerformAction(state: SimulatedGameState, action: ActionType):
                 !c.passiveAbilities.includes('STEALTH')
             );
 
-            if (wards.length > 0) {
+            if (wards.length > 0 && !attackerIgnoresWard) {
                 if (action.targetInstanceId === 'LEADER') return false;
                 const isAttackingWard = wards.some(w => w.instanceId === action.targetInstanceId);
                 if (!isAttackingWard) return false;
@@ -1683,7 +1755,7 @@ function applyEffectsToState(
             case 'DAMAGE_LEADER':
                 // リーダーダメージ
                 if (effect.value) {
-                    state.playerHp -= effect.value;
+                    applyDamageToPlayerLeader(state, effect.value);
                 }
                 break;
 
@@ -1811,6 +1883,12 @@ function applySimulatedEffectsToState(
                 }
                 break;
 
+            case 'DAMAGE_LEADER':
+                if (effect.value) {
+                    applyDamageToPlayerLeader(state, effect.value);
+                }
+                break;
+
             case 'AOE_DAMAGE':
                 // 全体ダメージ
                 if (effect.value) {
@@ -1886,15 +1964,66 @@ function applySimulatedEffectsToState(
 // Phase 4: 探索最適化
 // ============================================================================
 
-/** ノード数上限 */
-const MAX_NODES = 5000;
+/** ノード数上限（基本値） */
+const BASE_MAX_NODES = 5000;
 
-/** 時間制限（ミリ秒） */
-const TIME_LIMIT_MS = 50;
+/** 時間制限（ミリ秒）（基本値） */
+const BASE_TIME_LIMIT_MS = 100;
+
+/** 最大深度（基本値） */
+const BASE_MAX_DEPTH = 6;
+
+/**
+ * 動的探索制限を計算
+ * 状況に応じて探索深度/ノード数/時間を調整
+ *
+ * @param state - シミュレーション状態
+ * @returns 探索制限パラメータ
+ */
+export function calculateDynamicSearchLimits(state: SimulatedGameState): {
+    maxNodes: number;
+    timeLimitMs: number;
+    maxDepth: number;
+} {
+    // 基本値
+    let maxNodes = BASE_MAX_NODES;
+    let timeLimitMs = BASE_TIME_LIMIT_MS;
+    let maxDepth = BASE_MAX_DEPTH;
+
+    // プレイヤーHPが低い場合（10以下）、探索を深くする
+    if (state.playerHp <= 10) {
+        maxDepth = Math.min(8, maxDepth + 2);
+        maxNodes = Math.floor(maxNodes * 1.5);
+        timeLimitMs = Math.floor(timeLimitMs * 1.5);
+    }
+
+    // 手札が多い場合（7枚以上）、探索ノード数を増やす
+    if (state.aiHand.length >= 7) {
+        maxNodes = Math.floor(maxNodes * 1.3);
+    }
+
+    // 盤面が複雑な場合（双方合計8体以上）、探索を浅くする（時間節約）
+    const totalBoardSize = state.aiBoard.length + state.playerBoard.length;
+    if (totalBoardSize >= 8) {
+        maxDepth = Math.max(4, maxDepth - 1);
+        timeLimitMs = Math.floor(timeLimitMs * 0.9);
+    }
+
+    // リソースが豊富な場合（PP 7以上）、探索を深くする
+    if (state.aiPp >= 7) {
+        maxDepth = Math.min(7, maxDepth + 1);
+    }
+
+    return { maxNodes, timeLimitMs, maxDepth };
+}
 
 /**
  * 可能なアクションを優先度順に列挙
  * 優先度: 超進化(300) > スペル(250) > 必殺→バリア守護(220) > 通常攻撃(80-100)
+ * 
+ * 動的優先度調整:
+ * - リーサルに近い場合、リーダー攻撃の優先度を上げる
+ * - 守護が複数いる場合、守護突破の優先度を上げる
  *
  * @param state - シミュレーション状態
  * @returns 優先度順にソートされたアクション計画配列
@@ -1911,10 +2040,17 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
     const barrierWards = activeWards.filter(c => c.hasBarrier);
     const hasBarrierWards = barrierWards.length > 0;
 
+    // 動的優先度調整: リーサルに近い場合のボーナス
+    const isNearLethal = state.playerHp <= 15;
+    const lethalBonus = isNearLethal ? 50 : 0;
+    
+    // 動的優先度調整: 守護が複数いる場合のボーナス
+    const wardRemovalBonus = activeWards.length >= 2 ? 30 : 0;
+
     // === 優先度1: 超進化（カード生成のため） ===
     // 盤面のフォロワーで超進化可能なものを探す
     for (const card of state.aiBoard) {
-        if (card.canEvolve && !card.hasEvolved && state.aiSep >= 1 && state.aiEvolveCount < 2) {
+        if (state.aiCanEvolveThisTurn && card.canEvolve && !card.hasEvolved && state.aiSep >= 1 && state.aiEvolveCount < 2) {
             // 超進化でカードを生成するカードは最優先
             if (card.superEvolveGeneratesCards && card.superEvolveGeneratesCards.length > 0) {
                 actions.push({
@@ -1945,7 +2081,7 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
 
     // === 優先度2: 通常進化（EPがある場合） ===
     for (const card of state.aiBoard) {
-        if (card.canEvolve && !card.hasEvolved && state.aiEp >= 1 && state.aiEvolveCount < 2) {
+        if (state.aiCanEvolveThisTurn && card.canEvolve && !card.hasEvolved && state.aiEp >= 1 && state.aiEvolveCount < 2) {
             actions.push({
                 action: {
                     type: 'EVOLVE',
@@ -1969,6 +2105,7 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
                 // 単体ダメージスペル
                 if (hasWards) {
                     // 守護がいる場合、守護をターゲット
+                    // 動的優先度: 守護が複数いる場合、優先度を上げる
                     for (const ward of activeWards) {
                         actions.push({
                             action: {
@@ -1976,7 +2113,7 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
                                 cardInstanceId: spell.instanceId,
                                 targetInstanceId: ward.instanceId
                             },
-                            priority: 250,
+                            priority: 250 + wardRemovalBonus,
                             reason: `スペル「${spell.name}」で守護「${ward.name}」攻撃`,
                             expectedOutcome: { damageToPlayer: dmg }
                         });
@@ -1988,12 +2125,13 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
                     const hasLeaderDamage = fanfareTrigger?.effects.some(e => e.type === 'DAMAGE_LEADER');
 
                     if (hasLeaderDamage) {
+                        // 動的優先度: リーサルに近い場合、優先度を上げる
                         actions.push({
                             action: {
                                 type: 'USE_SPELL',
                                 cardInstanceId: spell.instanceId
                             },
-                            priority: 200,
+                            priority: 200 + lethalBonus,
                             reason: `スペル「${spell.name}」でリーダーダメージ`,
                             expectedOutcome: { damageToPlayer: dmg }
                         });
@@ -2019,7 +2157,7 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
     // === 優先度4: 必殺持ちでバリア守護攻撃 ===
     if (hasBarrierWards) {
         const baneAttackers = state.aiBoard.filter(c =>
-            (c.canAttack || c.passiveAbilities.includes('STORM')) &&
+            c.canAttack &&
             c.passiveAbilities.includes('BANE')
         );
 
@@ -2040,13 +2178,12 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
     }
 
     // === 優先度5: 通常攻撃 ===
-    const attackers = state.aiBoard.filter(c =>
-        c.canAttack || c.passiveAbilities.includes('STORM')
-    );
+    const attackers = state.aiBoard.filter(c => c.canAttack);
 
     for (const attacker of attackers) {
+        const attackerIgnoresWard = attacker.passiveAbilities.includes('STEALTH') || attacker.hadStealth;
         // 守護の有無で攻撃対象を決定
-        if (hasWards) {
+        if (hasWards && !attackerIgnoresWard) {
             // 守護がいる場合は守護のみ攻撃可能
             for (const ward of activeWards) {
                 // 必殺持ちでバリア守護を攻撃する場合は既に追加済み
@@ -2067,19 +2204,20 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
             }
         } else {
             // 守護がいない場合はリーダー攻撃が最優先
+            // 動的優先度: リーサルに近い場合、優先度を上げる
+            const basePriority = 100;
+            const dynamicPriority = basePriority + lethalBonus;
             actions.push({
                 action: {
                     type: 'ATTACK',
                     attackerInstanceId: attacker.instanceId,
                     targetInstanceId: 'LEADER'
                 },
-                priority: 100,
+                priority: dynamicPriority,
                 reason: `「${attacker.name}」でリーダー攻撃`,
                 expectedOutcome: {
-                    damageToPlayer: attacker.currentAttack *
-                        (attacker.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1),
-                    lethalAchieved: state.playerHp <= attacker.currentAttack *
-                        (attacker.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1)
+                    damageToPlayer: attacker.currentAttack,
+                    lethalAchieved: state.playerHp <= attacker.currentAttack
                 }
             });
 
@@ -2122,19 +2260,33 @@ export function enumerateActions(state: SimulatedGameState): ActionPlan[] {
 }
 
 /**
- * 枝刈り判定
+ * 枝刈り判定（強化版）
  * 最大期待ダメージがtargetHpに届かない場合はtrue
+ * より厳密な判定を追加
  *
  * @param state - シミュレーション状態
  * @param targetHp - ターゲットのHP（通常はプレイヤーHP）
+ * @param currentDepth - 現在の探索深度（オプション）
  * @returns 枝刈りすべきならtrue
  */
-export function shouldPrune(state: SimulatedGameState, targetHp: number): boolean {
+export function shouldPrune(state: SimulatedGameState, targetHp: number, currentDepth: number = 0): boolean {
     // 最大期待ダメージを計算
     const maxDamage = calculateMaxPossibleDamage(state);
 
     // リーサルに届かない場合は枝刈り
     if (maxDamage < targetHp) {
+        return true;
+    }
+
+    // 強化: 深度が深い場合、より厳密に判定
+    // 深度3以上で、ダメージがHP+2未満の場合は枝刈り（余裕がない）
+    if (currentDepth >= 3 && maxDamage < targetHp + 2) {
+        return true;
+    }
+
+    // 強化: リソースが不足している場合（PP 2以下、EP/SEP 0）、
+    // かつダメージがHP+1未満の場合は枝刈り
+    if (state.aiPp <= 2 && state.aiEp === 0 && state.aiSep === 0 && maxDamage < targetHp + 1) {
         return true;
     }
 
@@ -2153,22 +2305,25 @@ export function calculateMaxPossibleDamage(state: SimulatedGameState): number {
 
     // 盤面フォロワーの攻撃力合計（進化ボーナス込み）
     for (const card of state.aiBoard) {
-        const canAttackNow = card.canAttack || card.passiveAbilities.includes('STORM');
-        if (!canAttackNow) continue;
+        if (!card.canAttack) continue;
+
+        const maxAttacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
+        const attacksRemaining = Math.max(0, maxAttacks - (card.attacksMade || 0));
+        if (attacksRemaining <= 0) continue;
 
         // 基本攻撃力
         let attackPower = card.currentAttack;
 
         // 進化ボーナス（未進化で進化可能な場合）
-        if (card.canEvolve && !card.hasEvolved) {
-            if (state.aiEp > 0 || state.aiSep > 0) {
+        if (state.aiCanEvolveThisTurn && card.canEvolve && !card.hasEvolved) {
+            if (state.aiSep > 0) {
+                attackPower += 3;
+            } else if (state.aiEp > 0) {
                 attackPower += 2;
             }
         }
 
-        // ダブルアタック判定
-        const attacks = card.passiveAbilities.includes('DOUBLE_ATTACK') ? 2 : 1;
-        damage += attackPower * attacks;
+        damage += attackPower * attacksRemaining;
     }
 
     // 手札スペルのダメージ合計（PPが払えるもの）
@@ -2214,21 +2369,25 @@ export function calculateMaxPossibleDamage(state: SimulatedGameState): number {
 
 /**
  * DFS探索でリーサルパスを探す
- * - ノード数上限: 5000
- * - 時間制限: 50ms
+ * - 動的探索制限（状況に応じて調整）
  * - 状態ハッシュで重複排除
+ * - 早期終了の強化（最善パスが見つかった場合）
  *
  * @param state - 現在のシミュレーション状態
  * @param searchState - 探索状態（深度、訪問済み状態など）
  * @param currentPath - 現在までのアクション列
  * @param startTime - 探索開始時刻（ミリ秒）
+ * @param maxNodes - ノード数上限（動的計算される）
+ * @param timeLimitMs - 時間制限（ミリ秒、動的計算される）
  * @returns リーサルパス（見つからない場合はnull）
  */
 export function findLethalPath(
     state: SimulatedGameState,
     searchState: SearchState,
     currentPath: ActionPlan[],
-    startTime: number
+    startTime: number,
+    maxNodes: number = BASE_MAX_NODES,
+    timeLimitMs: number = BASE_TIME_LIMIT_MS
 ): ActionPlan[] | null {
     // 終了条件: リーサル達成
     if (state.playerHp <= 0) {
@@ -2236,25 +2395,30 @@ export function findLethalPath(
         return currentPath;
     }
 
+    // 早期終了: 最善パスが見つかっていて、現在のパスがそれより長い場合は枝刈り
+    if (searchState.bestLethalPath && currentPath.length >= searchState.bestLethalPath.length) {
+        return null;
+    }
+
     // 終了条件: 探索深度上限
     if (searchState.depth >= searchState.maxDepth) {
         return null;
     }
 
-    // 終了条件: ノード数上限
-    if (searchState.nodeCount >= MAX_NODES) {
-        console.log('[AI Lookahead] Node limit reached');
+    // 終了条件: ノード数上限（動的）
+    if (searchState.nodeCount >= maxNodes) {
+        console.log(`[AI Lookahead] Node limit reached (${maxNodes})`);
         return null;
     }
 
-    // 終了条件: 時間制限
-    if (Date.now() - startTime > TIME_LIMIT_MS) {
-        console.log('[AI Lookahead] Time limit reached');
+    // 終了条件: 時間制限（動的）
+    if (Date.now() - startTime > timeLimitMs) {
+        console.log(`[AI Lookahead] Time limit reached (${timeLimitMs}ms)`);
         return null;
     }
 
-    // 枝刈り: 最大期待ダメージがHPに届かない
-    if (shouldPrune(state, state.playerHp)) {
+    // 枝刈り: 最大期待ダメージがHPに届かない（強化版）
+    if (shouldPrune(state, state.playerHp, searchState.depth)) {
         return null;
     }
 
@@ -2283,7 +2447,7 @@ export function findLethalPath(
 
         const newPath = [...currentPath, actionPlan];
 
-        // 再帰的に探索
+        // 再帰的に探索（動的制限を引き継ぐ）
         const result = findLethalPath(
             newState,
             {
@@ -2292,7 +2456,9 @@ export function findLethalPath(
                 // visitedStatesとnodeCountは共有（参照渡し）
             },
             newPath,
-            startTime
+            startTime,
+            maxNodes,
+            timeLimitMs
         );
 
         if (result) {
@@ -2322,12 +2488,16 @@ export function planOptimalSequence(state: SimulatedGameState): ActionPlan[] {
     console.log('[AI Lookahead] planOptimalSequence: Starting lethal search...');
     console.log(`[AI Lookahead] Player HP: ${state.playerHp}, AI Board: ${state.aiBoard.length}, AI Hand: ${state.aiHand.length}`);
 
-    // 探索状態を初期化
-    const searchState = createSearchState();
+    // 動的探索制限を計算
+    const limits = calculateDynamicSearchLimits(state);
+    console.log(`[AI Lookahead] Dynamic limits: maxDepth=${limits.maxDepth}, maxNodes=${limits.maxNodes}, timeLimit=${limits.timeLimitMs}ms`);
+
+    // 探索状態を初期化（動的深度を使用）
+    const searchState = createSearchState(limits.maxDepth);
     const startTime = Date.now();
 
-    // DFS探索でリーサルパスを探す
-    const lethalPath = findLethalPath(state, searchState, [], startTime);
+    // DFS探索でリーサルパスを探す（動的制限を使用）
+    const lethalPath = findLethalPath(state, searchState, [], startTime, limits.maxNodes, limits.timeLimitMs);
 
     const elapsed = Date.now() - startTime;
     console.log(`[AI Lookahead] Search completed. Nodes: ${searchState.nodeCount}, Time: ${elapsed}ms`);
@@ -2342,6 +2512,26 @@ export function planOptimalSequence(state: SimulatedGameState): ActionPlan[] {
 
     console.log('[AI Lookahead] No lethal path found, falling back to existing logic');
     return [];
+}
+
+function isLethalPlanExecutable(state: SimulatedGameState, plans: ActionPlan[]): boolean {
+    let currentState = deepCopySimulatedState(state);
+
+    for (const plan of plans) {
+        if (!canPerformAction(currentState, plan.action)) {
+            return false;
+        }
+        const nextState = simulateAction(currentState, plan.action);
+        if (!nextState) {
+            return false;
+        }
+        currentState = nextState;
+        if (currentState.playerHp <= 0) {
+            return true;
+        }
+    }
+
+    return currentState.playerHp <= 0;
 }
 
 /**
@@ -2369,18 +2559,27 @@ export function tryFindLethalWithLookahead(
         const quickLethal = calculateLethalPotential(simState);
         console.log(`[AI Lookahead] Quick lethal check: canLethal=${quickLethal.canLethal}, totalDamage=${quickLethal.totalDamage}`);
 
-        // 簡易版でリーサル可能なら、それを返す
+        // 簡易版リーサルは必ず実行可能性を検証する（誤検知防止）
         if (quickLethal.canLethal) {
-            console.log('[AI Lookahead] Quick lethal found, using simple calculation');
-            return quickLethal;
+            const quickPlanValid = quickLethal.requiredActions.length > 0 &&
+                isLethalPlanExecutable(simState, quickLethal.requiredActions);
+            if (quickPlanValid) {
+                console.log('[AI Lookahead] Quick lethal validated, using simple calculation');
+                return quickLethal;
+            }
+            console.warn('[AI Lookahead] Quick lethal rejected by executable check, running full search');
         }
 
-        // 探索状態を初期化
-        const searchState = createSearchState();
+        // 動的探索制限を計算
+        const limits = calculateDynamicSearchLimits(simState);
+        console.log(`[AI Lookahead] Dynamic limits: maxDepth=${limits.maxDepth}, maxNodes=${limits.maxNodes}, timeLimit=${limits.timeLimitMs}ms`);
+
+        // 探索状態を初期化（動的深度を使用）
+        const searchState = createSearchState(limits.maxDepth);
         const startTime = Date.now();
 
-        // DFS探索でリーサルパスを探す
-        const lethalPath = findLethalPath(simState, searchState, [], startTime);
+        // DFS探索でリーサルパスを探す（動的制限を使用）
+        const lethalPath = findLethalPath(simState, searchState, [], startTime, limits.maxNodes, limits.timeLimitMs);
 
         const elapsed = Date.now() - startTime;
         console.log(`[AI Lookahead] Full search completed. Nodes: ${searchState.nodeCount}, Time: ${elapsed}ms`);
@@ -2438,9 +2637,9 @@ export function tryFindLethalWithLookahead(
             return lethalInfo;
         }
 
-        // リーサル不可の場合、簡易版の結果を返す
-        console.log('[AI Lookahead] No lethal found via full search, returning quick calculation result');
-        return quickLethal;
+        // リーサル不可の場合、誤検知を避けるため非リーサルを返す
+        console.log('[AI Lookahead] No lethal found via full search');
+        return createEmptyLethalInfo();
 
     } catch (error) {
         console.error('[AI Lookahead] Error in tryFindLethalWithLookahead:', error);
