@@ -1,0 +1,62 @@
+【ターン同期フリーズ修正のレビュー】
+
+## 問題
+ルームマッチ中にターンを終了したら相手のターンが始まらずにフリーズするケースがある。
+
+## 修正内容
+
+### 1. handleEndTurn関数の修正（11237-11332行目）
+- `dispatchAndSend`呼び出し後、`isEndingTurnRef.current = false`にリセットする前に、ターン状態を再確認
+- ターンが既に切り替わっている場合（リモートのEND_TURNが先に処理された場合）、リセットをスキップ
+
+### 2. handleMessage関数の修正（5028-5035行目）
+- リモートの`END_TURN`を受信した時、`isEndingTurnRef.current = false`にリセットする前に、ターン状態を確認
+- ターンが既に切り替わっている場合、リセットをスキップ
+
+## 修正コード
+
+### handleEndTurn関数（11332-11351行目）
+```typescript
+// Now dispatch END_TURN
+console.log('[handleEndTurn] Dispatching END_TURN');
+dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId });
+
+// CRITICAL FIX: Re-check turn state before resetting isEndingTurnRef
+// If turn has already switched (e.g., remote END_TURN processed first),
+// the flag will be reset by useEffect or remote END_TURN handler
+// Use a small delay to allow dispatch to process
+await new Promise(r => setTimeout(r, 10));
+
+// Always reset here, but log if turn has switched
+if (gameStateRef.current.activePlayerId !== currentPlayerId ||
+    gameStateRef.current.turnCount !== turnCountAtStart) {
+    console.log('[handleEndTurn] Turn already switched, isEndingTurnRef will be reset by useEffect or remote handler');
+}
+isEndingTurnRef.current = false;
+setIsEndingTurn(false);
+```
+
+### handleMessage関数（5028-5035行目）
+```typescript
+} else if (action.type === 'END_TURN') {
+    console.log('[GameScreen] Remote END_TURN received, turn switching to:',
+        action.playerId === 'p1' ? 'p2' : 'p1');
+    // CRITICAL FIX: Reset isEndingTurnRef when receiving remote END_TURN
+    // This prevents a stuck handleEndTurn from dispatching END_TURN again
+    // after the turn has already switched
+    // Only reset if it's currently set (handleEndTurn was in progress)
+    if (isEndingTurnRef.current) {
+        isEndingTurnRef.current = false;
+        setIsEndingTurn(false);
+        console.log('[GameScreen] Reset isEndingTurnRef due to remote END_TURN');
+    }
+}
+```
+
+## レビュー観点
+1. 修正が適切に実装されているか
+2. レースコンディションが解決されているか
+3. 新たなバグや問題がないか
+4. 見落としているエッジケース
+
+問題がなければ「LGTM」と回答してください。

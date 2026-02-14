@@ -1,0 +1,80 @@
+以下のAI改善（v1.23-v1.25）をレビューしてください。
+
+## 変更概要
+カードゲームAIの3つの改善:
+1. v1.23: BANE持ちがBARRIER持ちを優先攻撃
+2. v1.24: BARRIER処理の攻撃順序最適化（低ATKでバリア剥がし→高ATKで破壊）
+3. v1.25: 盞華超進化後のスペル使用ロジック改善
+
+## 変更内容
+
+### v1.23: BANE→BARRIER優先攻撃
+```typescript
+// SENKAデッキ
+if (attackerHasBane && barrierTargets.length > 0 && !hasWardSenka) {
+    const bestBarrierTarget = barrierTargets.sort((a, b) =>
+        (b.c.currentAttack || 0) - (a.c.currentAttack || 0)
+    )[0];
+    console.log(`[AI v1.23 SENKA] BANE attacker prioritizing BARRIER target`);
+    return { index: bestBarrierTarget.i, isLeader: false };
+}
+
+// YORUKAデッキ - 同様のロジック
+// 汎用AI - BARRIERターゲットのスコアを80に設定
+```
+
+### v1.24: BARRIER攻撃順序最適化
+```typescript
+// BARRIER処理担当の選出
+let barrierStripperAssigned: number | null = null;
+let barrierTargetIdx: number | null = null;
+
+if (aiDifficulty === 'HARD') {
+    const barrierTargets = playerBoard.filter(/* BARRIER持ち */);
+    if (barrierTargets.length > 0) {
+        const hasBaneAttacker = aiBoard.some(c => c.passiveAbilities?.includes('BANE'));
+        if (!hasBaneAttacker) {
+            // 最小ATKをバリア剥がし担当に
+            barrierStripperAssigned = attackableFollowers[0].idx;
+        }
+    }
+}
+
+// 攻撃順序ソートでバリア剥がし担当を優先
+.sort((a, b) => {
+    if (barrierStripperAssigned !== null) {
+        if (a.idx === barrierStripperAssigned) return -1;
+        if (b.idx === barrierStripperAssigned) return 1;
+    }
+    // ...
+});
+```
+
+### v1.25: 盞華超進化後スペル使用改善
+```typescript
+// 2.6 Post-Evolve Spell Phase
+{
+    console.log(`[AI v1.25 SENKA] Post-evolve spell check: hasQuake=${hasQuake}, hasSmash=${hasSmash}, hasJab=${hasJab}, enemies=${playerBoard.length}`);
+
+    // 守護優先処理 - 守護を倒せるなら必ずスペルで倒す
+    for (const ward of wards) {
+        const hp = ward.currentHealth || 0;
+        // HP 2以下: フリッカージャブ
+        // HP 6以下: バックハンドスマッシュ
+        // HP 8以下: スマッシュ + ジャブ
+        // HP 10以下: クエイク + スマッシュ + ジャブ
+    }
+
+    // 残りスペルで非守護処理
+    // 最終状態をログ出力
+}
+```
+
+## レビュー観点
+1. バグ・不具合の可能性
+2. パフォーマンス上の問題
+3. ロジックの抜け穴・エッジケース
+4. 既存機能への影響
+
+問題点があれば具体的に指摘してください。
+問題がなければ「LGTM」と回答してください。

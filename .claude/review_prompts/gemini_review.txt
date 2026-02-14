@@ -1,100 +1,80 @@
 以下の変更をレビューしてください。
 
 ## 変更概要
-ランクマッチ（CASUAL_MATCH/RANKED_MATCH）モードにおけるカード効果の同期処理バグを修正。
-`gameMode === 'HOST'`という条件でHOST/JOIN判定していたが、CASUAL_MATCH/RANKED_MATCHモードでは
-gameModeは'CASUAL_MATCH'や'RANKED_MATCH'のまま変わらないため、isHost変数を使用するように修正。
+CPU AI強化: YORUKAデッキ戦術実装 (v1.13)
 
 ## 変更ファイル
 - game/src/screens/GameScreen.tsx
 
-## 差分
-```diff
-diff --git a/game/src/screens/GameScreen.tsx b/game/src/screens/GameScreen.tsx
-index 6e566a9..5c52fa3 100644
---- a/game/src/screens/GameScreen.tsx
-+++ b/game/src/screens/GameScreen.tsx
-@@ -2650,15 +2650,36 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
+## 主要な変更点
 
-     // ランクマッチ終了時のレート更新処理
-     React.useEffect(() => {
-+        // デバッグログ: useEffectの発火条件を確認
-+        console.log('[RatingUpdate] useEffect triggered:', {
-+            gameMode,
-+            authPlayerId,
-+            winnerId: gameState.winnerId,
-+            currentPlayerId,
-+            ratingUpdateDone,
-+            willSkip: gameMode !== 'RANKED_MATCH' || !authPlayerId || !gameState.winnerId || ratingUpdateDone
-+        });
-+
-         if (gameMode !== 'RANKED_MATCH' || !authPlayerId || !gameState.winnerId || ratingUpdateDone) {
-             return;
-         }
-
-+        console.log('[RatingUpdate] Starting rating update process...');
-+
-         const updateRating = async () => {
-             try {
-                 const classRating = await getClassRating(authPlayerId, currentPlayerClass);
-                 const isWin = gameState.winnerId === currentPlayerId;
-
-+                console.log('[RatingUpdate] Calculating rating:', {
-+                    currentRating: classRating.rating,
-+                    winStreak: classRating.winStreak,
-+                    opponentRating: propOpponentRating,
-+                    winnerId: gameState.winnerId,
-+                    currentPlayerId,
-+                    isWin
-+                });
-+
-                 let result: RatingCalculationResult;
-                 if (isWin) {
-                     result = calculateWinRating(
-@@ -3649,12 +3670,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
-                             setIsProcessingEffect(false);
-                             isProcessingEffectRef.current = false;
-                             // Resolve ALL batched effects at once
--                            if (gameMode === 'CPU' || gameMode === 'HOST') {
-+                            // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
-+                            const shouldProcessEffects = gameMode === 'CPU' || isHost;
-+                            if (shouldProcessEffects) {
-                                 generateEffects.forEach(eff => {
-                                     dispatch({ type: 'RESOLVE_EFFECT', playerId: eff.sourcePlayerId, payload: { targetId: eff.targetId } });
-                                 });
-
--                                if (gameMode === 'HOST' && connected && adapter) {
-+                                // Send state to JOIN side (for any online mode where we're HOST)
-+                                const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
-+                                if (isOnlineHost) {
-                                     setTimeout(() => {
-                                         const updatedState = gameStateRef.current;
-                                         adapter.send({ type: 'GAME_STATE', payload: updatedState });
-@@ -3866,12 +3891,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
-                 // Online mode synchronization:
-                 // - HOST (or CPU) processes RESOLVE_EFFECT and sends updated state to JOIN
-                 // - JOIN waits for state sync from HOST to avoid RNG desync
--                if (gameMode === 'CPU' || gameMode === 'HOST') {
-+                // CRITICAL FIX: Use isHost instead of gameMode for CASUAL_MATCH/RANKED_MATCH support
-+                const shouldProcessEffects = gameMode === 'CPU' || isHost;
-+                if (shouldProcessEffects) {
-                     // HOST/CPU: dispatch locally and send updated state to network
-                     dispatch({ type: 'RESOLVE_EFFECT', playerId: current.sourcePlayerId, payload: { targetId: current.targetId } });
-
--                    // Send updated state to JOIN after processing
--                    if (gameMode === 'HOST' && connected && adapter) {
-+                    // Send updated state to JOIN after processing (for any online mode where we're HOST)
-+                    const isOnlineHost = isHost && gameMode !== 'CPU' && connected && adapter;
-+                    if (isOnlineHost) {
-                         // Use setTimeout to ensure dispatch is processed first
-                         setTimeout(() => {
-                             const updatedState = gameStateRef.current;
+### Phase 1: calculateYorukaLethal関数（6309-6489行目）
+```typescript
+const calculateYorukaLethal = (
+    state: any,
+    yorukaPlayerId: string
+): {
+    canLethal: boolean;
+    damage: number;
+    plan: string;
+    requiredCards: string[];
+}
 ```
 
-## isHost変数の定義（参考）
+リーサルパターン:
+| パターン | 条件 | ダメージ | 計算式 |
+|----------|------|---------|--------|
+| 7T遙SE | 手札遙+SEP≥1+NC4+PP≥5 | 6 | 刹那(1+2)*2 |
+| 遙生存+SE | 盤面遙(攻撃可)+SEP≥1+NC4 | 11-17 | 遙+刹那6+悠霞3+(疾き+6) |
+| NP+遙SE | 10T+NP+盤面遙+SEP+NC4+PP≥7 | 22+ | 遙+刹那*n |
+| NP単体 | 10T+NP+NC≥8+PP≥7 | 10+ | 刹那2*n+盤面 |
+
+### Phase 2: scoreCardForPlayingにYORUKAロジック（6397-6446行目）
 ```typescript
-const isHost = gameMode === 'CPU' || gameMode === 'HOST' ||
-               ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && adapter?.isHost === true);
+if (aiClass === 'YORUKA') {
+    if (card.id === 'c_haruka') {
+        const lethalCalc = calculateYorukaLethal(state, opponentPlayerId);
+        if (lethalCalc.canLethal) {
+            score += 500; // リーサル可能
+        } else if (!inLethalDanger && canSuperEvolve && hasNecromance4) {
+            score -= 150; // 安全なら温存
+        }
+    }
+    // s_hayakikoto: リーサル用温存傾向
+    // s_night_parade: リーサル用
+}
+```
+
+### Phase 3: shouldEvolveThisTurnにYORUKA温存（6614-6662行目）
+```typescript
+if (aiClass === 'YORUKA') {
+    // SEP=1 かつ ハルカ手札 かつ 安全 → 温存
+    // yoRuka盤面 かつ 敵2体以上 かつ SEP≥2 → SE実行
+    // ハルカ盤面 かつ リーサル可能 → SE実行
+    // ハルカ盤面 かつ リーサル不可 かつ 安全 → 温存
+}
+```
+
+### Phase 4: scoreEvolveTargetにYORUKA判定（6515-6558行目）
+```typescript
+if (aiClass === 'YORUKA') {
+    if (card.id === 'c_haruka') {
+        if (lethalCalc.canLethal) score += 1000;
+        else score -= 500;
+    }
+    if (card.id === 'c_yuka' && enemyCount >= 2) score += 100; // 3dmg×2
+    if (card.id === 'c_yoruka' && useSuperEvolve && enemyCount >= 2) score += 150;
+    if (card.id === 'c_y') score += enemyCount * 30; // AOE 3dmg
+}
+```
+
+### Phase 5: findBestAttackTargetにYORUKA攻撃優先度（6798-6847行目）
+```typescript
+if (aiClass === 'YORUKA') {
+    // 刹那: 守護優先、なければリーダー攻撃
+    // 守護なし: リーダー攻撃優先（リーサル狙い）
+    // BANE持ち: 守護を処理
+}
 ```
 
 ## レビュー観点

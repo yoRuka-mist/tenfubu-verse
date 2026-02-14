@@ -1,0 +1,53 @@
+## 問題
+Vite開発サーバーは起動するが、ブラウザで画面が真っ暗になる。
+
+## 環境
+- Vite v5.4.21
+- React + TypeScript
+- ポート5174で起動（5173は別プロセスが使用中）
+
+## 最近の変更（v1.47）
+GameScreen.tsxに以下の変更を加えた：
+
+1. 防御的超進化のバリア判定修正
+```typescript
+// 変更前
+const hasBarrier = threat.passiveAbilities?.includes('BARRIER');
+
+// 変更後
+const hasBarrier = threat.passiveAbilities?.includes('BARRIER') || threat.hasBarrier;
+```
+
+2. threatHpのhealthフォールバック追加
+```typescript
+// 変更前
+const threatHp = threat.currentHealth || 0;
+
+// 変更後
+const threatHp = threat.currentHealth || threat.health || 0;
+```
+
+3. canKillAnyThreatのhealthフォールバック追加
+```typescript
+// 変更前
+return evolvedAtk >= (enemy.currentHealth || 0);
+
+// 変更後
+return evolvedAtk >= (enemy.currentHealth || enemy.health || 0);
+```
+
+## TypeScriptエラー（警告レベル）
+- 未使用変数: enemyThreat, aiPpMax, senkaCount, shiekoCount, aiPlayer, damageAfterEvolve, hasAura, hasSuperEvolveRemovalEffect
+- 型の不一致: '"NORMAL"' and '"HARD"' have no overlap
+- possibly null: ward, enemy, target.c
+
+## 考えられる原因
+1. v1.47の変更でランタイムエラー発生
+2. ポート変更による問題
+3. 別のターミナル/プロセスとの競合
+4. キャッシュの問題
+
+## 質問
+1. 画面が真っ暗になる原因として何が考えられるか？
+2. v1.47の変更に問題はあるか？
+3. デバッグ方法の提案
