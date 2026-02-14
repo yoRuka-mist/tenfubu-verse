@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useReducer, useState, useCallback, useRef } from 'react';
 import { initializeGame, gameReducer, getCardDefinition, getAllCardNames, STAMP_DEFINITIONS, getStampImagePath, getStampSE } from '../core/engine';
 import { ClassType, Player, Card as CardModel, StampId, StampDisplay, GameState } from '../core/types';
 import { Card } from '../components/Card';
@@ -762,9 +762,10 @@ interface BattleLogProps {
     onCardNameClick?: (cardName: string) => void;
     scale?: number;
     isMobile?: boolean;
+    inline?: boolean; // PC版flexboxレイアウト用（position: absoluteを使わない）
 }
 
-const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: BattleLogProps) => {
+const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false, inline = false }: BattleLogProps) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         // Scroll to bottom of container without affecting parent elements
@@ -887,29 +888,42 @@ const BattleLog = ({ logs, onCardNameClick, scale = 1, isMobile = false }: Battl
     const logHeight = isMobile ? Math.max(100, 140 * scale) : Math.max(150, 200 * scale);
     const logWidth = isMobile ? Math.max(140, 180 * scale) : Math.max(180, 220 * scale);
 
+    // inlineモードの場合はflexbox内に配置される（position: absoluteを使わない）
+    const containerStyle: React.CSSProperties = inline ? {
+        width: logWidth,
+        height: logHeight,
+        overflowY: 'auto',
+        background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
+        color: '#fff',
+        fontSize: `${Math.max(0.65, 0.75 * scale)}rem`,
+        padding: `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
+        borderLeft: '3px solid #63b3ed',
+        pointerEvents: 'auto',
+        scrollbarWidth: 'thin',
+    } : {
+        position: 'absolute',
+        left: 0,
+        top: '45%',
+        transform: 'translateY(-50%)',
+        width: logWidth,
+        height: logHeight,
+        overflowY: 'auto',
+        background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
+        color: '#fff',
+        fontSize: isMobile ? `${Math.max(0.55, 0.65 * scale)}rem` : `${Math.max(0.65, 0.75 * scale)}rem`,
+        padding: isMobile ? `${6 * scale}px ${6 * scale}px ${6 * scale}px ${10 * scale}px` : `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
+        borderLeft: isMobile ? '2px solid #63b3ed' : '3px solid #63b3ed',
+        zIndex: 15,
+        pointerEvents: 'auto',
+        scrollbarWidth: 'thin',
+    };
+
     return (
         <div
             ref={containerRef}
-            style={{
-                position: 'absolute',
-                left: 0,
-                top: '45%',
-                transform: 'translateY(-50%)',
-                width: logWidth,
-                height: logHeight, // Fixed height to prevent layout shift
-                overflowY: 'auto',
-                background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
-                color: '#fff',
-                fontSize: isMobile ? `${Math.max(0.55, 0.65 * scale)}rem` : `${Math.max(0.65, 0.75 * scale)}rem`,
-                padding: isMobile ? `${6 * scale}px ${6 * scale}px ${6 * scale}px ${10 * scale}px` : `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
-                borderLeft: isMobile ? '2px solid #63b3ed' : '3px solid #63b3ed',
-                zIndex: 15, // Under menus, over board default
-                pointerEvents: 'auto', // Allow scroll
-                // Custom Scrollbar styling handled by browser usually, or simple CSS class if available
-                scrollbarWidth: 'thin',
-            }}
-            onMouseDown={e => e.stopPropagation()} // Prevent drag triggering
-            onClick={e => e.stopPropagation()} // Prevent hand collapse
+            style={containerStyle}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
         >
             <div style={{
                 fontWeight: 'bold', marginBottom: (isMobile ? 3 : 4) * scale, color: '#a0aec0',
@@ -4406,16 +4420,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             setCurrentPlayerClass(newDeckType);
         }
 
-        // 6. Determine opponent class based on new player class
-        // CPUは自分と違うクラスをランダムで選択（YORUKAの場合はSENKAかAJA）
-        let newOpponentClass: ClassType = opponentClass;
-        if (opponentType === 'CPU') {
-            if (deckToUse === 'YORUKA') {
-                newOpponentClass = Math.random() < 0.5 ? 'SENKA' : 'AJA';
-            } else {
-                newOpponentClass = deckToUse === 'SENKA' ? 'AJA' : 'SENKA';
-            }
-        }
+        // 6. Determine opponent class
+        // CPU再戦時は最初に決定したopponentClassをそのまま使用（変更しない）
+        // オンライン対戦時もopponentClassは維持される
+        const newOpponentClass: ClassType = opponentClass;
 
         // 7. Suppress immediate diff detection by clearing and then resetting the Ref
         const opponentDefaultName = opponentType === 'ONLINE' ? '対戦相手' : 'CPU';
@@ -5023,7 +5031,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // CRITICAL FIX: Reset isEndingTurnRef when receiving remote END_TURN
                     // This prevents a stuck handleEndTurn from dispatching END_TURN again
                     // after the turn has already switched
-                    isEndingTurnRef.current = false;
+                    // Only reset if it's currently set (handleEndTurn was in progress)
+                    if (isEndingTurnRef.current) {
+                        isEndingTurnRef.current = false;
+                        setIsEndingTurn(false);
+                        console.log('[GameScreen] Reset isEndingTurnRef due to remote END_TURN');
+                    }
                 }
             }
         };
@@ -5594,8 +5607,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 aiProcessing.current = true;
                 lastProcessedTurn.current = currentTurnKey;
 
+                // === v1.28: AIターン全体のタイムアウト（フリーズ防止） ===
+                const aiTurnStartTime = Date.now();
+                const AI_TURN_TIMEOUT = 20000; // 20秒でタイムアウト
+
+                const isAiTurnTimedOut = () => Date.now() - aiTurnStartTime > AI_TURN_TIMEOUT;
+
                 // Helper to wait for all visual and logical effects to settle
+                // === v1.28: タイムアウト短縮（6秒→3秒）===
                 const waitForIdle = async (initialDelay = 300) => {
+                    // タイムアウトチェック
+                    if (isAiTurnTimedOut()) {
+                        console.warn('[waitForIdle] AI turn timed out, skipping wait');
+                        return;
+                    }
+
                     // Initial wait for state propagation
                     await new Promise(r => setTimeout(r, initialDelay));
 
@@ -5610,9 +5636,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         return !hasPending && !hasActiveEffects && !isAnimatingCards && !isPlayingCard && !isEvolving;
                     };
 
-                    // Wait until idle (with timeout to prevent infinite loop - increased for evolution animations)
+                    // Wait until idle (with timeout to prevent infinite loop)
+                    // === v1.28: 60→30に短縮（最大3秒）===
                     let waitCount = 0;
-                    while (!checkIdle() && waitCount < 60) { // 60 * 100ms = 6 seconds max wait
+                    while (!checkIdle() && waitCount < 30 && !isAiTurnTimedOut()) {
                         await new Promise(r => setTimeout(r, 100));
                         waitCount++;
 
@@ -5630,9 +5657,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             await new Promise(r => setTimeout(r, 200)); // 処理待ち
                         }
                     }
+
+                    if (waitCount >= 30) {
+                        console.warn('[waitForIdle] Max wait reached, continuing anyway');
+                    }
                 };
 
                 // --- AI Helper Functions ---
+
+                // === v1.30: 行動選択ループ用型定義（instanceId追加でインデックス無効化問題を解決）===
+                type AIActionType =
+                    | { type: 'PLAY_CARD'; cardIndex: number; instanceId: string; targetId?: string; card?: any }
+                    | { type: 'EVOLVE'; followerIndex: number; instanceId: string; useSep: boolean; targetId?: string; card?: any }
+                    | { type: 'ATTACK'; attackerIndex: number; attackerInstanceId: string; targetIndex: number; targetIsLeader: boolean; attacker?: any }
+                    | { type: 'END_TURN' };
 
                 // Check if target is immune to follower damage (for attack decisions)
                 const isImmuneToFollowerAttack = (target: any, _state: any): boolean => {
@@ -5648,8 +5686,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Check if attacker would die attacking target (including BANE)
                 const wouldDieAttacking = (attacker: any, target: any): boolean => {
                     if (!target || !attacker) return false;
+                    // === v1.50修正: バリア持ちは反撃ダメージを受けない ===
+                    const attackerHasBarrier = attacker.hasBarrier || attacker.passiveAbilities?.includes('BARRIER');
+                    if (attackerHasBarrier) {
+                        return false; // バリアで反撃を無効化
+                    }
                     // BANE kills on any damage (unless attacker has BARRIER)
-                    if (target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
+                    if (target.passiveAbilities?.includes('BANE')) {
                         return true; // BANE always kills attacker
                     }
                     return (target.currentAttack || 0) >= attacker.currentHealth;
@@ -5671,6 +5714,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
                     const playerBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
                     const hasWard = playerBoard.some((c: any) => c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH'));
+                    const hasLeaderDamageCap = playerBoard.some((c: any) => c.passiveAbilities?.includes('LEADER_DAMAGE_CAP'));
+                    const hasLeaderDamageShield = !!state.players[currentPlayerId].leaderDamageShield;
+                    const faceHitDamages: number[] = [];
 
                     for (const card of aiBoard) {
                         if (!card.canAttack) continue;
@@ -5680,8 +5726,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         if (!canGoFace) continue;
                         // If there's a ward, can't attack face (unless stealth)
                         if (hasWard && !card.passiveAbilities?.includes('STEALTH') && !card.hadStealth) continue;
-                        damage += card.currentAttack || 0;
-                        if (card.passiveAbilities?.includes('DOUBLE_ATTACK')) damage += card.currentAttack || 0;
+                        const rawHit = card.currentAttack || 0;
+                        const hitDamage = hasLeaderDamageCap ? Math.min(rawHit, 1) : rawHit;
+                        faceHitDamages.push(hitDamage);
+                        if (card.passiveAbilities?.includes('DOUBLE_ATTACK')) faceHitDamages.push(hitDamage);
+                        damage += hitDamage;
+                        if (card.passiveAbilities?.includes('DOUBLE_ATTACK')) damage += hitDamage;
+                    }
+
+                    if (hasLeaderDamageShield && faceHitDamages.length > 0) {
+                        // 次の1ヒットを0にする効果。過剰評価を避けるため最大ヒットを無効化する。
+                        damage -= Math.max(...faceHitDamages);
                     }
                     return damage;
                 };
@@ -5689,11 +5744,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // カード1枚の脅威スコアを計算
                 const calculateThreatScore = (card: any): number => {
                     if (!card) return 0;
-                    let score = (card.currentAttack || 0) * 10;
-
+                    const atk = card.currentAttack || 0;
                     const passives = card.passiveAbilities || [];
+
+                    // === v1.20: ATK 0フォロワーは除去対象外（WARDは例外） ===
+                    // ATK 0フォロワーは脅威ではない（ダメージを与えられない）
+                    // ただしWARD持ちは攻撃を防ぐため除去価値あり
+                    if (atk === 0 && !passives.includes('WARD')) {
+                        return 0;
+                    }
+
+                    let score = atk * 10;
+
                     if (passives.includes('BANE')) score += 50;
-                    if (passives.includes('DOUBLE_ATTACK')) score += (card.currentAttack || 0) * 10;
+                    if (passives.includes('DOUBLE_ATTACK')) score += atk * 10;
                     if (passives.includes('STORM')) score += 30;
                     if (passives.includes('WARD')) score += 20;
                     if (passives.includes('DRAIN')) score += 15;
@@ -6484,9 +6548,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         if (trig.trigger === trigType) {
                             hasEvolveEffect = true;
                             for (const eff of trig.effects || []) {
+                                // === v1.49修正: 敵がいない場合のダメージ/破壊効果は無価値 ===
                                 // Damage/Destroy effects are valuable when enemy has board
-                                if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
-                                    score += enemyBoard.length > 0 ? 80 : 5; // Much higher if enemy has board
+                                if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE'].includes(eff.type)) {
+                                    if (enemyBoard.length > 0) {
+                                        score += 80;
+                                    } else {
+                                        // 敵がいない場合、ダメージ/破壊効果は無駄なのでマイナス
+                                        score -= 100;
+                                        console.log(`[AI v1.49] 敵フォロワー0 - ${eff.type}効果は無駄`);
+                                    }
                                 }
                                 // Summon effects are always good
                                 if (['SUMMON_CARD', 'SUMMON_CARD_RUSH'].includes(eff.type)) {
@@ -6508,6 +6579,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 // Generate card
                                 if (eff.type === 'GENERATE_CARD') {
                                     score += 25;
+                                }
+
+                                // === v1.51: 遙が敵盤面にいる場合、除去可能な進化効果を優先 ===
+                                // === v1.51修正(Codex指摘): targetTypeチェック追加 & ループ外に移動すべきだが可読性のため維持 ===
+                                const harukaOnEnemyBoardEvolve = enemyBoard.some((c: any) => c && c.id === 'c_haruka');
+                                if (harukaOnEnemyBoardEvolve) {
+                                    const aiHpForHarukaEvolve = state.players[opponentPlayerId].hp;
+                                    const hpBonus = aiHpForHarukaEvolve <= 17 ? 200 : 0;
+
+                                    // RANDOM_DESTROY: 遙を確率的に除去可能（相手対象のみ）
+                                    const targetsOpponent = !eff.targetType || eff.targetType === 'OPPONENT';
+                                    if (eff.type === 'RANDOM_DESTROY' && targetsOpponent) {
+                                        const destroyCount = eff.value || 1;
+                                        const enemyCount = enemyBoard.length;
+                                        // 破壊数が敵数以上なら確定除去
+                                        const bonus = destroyCount >= enemyCount ? 400 : 200;
+                                        score += bonus + hpBonus;
+                                        console.log(`[AI v1.51 Evolve] 遙発見！RANDOM_DESTROY ${destroyCount}体 - ${card.name} +${bonus + hpBonus}`);
+                                    }
+
+                                    // AOE_DAMAGE 3+: 遙(HP=3)を確殺（敵を含むtargetTypeのみ）
+                                    const aoeTargetsEnemy = !eff.targetType ||
+                                        eff.targetType === 'ALL_FOLLOWERS' ||
+                                        eff.targetType === 'ALL_ENEMY_FOLLOWERS';
+                                    if (eff.type === 'AOE_DAMAGE' && (eff.value || 0) >= 3 && aoeTargetsEnemy) {
+                                        score += 400 + hpBonus;
+                                        console.log(`[AI v1.51 Evolve] 遙発見！AOE ${eff.value}ダメージ - ${card.name} +${400 + hpBonus}`);
+                                    }
                                 }
                             }
                         }
@@ -6550,11 +6649,50 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
                         }
 
-                        // 悠霞: 敵2体以上なら進化推奨（3dmg×2ランダム）
+                        // 悠霞: 敵2体以上でHP3以下の敵がいれば進化必須（3dmg×2ランダム）
                         if (card.id === 'c_yuka') {
-                            if (enemyCount >= 2) {
-                                score += 100; // 3dmg×2で処理
+                            const lowHpEnemies = enemyBoard.filter((c: any) => (c.currentHealth || 0) <= 3);
+                            if (enemyCount >= 2 && lowHpEnemies.length >= 2) {
+                                // 敵2体以上、HP3以下が2体以上 → 確実に2体倒せる
+                                score += 500; // 非常に高スコア（必ず進化すべき）
+                                console.log(`[AI YORUKA] Yukasumi MUST evolve - ${lowHpEnemies.length} low HP enemies`);
+                            } else if (enemyCount >= 2) {
+                                score += 150; // 3dmg×2で処理の可能性
                                 console.log('[AI YORUKA] Yukasumi evolve for AOE removal');
+                            }
+                        }
+
+                        // 刹那: BANEなので進化価値が低い（リーサル時のみ価値あり）
+                        if (card.id === 'c_setsuna') {
+                            // 刹那は進化してもBANEで倒せる相手は変わらない
+                            // リーサル判定：盤面ダメージ + 進化ボーナス2点 でプレイヤーを倒せるか
+                            const currentDamage = aiBoard
+                                .filter((c: any) => c && c.canAttack)
+                                .reduce((sum: number, c: any) => sum + (c.currentAttack || 0), 0);
+                            const playerHpCheck = state.players[currentPlayerId].hp;
+
+                            if (currentDamage + 2 >= playerHpCheck) {
+                                score += 200; // リーサルなら進化価値あり
+                                console.log('[AI YORUKA] Setsuna evolve for lethal');
+                            } else {
+                                score -= 300; // リーサルでなければ進化しない
+                                console.log('[AI YORUKA] Avoiding Setsuna evolve - BANE already kills anything');
+                            }
+                        }
+
+                        // ユキ: 味方3体以上なら進化価値高い（+1/+1を全員に付与）
+                        if (card.id === 'c_yuki') {
+                            const allyCount = aiBoard.length;
+                            // 盞華がいる場合は盞華優先
+                            const hasSenka = aiBoard.some((c: any) => c && c.name === '盞華');
+                            if (hasSenka) {
+                                score -= 50; // 盞華がいれば盞華優先
+                                console.log('[AI YORUKA] Yuki deferred - Senka on board');
+                            } else if (allyCount >= 3) {
+                                score += 200; // 3体以上なら進化価値高い
+                                console.log(`[AI YORUKA] Yuki evolve for ${allyCount} allies buff`);
+                            } else if (allyCount >= 2) {
+                                score += 80; // 2体でもそこそこ価値
                             }
                         }
 
@@ -6574,6 +6712,73 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             score += enemyCount * 30; // 敵が多いほど価値
                             if (enemyCount >= 2) {
                                 console.log(`[AI YORUKA] Y evolve for AOE - ${enemyCount} enemies`);
+                            }
+
+                            // === v1.51修正: 敵盤面に遙がいる場合、Y進化を最優先 ===
+                            // 遙は隠密だが、YのAOE 3ダメージで処理可能（遙のHP=3）
+                            const harukaOnEnemyBoard = enemyBoard.some((c: any) => c && c.id === 'c_haruka');
+                            if (harukaOnEnemyBoard) {
+                                const aiHpValue = state.players[opponentPlayerId].hp;
+                                // 遙は次ターンに17点以上のリーサル可能性があるため、緊急除去対象
+                                if (aiHpValue <= 17) {
+                                    score += 800; // HP危険域なら最優先
+                                    console.log(`[AI v1.51] 遙を発見！AI HP ${aiHpValue} <= 17 - Y進化で緊急除去 +800`);
+                                } else {
+                                    score += 400; // HPに余裕があっても遙除去は高優先
+                                    console.log(`[AI v1.51] 遙を発見！Y進化でAOE除去推奨 +400`);
+                                }
+                            }
+                        }
+                    }
+
+                    // === v1.43: 進化後に有効なトレードができるか評価 ===
+                    // 進化効果（除去/召喚等）がなく、攻撃で敵を倒せない場合は進化しない
+                    const hasRemovalEvolveEffect = (() => {
+                        const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
+                        return triggers.some((trig: any) => trig.trigger === trigType &&
+                            (trig.effects || []).some((e: any) =>
+                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE'].includes(e.type)
+                            ));
+                    })();
+
+                    if (!hasEvolveEffect || (hasEvolveEffect && !hasRemovalEvolveEffect)) {
+                        // 進化後の攻撃力（通常進化+2、超進化+3）
+                        const evolvedAtk = (card.currentAttack || 0) + (useSuperEvolve ? 3 : 2);
+
+                        // 攻撃可能か（進化後は突進を得る）
+                        const canAttackAfterEvolve = true; // 進化後は突進でフォロワーに攻撃可能
+
+                        if (canAttackAfterEvolve && enemyBoard.length > 0) {
+                            // 敵フォロワーの中で、進化後の攻撃力で倒せる相手を探す
+                            // === v1.46修正: バリア持ちは一撃では倒せない ===
+                            const killableEnemies = enemyBoard.filter((enemy: any) => {
+                                const enemyHp = enemy.currentHealth || 0;
+                                const enemyHasBarrier = enemy.passiveAbilities?.includes('BARRIER') || enemy.hasBarrier;
+                                // バリア持ちは一撃では倒せない（バリアでダメージ無効化）
+                                if (enemyHasBarrier) {
+                                    return false;
+                                }
+                                // 進化後の攻撃力 >= 敵のHP なら倒せる
+                                return evolvedAtk >= enemyHp;
+                            });
+
+                            if (killableEnemies.length > 0) {
+                                // 倒せる相手がいる → 有効なトレード可能
+                                // 倒せる相手の最大脅威度でボーナス
+                                const maxThreat = Math.max(...killableEnemies.map((e: any) => e.currentAttack || 0));
+                                score += 50 + maxThreat * 10;
+                                console.log(`[AI v1.43] 有効なトレード可能: ${card.name} 進化(${evolvedAtk}atk)で${killableEnemies.length}体を処理可能`);
+                            } else {
+                                // 倒せる相手がいない → 進化しても意味がない
+                                // 進化効果もない場合は大幅に減点
+                                score -= 200;
+                                console.log(`[AI v1.43] 有効なトレード不可: ${card.name} 進化(${evolvedAtk}atk)では敵を倒せない -200`);
+                            }
+                        } else if (enemyBoard.length === 0) {
+                            // 敵盤面が空の場合、進化効果がなければ進化は不要
+                            if (!hasEvolveEffect) {
+                                score -= 100;
+                                console.log(`[AI v1.43] 敵盤面空 & 進化効果なし: ${card.name} 進化は不要 -100`);
                             }
                         }
                     }
@@ -6595,9 +6800,73 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const evolvableCandidates = aiBoard.filter((c: any) => c && !c.hasEvolved);
                     if (evolvableCandidates.length === 0) return false;
 
-                    // === v1.17: 敵盤面が空の場合は基本的に進化しない ===
+                    // === v1.51緊急: 敵盤面に遙がいてYが進化可能なら、必ず進化する ===
+                    // 遙は隠密だが、YのAOE 3ダメージで処理可能（遙HP=3）
+                    // 遙を放置すると次ターン17点以上のリーサルを許してしまう可能性が高い
+                    const harukaOnEnemyBoard = enemyBoard.some((c: any) => c && c.id === 'c_haruka');
+                    const yCanEvolve = evolvableCandidates.some((c: any) => c && c.id === 'c_y');
+                    if (harukaOnEnemyBoard && yCanEvolve) {
+                        console.log(`[AI v1.51] 遙を発見！Y進化でAOE除去を最優先 - 強制進化`);
+                        return true;
+                    }
+
+                    // === v1.20: 脅威フォロワー（ATK > 0 または WARD）のみを除去対象としてカウント ===
+                    // ATK 0のフォロワーは除去対象として存在しないものとみなす
+                    const threatEnemies = enemyBoard.filter((c: any) => {
+                        const atk = c.currentAttack || 0;
+                        const hasWard = c.passiveAbilities?.includes('WARD');
+                        return atk > 0 || hasWard;
+                    });
+
+                    // === v1.20: 脅威フォロワーが1体のみで、BANEで相討ち可能なら進化温存 ===
+                    if (threatEnemies.length === 1) {
+                        const threatEnemy = threatEnemies[0];
+                        // AI盤面にBANE持ちがいて攻撃可能か
+                        const baneFollower = aiBoard.find((c: any) =>
+                            c && c.canAttack && c.passiveAbilities?.includes('BANE')
+                        );
+                        if (baneFollower) {
+                            // BANEで相討ちできるなら進化不要（除去効果を温存）
+                            console.log(`[AI v1.20] Single threat enemy (${threatEnemy.name}) - BANE can trade, skip evolve`);
+                            return false;
+                        }
+                    }
+
+                    // === v1.43: 進化後に有効なトレードができるか判定 ===
+                    // 進化しても敵を倒せない場合は進化しない（進化効果がある場合を除く）
+                    const hasAnyRemovalEffect = evolvableCandidates.some((card: any) => {
+                        const triggers = card.triggers || [];
+                        const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
+                        return triggers.some((trig: any) =>
+                            trig.trigger === trigType &&
+                            (trig.effects || []).some((e: any) =>
+                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE'].includes(e.type)
+                            )
+                        );
+                    });
+
+                    if (!hasAnyRemovalEffect && threatEnemies.length > 0) {
+                        // 進化効果で除去できない場合、攻撃で倒せるかチェック
+                        // === v1.46修正: バリア持ちは考慮しない ===
+                        const canKillAnyThreat = evolvableCandidates.some((card: any) => {
+                            const evolvedAtk = (card.currentAttack || 0) + (useSuperEvolve ? 3 : 2);
+                            return threatEnemies.some((enemy: any) => {
+                                const enemyHasBarrier = enemy.passiveAbilities?.includes('BARRIER') || enemy.hasBarrier;
+                                if (enemyHasBarrier) return false;
+                                // === v1.47修正: healthフォールバック追加 ===
+                                return evolvedAtk >= (enemy.currentHealth || enemy.health || 0);
+                            });
+                        });
+
+                        if (!canKillAnyThreat) {
+                            console.log('[AI v1.43] 進化しても敵を倒せない - 進化温存');
+                            return false;
+                        }
+                    }
+
+                    // === v1.17 (v1.20修正): 脅威フォロワーが0の場合は基本的に進化しない ===
                     // 例外: SUMMON系/BUFF系/BARRIER付与などの有用な効果を持つカードがいる場合
-                    if (enemyBoard.length === 0) {
+                    if (threatEnemies.length === 0) {
                         const trigType = useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE';
                         const hasUsefulEvolveEffect = evolvableCandidates.some((card: any) => {
                             const triggers = card.triggers || [];
@@ -6718,7 +6987,34 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const enemyCount = playerBoard.filter((c: any) => c !== null).length;
                         const lethalCalc = calculateYorukaLethal(state, opponentPlayerId);
 
-                        // 超進化は遙に1つ残す（緊急時除く）
+                        // === 汎用: 超進化しか残っていない場合の温存チェック ===
+                        // 通常EP=0、SEP>0 の場合、リーサル圏外なら超進化をフィニッシャー用に温存
+                        if (useSuperEvolve) {
+                            const isAiFirstPlayer = opponentPlayerId === state.firstPlayerId;
+                            const hasNormalEvolve = canEvolve(aiPlayer, turnCount, isAiFirstPlayer);
+
+                            if (!hasNormalEvolve && sep >= 1) {
+                                // 相手のリーサル圏を計算（盤面打点 + 推定バースト打点）
+                                const enemyDamage = playerBoard.filter((c: any) => c !== null)
+                                    .reduce((sum: number, c: any) => sum + (c.currentAttack || 0), 0);
+                                // 相手のデッキ固有の即打点を考慮（STORMカード、スペル等）
+                                const enemyClass = state.players[currentPlayerId]?.class;
+                                const estimatedBurst = enemyClass === 'SENKA' ? 8 : (enemyClass === 'YORUKA' ? 6 : 4);
+                                const inLethalRange = aiHp <= enemyDamage + estimatedBurst;
+
+                                // フィニッシャー（遙、yoRuka）が手札or盤面にあり、リーサル圏外なら温存
+                                const hasFinisher = harukaInHand || harukaOnBoard ||
+                                    aiHand.some((c: any) => c.id === 'c_yoruka') ||
+                                    yorukaOnBoard;
+
+                                if (!inLethalRange && hasFinisher) {
+                                    console.log(`[AI YORUKA] Only super evolve available - saving for finisher (not in lethal range: aiHp=${aiHp}, enemyDmg=${enemyDamage}, burst=${estimatedBurst})`);
+                                    return false;
+                                }
+                            }
+                        }
+
+                        // 超進化は遙に1つ残す（緊急時除く）- 上記の汎用チェックを通過した場合のみ
                         if (useSuperEvolve && sep === 1) {
                             if (harukaInHand && !harukaOnBoard) {
                                 // 遙が手札にあり、リーサル圏外なら温存
@@ -6774,7 +7070,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             for (const trig of triggers) {
                                 if (trig.trigger === (useSuperEvolve ? 'SUPER_EVOLVE' : 'EVOLVE')) {
                                     for (const eff of trig.effects || []) {
-                                        if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'AOE_DAMAGE'].includes(eff.type)) {
+                                        if (['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE', 'SELECT_DAMAGE'].includes(eff.type)) {
                                             return true;
                                         }
                                     }
@@ -6831,12 +7127,54 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const aiHp = state.players[opponentPlayerId]?.hp || 20;
                     const highPressure = totalEnemyAtk >= aiHp * 0.4; // HP40%以上の脅威 = 高圧力
 
+                    // === 水氷龍（TOKEN_SUIHYORYU）の特別処理 ===
+                    // 水氷龍は次の相手のターン開始時に自動破壊されるため、基本的に攻撃不要
+                    const suihyoryuTargets = targetableEnemies.filter(({ c }) => c.id === 'TOKEN_SUIHYORYU');
+                    const nonSuihyoryuTargets = targetableEnemies.filter(({ c }) => c.id !== 'TOKEN_SUIHYORYU');
+                    const wardTargetsExcludingSuihyoryu = nonSuihyoryuTargets.filter(({ c }) =>
+                        c.passiveAbilities?.includes('WARD') && !isImmuneToFollowerAttack(c, state)
+                    );
+
+                    // 水氷龍だけが守護として残っている場合
+                    if (suihyoryuTargets.length > 0 && wardTargetsExcludingSuihyoryu.length === 0) {
+                        // 水氷龍以外に処理すべきフォロワーがいるか？
+                        const threateningEnemies = nonSuihyoryuTargets.filter(({ c }) => {
+                            // STEALTH中は攻撃不可なのでスキップ
+                            if (c.passiveAbilities?.includes('STEALTH') && !c.hadStealth) return false;
+                            // AURA持ちは攻撃可能だが低優先度
+                            const threat = (c.currentAttack || 0);
+                            return threat >= 2; // 脅威度2以上を処理対象
+                        });
+
+                        if (threateningEnemies.length === 0) {
+                            // 水氷龍だけが残っている → 攻撃しない（自動破壊を待つ）
+                            if (canAttackLeader) {
+                                // 水氷龍は守護なのでリーダー攻撃不可だが、
+                                // STEALTH/hadStealthならリーダー攻撃可能
+                                const ignoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
+                                if (ignoresWard) {
+                                    console.log('[AI] Suihyoryu only - ignoring (STEALTH) and attacking leader');
+                                    return { index: -1, isLeader: true };
+                                }
+                            }
+                            // リーダー攻撃もできないなら攻撃しない
+                            console.log('[AI] Suihyoryu only - skipping attack (will auto-destroy next turn)');
+                            return { index: -1, isLeader: false };
+                        } else {
+                            // 水氷龍の後ろに脅威がある → 水氷龍を倒して裏を処理したい
+                            // ただし、進化効果などで直接除去できるなら水氷龍は無視
+                            console.log(`[AI] Suihyoryu blocking ${threateningEnemies.length} threats - must break through`);
+                            // 水氷龍を攻撃（守護突破）
+                            return { index: suihyoryuTargets[0].i, isLeader: false };
+                        }
+                    }
+
                     // RUSHフォロワーは必ずフォロワー攻撃（リーダー攻撃不可）
                     if (isRushOnly && targetableEnemies.length > 0) {
-                        // 守護チェック
+                        // 守護チェック（水氷龍を除く）
                         const wardTarget = targetableEnemies.find(({ c }) =>
-                            c.passiveAbilities?.includes('WARD') && !isImmuneToFollowerAttack(c, state)
-                        );
+                            c.passiveAbilities?.includes('WARD') && !isImmuneToFollowerAttack(c, state) && c.id !== 'TOKEN_SUIHYORYU'
+                        ) || suihyoryuTargets[0]; // 水氷龍以外の守護がなければ水氷龍を攻撃
                         if (wardTarget) {
                             console.log(`[AI] RUSH attacker targeting WARD at ${wardTarget.i}`);
                             return { index: wardTarget.i, isLeader: false };
@@ -6880,6 +7218,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             c.passiveAbilities?.includes('BARRIER') && !isImmuneToFollowerAttack(c, state)
                         );
                         const hasWardSenka = !attackerIgnoresWardSenka && wardTargets.length > 0;
+
+                        // === v1.23: BANE持ちはBARRIER持ちを優先攻撃 ===
+                        // BANEでBARRIERを処理すれば他のフォロワーを温存できる
+                        if (attackerHasBane && barrierTargets.length > 0 && !hasWardSenka) {
+                            // バリア持ちの中で最も脅威度が高いターゲットを選択
+                            const bestBarrierTarget = barrierTargets.sort((a, b) =>
+                                (b.c.currentAttack || 0) - (a.c.currentAttack || 0)
+                            )[0];
+                            console.log(`[AI v1.23 SENKA] BANE attacker prioritizing BARRIER target at ${bestBarrierTarget.i}`);
+                            return { index: bestBarrierTarget.i, isLeader: false };
+                        }
 
                         // === 1. 守護処理（必須） ===
                         if (hasWardSenka) {
@@ -7017,14 +7366,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             return { index: -1, isLeader: true };
                         }
 
-                        // 守護がいる場合、BANEを持つフォロワーで守護を処理
-                        if (attacker.passiveAbilities?.includes('BANE') && hasWardYoruka) {
-                            const wardTargets = targetableEnemies.filter(({ c }) =>
-                                c.passiveAbilities?.includes('WARD') && !isImmuneToFollowerAttack(c, state)
+                        // === v1.23修正: BANE持ちの優先攻撃ロジック ===
+                        if (attacker.passiveAbilities?.includes('BANE')) {
+                            // WARDがいる場合、WARD優先攻撃
+                            if (hasWardYoruka) {
+                                const wardTargets = targetableEnemies.filter(({ c }) =>
+                                    c.passiveAbilities?.includes('WARD') && !isImmuneToFollowerAttack(c, state)
+                                );
+                                if (wardTargets.length > 0) {
+                                    console.log('[AI YORUKA] BANE unit targeting WARD');
+                                    return { index: wardTargets[0].i, isLeader: false };
+                                }
+                            }
+
+                            // === v1.23: WARDがない場合、BARRIER持ちを優先攻撃（Codex指摘対応）===
+                            const barrierTargetsYoruka = targetableEnemies.filter(({ c }) =>
+                                c.passiveAbilities?.includes('BARRIER') && !isImmuneToFollowerAttack(c, state)
                             );
-                            if (wardTargets.length > 0) {
-                                console.log('[AI YORUKA] BANE unit targeting WARD');
-                                return { index: wardTargets[0].i, isLeader: false };
+                            if (!hasWardYoruka && barrierTargetsYoruka.length > 0) {
+                                const bestBarrierYoruka = barrierTargetsYoruka.sort((a, b) =>
+                                    (b.c.currentAttack || 0) - (a.c.currentAttack || 0)
+                                )[0];
+                                console.log(`[AI v1.23 YORUKA] BANE attacker prioritizing BARRIER target at ${bestBarrierYoruka.i}`);
+                                return { index: bestBarrierYoruka.i, isLeader: false };
                             }
                         }
 
@@ -7072,31 +7436,51 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         // === v1.18: ヴァルキリーはバリア復活するので殴り得 ===
 
                         // BARRIER持ちは1回目ダメージ0（バリア剥がすだけ）
+                        // === v1.23: BANE持ちならBARRIER優先攻撃 ===
+                        const attackerHasBaneGeneric = attacker.passiveAbilities?.includes('BANE');
                         if (targetHasBarrier) {
-                            targetScore = -30;
-                            // 他に攻撃対象がない場合は少し価値あり
-                            if (targetableEnemies.length === 1) {
-                                targetScore = 5;
-                            }
-                            // v1.18: ヴァルキリーはターン終了時にバリア復活するので殴り得
-                            // こちらがバリアを持っていればノーダメージでバリア剥がせる
-                            if (target.id === 'c_valkyrie') {
-                                if (attacker.hasBarrier || attacker.passiveAbilities?.includes('BARRIER')) {
-                                    // こちらもバリアなら殴り得
-                                    targetScore = 20;
-                                } else {
-                                    // バリアなしでも殴っておくと相手のバリアを剥がせる
-                                    targetScore = 10;
-                                }
+                            if (attackerHasBaneGeneric) {
+                                // === v1.23: BANE持ちでBARRIER攻撃は高スコア（他フォロワー温存のため）===
+                                targetScore = 80;
+                                console.log(`[AI v1.23] BANE attacker prioritizing BARRIER target`);
                             } else {
-                                // 通常のBARRIER持ち：進化済みでバリアを殴るのは無意味
-                                if (attackerIsEvolved) {
-                                    targetScore -= 50;
+                                targetScore = -30;
+                                // 他に攻撃対象がない場合は少し価値あり
+                                if (targetableEnemies.length === 1) {
+                                    targetScore = 5;
+                                }
+                                // v1.18: ヴァルキリーはターン終了時にバリア復活するので殴り得
+                                // こちらがバリアを持っていればノーダメージでバリア剥がせる
+                                if (target.id === 'c_valkyrie') {
+                                    if (attacker.hasBarrier || attacker.passiveAbilities?.includes('BARRIER')) {
+                                        // こちらもバリアなら殴り得
+                                        targetScore = 20;
+                                    } else {
+                                        // バリアなしでも殴っておくと相手のバリアを剥がせる
+                                        targetScore = 10;
+                                    }
+                                } else {
+                                    // 通常のBARRIER持ち：進化済みでバリアを殴るのは無意味
+                                    if (attackerIsEvolved) {
+                                        targetScore -= 50;
+                                    }
                                 }
                             }
                         } else if (canKillTarget(attacker, target)) {
                             // 攻撃力削減量を最重視: 敵ATK * 20
                             targetScore = targetAtk * 20;
+                            // === v1.50追加: HPも考慮（高HPの敵を倒す価値）===
+                            const targetHp = target.currentHealth || 0;
+                            targetScore += targetHp * 5;
+
+                            // === v1.50追加: バリア持ちは反撃を受けないので高価値ターゲット優先 ===
+                            const attackerHasBarrier = attacker.hasBarrier || attacker.passiveAbilities?.includes('BARRIER');
+                            if (attackerHasBarrier && !willDie) {
+                                // バリア持ちはノーリスクで高価値ターゲットを狙える
+                                targetScore += targetHp * 10; // HP高いほどボーナス大
+                                targetScore += targetAtk * 5; // ATK高いほどボーナス
+                                console.log(`[AI v1.50] バリア攻撃者: 高価値ターゲット ${target.name}(${targetAtk}/${targetHp}) にボーナス`);
+                            }
 
                             if (!willDie) {
                                 // 倒して生存 = 最高
@@ -7147,11 +7531,1376 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     return bestTarget;
                 };
 
+                // === v1.29: 行動選択ループ - 全ての可能な行動を列挙 ===
+                const enumerateAllActions = (state: any): AIActionType[] => {
+                    const actions: AIActionType[] = [];
+                    const aiPlayer = state.players[opponentPlayerId];
+                    const aiHand = aiPlayer.hand;
+                    const aiBoard = aiPlayer.board;
+                    const playerBoard = state.players[currentPlayerId].board;
+                    const aiPp = aiPlayer.pp;
+                    const turnCount = state.turnCount;
+                    const isFirstPlayer = opponentPlayerId === state.firstPlayerId;
+
+                    // 盤面の空きスロット数
+                    const boardSlots = aiBoard.filter((c: any) => c !== null).length;
+                    const hasEmptySlot = boardSlots < 5;
+
+                    // === カードプレイアクション ===
+                    for (let i = 0; i < aiHand.length; i++) {
+                        const card = aiHand[i];
+                        if (card.cost > aiPp) continue;
+
+                        // フォロワーは盤面に空きが必要
+                        if (card.type === 'FOLLOWER' && !hasEmptySlot) continue;
+
+                        // 召喚系スペルも盤面チェック
+                        if (card.type === 'SPELL' && !hasEmptySlot) {
+                            const effects = card.effects || [];
+                            const hasSummonEffect = effects.some((e: any) =>
+                                ['SUMMON_CARD', 'SUMMON_CARD_RUSH', 'SUMMON_CARD_FILL_BOARD', 'SUMMON_TOKEN'].includes(e.type)
+                            );
+                            if (hasSummonEffect) continue;
+                        }
+
+                        // ターゲット選択が必要なカードの処理
+                        const cardTriggers = card.triggers || [];
+                        const fanfareEffects = cardTriggers.find((t: any) => t.trigger === 'FANFARE')?.effects || [];
+                        const targetEffect = fanfareEffects.find((e: any) => e.targetType);
+                        const targetType = targetEffect?.targetType;
+
+                        const isAllyTarget = targetType === 'SELECT_ALLY_FOLLOWER' || targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+                        const targetBoard = isAllyTarget ? aiBoard : playerBoard;
+
+                        const targetableCards = targetBoard.filter((c: any) =>
+                            c &&
+                            !c.passiveAbilities?.includes('STEALTH') &&
+                            !c.passiveAbilities?.includes('AURA')
+                        );
+
+                        const requiresTarget = targetType === 'SELECT_FOLLOWER' ||
+                                               targetType === 'SELECT_ALLY_FOLLOWER' ||
+                                               targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+
+                        if (requiresTarget && targetableCards.length === 0) continue;
+
+                        // AOEスペルで敵がいない場合はスキップ
+                        const isAoeSpell = fanfareEffects.some((e: any) =>
+                            e.type === 'AOE_DAMAGE' && (e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_ENEMY_FOLLOWERS')
+                        );
+                        const enemyBoard = playerBoard.filter((c: any) => c !== null);
+                        if (isAoeSpell && enemyBoard.length === 0) continue;
+
+                        // ターゲットを選定
+                        let targetId: string | undefined;
+                        if (targetableCards.length > 0 && targetType) {
+                            const sortedTargets = [...targetableCards].sort((a: any, b: any) => {
+                                let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
+                                let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
+                                if (a.passiveAbilities?.includes('BANE')) scoreA += 10;
+                                if (b.passiveAbilities?.includes('BANE')) scoreB += 10;
+                                return scoreB - scoreA;
+                            });
+                            targetId = sortedTargets[0]?.instanceId;
+                        }
+
+                        // === v1.30: instanceIdを追加してインデックス無効化問題を解決 ===
+                        actions.push({ type: 'PLAY_CARD', cardIndex: i, instanceId: card.instanceId, targetId, card });
+                    }
+
+                    // === 進化アクション ===
+                    const canSuperEvolveCheck = canSuperEvolve(aiPlayer, turnCount, isFirstPlayer);
+                    const canEvolveCheck = canEvolve(aiPlayer, turnCount, isFirstPlayer);
+
+                    if (canEvolveCheck || canSuperEvolveCheck) {
+                        for (let i = 0; i < aiBoard.length; i++) {
+                            const follower = aiBoard[i];
+                            if (!follower || follower.type !== 'FOLLOWER') continue;
+                            if (follower.hasEvolved) continue;
+                            // 召喚酔い解除チェック（STORMは除く）
+                            const hasStorm = follower.passiveAbilities?.includes('STORM');
+                            const canAttackAfterEvolve = hasStorm || follower.turnPlayed !== turnCount;
+
+                            // ターゲット選択が必要な進化効果の処理
+                            const evolveTriggers = follower.triggers || [];
+                            const evolveEffects = evolveTriggers.find((t: any) => t.trigger === 'EVOLVE')?.effects || [];
+                            const superEvolveEffects = evolveTriggers.find((t: any) => t.trigger === 'SUPER_EVOLVE')?.effects || [];
+
+                            const getEvolveTargetId = (effects: any[]) => {
+                                const targetEffect = effects.find((e: any) => e.targetType);
+                                const targetType = targetEffect?.targetType;
+                                if (!targetType) return undefined;
+
+                                const isAllyTarget = targetType === 'SELECT_ALLY_FOLLOWER' || targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+                                const targetBoard = isAllyTarget ? aiBoard : playerBoard;
+                                const targetableCards = targetBoard.filter((c: any, idx: number) =>
+                                    c !== null &&
+                                    !c.passiveAbilities?.includes('STEALTH') &&
+                                    !c.passiveAbilities?.includes('AURA') &&
+                                    !(targetType === 'SELECT_OTHER_ALLY_FOLLOWER' && idx === i)
+                                );
+                                if (targetableCards.length === 0) return undefined;
+
+                                const sortedTargets = [...targetableCards].sort((a: any, b: any) =>
+                                    calculateThreatScore(b) - calculateThreatScore(a)
+                                );
+                                return sortedTargets[0]?.instanceId;
+                            };
+
+                            // 通常進化
+                            // === v1.30: instanceIdを追加 ===
+                            if (canEvolveCheck) {
+                                const targetId = getEvolveTargetId(evolveEffects);
+                                actions.push({ type: 'EVOLVE', followerIndex: i, instanceId: follower.instanceId, useSep: false, targetId, card: follower });
+                            }
+
+                            // 超進化
+                            // === v1.30: instanceIdを追加 ===
+                            if (canSuperEvolveCheck && canAttackAfterEvolve) {
+                                const targetId = getEvolveTargetId(superEvolveEffects);
+                                actions.push({ type: 'EVOLVE', followerIndex: i, instanceId: follower.instanceId, useSep: true, targetId, card: follower });
+                            }
+                        }
+                    }
+
+                    // === 攻撃アクション ===
+                    for (let i = 0; i < aiBoard.length; i++) {
+                        const attacker = aiBoard[i];
+                        if (!attacker || !attacker.canAttack) continue;
+
+                        const attackerIgnoresWard = attacker.passiveAbilities?.includes('STEALTH') || attacker.hadStealth;
+                        const hasStorm = attacker.passiveAbilities?.includes('STORM');
+                        const canAttackLeader = hasStorm || attacker.turnPlayed !== turnCount;
+
+                        // 敵盤面のフォロワーを取得
+                        const enemyFollowers = playerBoard
+                            .map((c: any, idx: number) => ({ c, idx }))
+                            .filter(({ c }: any) => c !== null);
+
+                        // 守護チェック
+                        const wardTargets = enemyFollowers.filter(({ c }: any) =>
+                            c.passiveAbilities?.includes('WARD') &&
+                            !c.passiveAbilities?.includes('STEALTH') &&
+                            !isImmuneToFollowerAttack(c, state)
+                        );
+                        const hasWard = !attackerIgnoresWard && wardTargets.length > 0;
+
+                        // 守護がいる場合は守護のみ攻撃可能
+                        const validTargets = hasWard ? wardTargets : enemyFollowers.filter(({ c }: any) =>
+                            !c.passiveAbilities?.includes('STEALTH') &&
+                            !isImmuneToFollowerAttack(c, state)
+                        );
+
+                        // フォロワー攻撃
+                        // === v1.30: attackerInstanceIdを追加 ===
+                        for (const { idx } of validTargets) {
+                            actions.push({ type: 'ATTACK', attackerIndex: i, attackerInstanceId: attacker.instanceId, targetIndex: idx, targetIsLeader: false, attacker });
+                        }
+
+                        // リーダー攻撃（守護がいなければ）
+                        // === v1.30: attackerInstanceIdを追加 ===
+                        if (!hasWard && canAttackLeader) {
+                            actions.push({ type: 'ATTACK', attackerIndex: i, attackerInstanceId: attacker.instanceId, targetIndex: -1, targetIsLeader: true, attacker });
+                        }
+                    }
+
+                    return actions;
+                };
+
+                // === v1.29: 行動選択ループ - 各行動を評価 ===
+                const evaluateAction = (action: AIActionType, state: any): number => {
+                    const playerHp = state.players[currentPlayerId].hp;
+                    const _aiHp = state.players[opponentPlayerId].hp; // 将来の拡張用
+                    const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    const _aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null); // 将来の拡張用
+                    const _aiClass = state.players[opponentPlayerId]?.class; // 将来の拡張用
+                    void _aiHp; void _aiBoard; void _aiClass; // 未使用警告を抑制
+
+                    if (action.type === 'END_TURN') return 0;
+
+                    if (action.type === 'ATTACK') {
+                        const attacker = state.players[opponentPlayerId].board[action.attackerIndex];
+                        if (!attacker) return -1000;
+
+                        const attackerAtk = attacker.currentAttack || 0;
+                        const hasDoubleAttack = attacker.passiveAbilities?.includes('DOUBLE_ATTACK');
+                        const totalDamage = hasDoubleAttack ? attackerAtk * 2 : attackerAtk;
+
+                        // リーサル攻撃
+                        if (action.targetIsLeader && totalDamage >= playerHp) {
+                            return 1000;
+                        }
+
+                        // === v1.30: 進化可能なフォロワーは進化後に攻撃すべき ===
+                        const canStillEvolve = !attacker.hasEvolved;
+                        const aiPlayer = state.players[opponentPlayerId];
+                        const turnCount = state.turnCount;
+                        const isAiFirstPlayer = opponentPlayerId === state.firstPlayerId;
+                        const hasEvolveResource = canEvolve(aiPlayer, turnCount, isAiFirstPlayer) || canSuperEvolve(aiPlayer, turnCount, isAiFirstPlayer);
+
+                        // 進化可能なフォロワーの攻撃は進化後にした方が効率的
+                        // 特に盞華は超進化でスペルを生成するので、攻撃前に超進化すべき
+                        if (canStillEvolve && hasEvolveResource) {
+                            // 盞華は特に超進化を優先すべき
+                            if (attacker.id === 'c_senka_knuckler') {
+                                // 盞華の攻撃スコアを大幅に下げる（超進化後に攻撃させる）
+                                return action.targetIsLeader ? 50 : 30;
+                            }
+                            // 他の進化可能フォロワーも攻撃を控える（ただしリーサルなら別）
+                            if (!action.targetIsLeader || totalDamage < playerHp) {
+                                // 攻撃スコアを下げる
+                                return Math.max(50, (200 + attackerAtk * 10) - 150);
+                            }
+                        }
+
+                        // === v1.32: リーダー攻撃は基本的に最後に行う ===
+                        // カードプレイや進化を先にした方が効率的
+                        if (action.targetIsLeader) {
+                            const aiHandLeader = state.players[opponentPlayerId].hand;
+                            const aiPpLeader = state.players[opponentPlayerId].pp;
+                            const aiBoardLeader = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+
+                            // まだプレイ可能なカードがあるか確認
+                            const playableCardsLeader = aiHandLeader.filter((c: any) => c.cost <= aiPpLeader);
+
+                            // 進化可能なフォロワーがあるか
+                            const hasEvolvableLeader = aiBoardLeader.some((c: any) =>
+                                c && !c.hasEvolved && (
+                                    canEvolve(aiPlayer, turnCount, isAiFirstPlayer) ||
+                                    canSuperEvolve(aiPlayer, turnCount, isAiFirstPlayer)
+                                )
+                            );
+
+                            // 他にできることがあれば攻撃を後回し（スコア20以下）
+                            if (playableCardsLeader.length > 0 || hasEvolvableLeader) {
+                                return 20;
+                            }
+
+                            // カードも進化もなければ通常スコア
+                            return 120 + attackerAtk * 5;
+                        }
+
+                        // フォロワー攻撃
+                        const target = state.players[currentPlayerId].board[action.targetIndex];
+                        if (!target) return -1000;
+
+                        const targetAtk = target.currentAttack || 0;
+                        const targetHp = target.currentHealth || 0;
+                        const hasBane = attacker.passiveAbilities?.includes('BANE');
+                        const targetHasWard = target.passiveAbilities?.includes('WARD');
+                        const targetHasBarrier = target.passiveAbilities?.includes('BARRIER') || target.hasBarrier;
+                        const willKill = hasBane ? !targetHasBarrier : attackerAtk >= targetHp;
+                        const willDie = wouldDieAttacking(attacker, target);
+
+                        // === v1.44: 攻撃で自滅する場合の警戒 ===
+                        // 自分が死んで相手が生き残る（かつ倒せない）場合はマイナス評価
+                        if (willDie && !willKill) {
+                            // 完全な損失（自滅して相手は無傷）
+                            console.log(`[AI v1.44] 自滅警戒: ${attacker.name}(${attackerAtk}/${attacker.currentHealth}) → ${target.name}(${targetAtk}/${targetHp}) 自滅損失`);
+                            // 守護でも低優先度に
+                            if (targetHasWard) {
+                                return 30; // 守護でも自滅損なら低優先
+                            }
+                            return -50;
+                        }
+
+                        // 守護攻撃（必殺）
+                        if (targetHasWard && hasBane && willKill) {
+                            return 350;
+                        }
+
+                        // 守護攻撃（通常）
+                        if (targetHasWard) {
+                            // === v1.44: バリア持ちの守護への攻撃は優先度を下げる ===
+                            // バリア持ちの守護は一撃では倒せない（必殺を除く）
+                            // 先にカードプレイでバリアを消費する手段を探すべき
+                            if (targetHasBarrier && !hasBane) {
+                                // バリア+守護への攻撃は低優先度
+                                // カードプレイを先にさせるため、280未満に設定
+                                console.log(`[AI v1.44] バリア+守護への攻撃は後回し: ${attacker.name} → ${target.name}`);
+                                return 50;
+                            }
+                            return willKill ? 300 : 280;
+                        }
+
+                        // === v1.37: 必殺持ちによるバリア貫通攻撃 ===
+                        // 必殺はバリアを貫通して破壊できる
+                        // リーサル時以外は積極的に必殺で高価値ターゲットを破壊
+                        if (hasBane && targetHasBarrier) {
+                            // リーサル判定（現在のダメージで相手を倒せるか）
+                            const aiBoardForBane = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                            let totalDamageForBane = 0;
+                            for (const card of aiBoardForBane) {
+                                if (card && (card.canAttack || card.passiveAbilities?.includes('STORM'))) {
+                                    totalDamageForBane += (card.currentAttack || 0);
+                                }
+                            }
+                            const canLethalNow = totalDamageForBane >= playerHp;
+
+                            if (!canLethalNow) {
+                                // リーサルできない → 必殺でバリア持ちを積極的に破壊
+                                // 高HPや高攻撃力のターゲットほど価値が高い
+                                const targetValue = targetAtk * 10 + targetHp * 5;
+                                const baneScore = 200 + targetValue;
+                                console.log(`[AI v1.37] 必殺バリア貫通: ${attacker.name} → ${target.name}(${targetAtk}/${targetHp}) スコア${baneScore}`);
+                                return baneScore;
+                            } else {
+                                // リーサル可能 → 必殺での除去は後回し（リーダー攻撃優先）
+                                console.log(`[AI v1.37] 必殺バリア貫通: リーサル可能なためリーダー攻撃優先`);
+                                return 20;
+                            }
+                        }
+
+                        // === v1.37: 必殺持ちによる高価値ターゲット除去（非バリア）===
+                        // 必殺は攻撃力に関係なく破壊できるので、高HP/高攻撃力の敵を狙う
+                        if (hasBane && !targetHasBarrier && !targetHasWard) {
+                            const aiBoardForBane2 = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                            let totalDamageForBane2 = 0;
+                            for (const card of aiBoardForBane2) {
+                                if (card && (card.canAttack || card.passiveAbilities?.includes('STORM'))) {
+                                    totalDamageForBane2 += (card.currentAttack || 0);
+                                }
+                            }
+                            const canLethalNow2 = totalDamageForBane2 >= playerHp;
+
+                            if (!canLethalNow2 && (targetAtk >= 4 || targetHp >= 5)) {
+                                // リーサルできない＆高価値ターゲット → 必殺で除去
+                                const targetValue = targetAtk * 10 + targetHp * 3;
+                                const baneScore = 150 + targetValue;
+                                console.log(`[AI v1.37] 必殺除去: ${attacker.name} → ${target.name}(${targetAtk}/${targetHp}) スコア${baneScore}`);
+                                return baneScore;
+                            }
+                        }
+
+                        // === v1.33: 盞華はリーダー攻撃を優先 ===
+                        // 盞華は高攻撃力なのでリーダーに直接ダメージを与えた方が効率的
+                        // ただし、次のターンにリーサルの危険がある場合は除去を優先
+                        if (attacker.id === 'c_senka_knuckler' || attacker.id === 'SENKA') {
+                            const aiHpCheck = state.players[opponentPlayerId].hp;
+                            const enemyTotalAtk = enemyBoard.reduce((sum: number, c: any) =>
+                                sum + (c?.currentAttack || 0), 0);
+
+                            // 次のターンにリーサルの危険があるか（相手の総攻撃力がAIのHP-5以上）
+                            const lethalThreat = enemyTotalAtk >= aiHpCheck - 5;
+
+                            if (!lethalThreat) {
+                                // リーサルの危険がなければ、フォロワー攻撃のスコアを大幅に下げる
+                                // （リーダー攻撃を優先させる）
+                                console.log(`[AI v1.33] 盞華: リーダー攻撃優先（リーサル脅威なし: 敵総攻撃力${enemyTotalAtk} < AI HP${aiHpCheck}-5）`);
+                                return -10;
+                            }
+                            console.log(`[AI v1.33] 盞華: フォロワー除去優先（リーサル脅威あり: 敵総攻撃力${enemyTotalAtk} >= AI HP${aiHpCheck}-5）`);
+                        }
+
+                        // === v1.32: 基本的に攻撃は最後に行う ===
+                        // カードプレイや進化が残っていれば攻撃を後回しにする
+                        const aiHandForAttack = state.players[opponentPlayerId].hand;
+                        const aiPpForAttack = state.players[opponentPlayerId].pp;
+                        const aiBoardForAttack = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                        // aiPlayer, turnCount, isAiFirstPlayer は上で宣言済み
+
+                        // プレイ可能なカードがあるか
+                        const playableCardsForAttack = aiHandForAttack.filter((c: any) => c.cost <= aiPpForAttack);
+                        const hasPlayableCards = playableCardsForAttack.length > 0;
+
+                        // 進化可能なフォロワーがあるか
+                        const hasEvolvableFollower = aiBoardForAttack.some((c: any) =>
+                            c && !c.hasEvolved && (
+                                canEvolve(aiPlayer, turnCount, isAiFirstPlayer) ||
+                                canSuperEvolve(aiPlayer, turnCount, isAiFirstPlayer)
+                            )
+                        );
+
+                        // 他にできることがあれば攻撃を後回し
+                        const hasOtherActions = hasPlayableCards || hasEvolvableFollower;
+
+                        // === v1.32: 攻撃は基本的に最後 ===
+                        // 他にできることがあれば、攻撃スコアを一律20以下に抑える
+                        // これによりカードプレイ・進化が確実に先に実行される
+
+                        // 有利トレード（倒せて生存）
+                        // 同じ脅威度（攻撃力）で両方倒せるなら、体力が多い方を優先して倒す
+                        if (willKill && !willDie) {
+                            if (hasOtherActions) {
+                                // 他にできることがあれば後回し（体力ボーナスで対象選択は維持）
+                                return 15 + targetHp * 3;
+                            }
+                            // 体力ボーナス追加：同じ攻撃力なら体力が多い方を優先
+                            return 150 + targetAtk * 10 + targetHp * 5;
+                        }
+
+                        // 相打ち - 基本的に最後
+                        // 同じ脅威度（攻撃力）で両方倒せるなら、体力が多い方を優先して倒す
+                        if (willKill && willDie) {
+                            if (hasOtherActions) {
+                                // 他にできることがあれば後回し（体力ボーナスで対象選択は維持）
+                                return 10 + targetHp;
+                            }
+                            // 他にできることがなければ通常スコア
+                            let tradeScore = (targetAtk >= attackerAtk) ? 100 : 50;
+                            tradeScore += targetHp * 5;
+                            return tradeScore;
+                        }
+
+                        // 不利トレード
+                        if (!willKill && willDie) {
+                            return -50;
+                        }
+
+                        // ダメージのみ - 最も低い優先度
+                        if (hasOtherActions) {
+                            return 5 + targetHp; // 他にやることがあればほぼ選択しない
+                        }
+                        return 30;
+                    }
+
+                    if (action.type === 'PLAY_CARD') {
+                        const card = action.card;
+                        if (!card) return -1000;
+
+                        // 既存のscoreCardForPlayingを使用
+                        let score = scoreCardForPlaying(card, state);
+
+                        // === v1.35: OTK用カード温存ロジック ===
+                        // 盞華デッキはOTKを狙うため、キーカードを温存する
+                        const currentTurn = state.turnCount;
+                        const aiHpForSave = state.players[opponentPlayerId].hp;
+                        const aiPpMax = Math.min(10, Math.floor((currentTurn + 1) / 2) + 1); // 最大PP（概算）
+                        const enemyTotalAtkForSave = enemyBoard.reduce((sum: number, c: any) =>
+                            sum + (c?.currentAttack || 0), 0);
+
+                        // 盤面の危険度（0-1、高いほど危険）
+                        const dangerLevel = Math.min(1, enemyTotalAtkForSave / Math.max(1, aiHpForSave));
+                        const isNearTurn10 = currentTurn >= 16; // ターン16以降は10T（各プレイヤー10ターン目）に近い
+                        const isVeryNearTurn10 = currentTurn >= 18;
+
+                        // 手札にある各カードの枚数をカウント
+                        const aiHandCards = state.players[opponentPlayerId].hand;
+                        const countInHand = (cardId: string) =>
+                            aiHandCards.filter((c: any) => c?.id === cardId).length;
+
+                        const senkaCount = countInHand('c_senka_knuckler');
+                        const yukiCount = countInHand('c_yuki');
+                        const shiekoCount = countInHand('c_shieko');
+                        const tsubakiCount = countInHand('c_white_tsubaki');
+
+                        // OTKに必要なPP: 盞華(8) + ユキ(3) = 11、または盞華(8) + ユキ×2(6) = 14
+                        // PP10あれば盞華+ユキ2枚は無理だが、盞華+ユキ1枚は可能
+
+                        // 盞華（ナックラー）: 可能な限り温存
+                        if (card.id === 'c_senka_knuckler') {
+                            if (dangerLevel >= 0.7) {
+                                // 非常に危険: 盤面の圧力で負けそうなら出す
+                                console.log(`[AI v1.35] 盞華: 危険度${(dangerLevel * 100).toFixed(0)}% → 致し方なくプレイ`);
+                                // スコアはそのまま
+                            } else {
+                                // 温存
+                                score -= 500;
+                                console.log(`[AI v1.35] 盞華: 危険度${(dangerLevel * 100).toFixed(0)}% → 温存 -500`);
+                            }
+                        }
+
+                        // しゑこ: 何枚でも温存（常に温存）
+                        if (card.id === 'c_shieko') {
+                            score -= 600;
+                            console.log(`[AI v1.35] しゑこ: 常に温存 -600`);
+                        }
+
+                        // ユキ: 1枚温存、2枚目以降は使ってOK。10T近いなら2枚温存も視野
+                        if (card.id === 'c_yuki') {
+                            if (isVeryNearTurn10 && yukiCount <= 2) {
+                                // 10T間近で2枚以下 → 2枚温存
+                                score -= 400;
+                                console.log(`[AI v1.35] ユキ: 10T間近、${yukiCount}枚 → 2枚温存 -400`);
+                            } else if (yukiCount <= 1) {
+                                // 1枚以下 → 温存
+                                score -= 350;
+                                console.log(`[AI v1.35] ユキ: ${yukiCount}枚 → 1枚温存 -350`);
+                            } else {
+                                // 2枚以上あれば使ってOK
+                                console.log(`[AI v1.35] ユキ: ${yukiCount}枚 → 使用OK`);
+                            }
+                        }
+
+                        // 白ツバキ: 基本的に温存不要。10T近いなら1枚温存も視野
+                        if (card.id === 'c_white_tsubaki') {
+                            if (isNearTurn10 && tsubakiCount <= 1) {
+                                // 10T近くで1枚以下 → 温存
+                                score -= 200;
+                                console.log(`[AI v1.35] 白ツバキ: 10T近く、${tsubakiCount}枚 → 温存 -200`);
+                            } else {
+                                console.log(`[AI v1.35] 白ツバキ: ${tsubakiCount}枚 → 使用OK`);
+                            }
+                        }
+
+                        // 守護除去スペル（盞華のスペル等）を高評価
+                        const wardFollowers = enemyBoard.filter((c: any) =>
+                            c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH')
+                        );
+                        if (wardFollowers.length > 0 && card.type === 'SPELL') {
+                            const effects = card.effects || [];
+                            const triggers = card.triggers || [];
+                            const fanfareEffects = triggers.find((t: any) => t.trigger === 'FANFARE')?.effects || [];
+                            const allEffects = [...effects, ...fanfareEffects];
+
+                            const hasDamageEffect = allEffects.some((e: any) =>
+                                ['DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'DESTROY'].includes(e.type)
+                            );
+                            if (hasDamageEffect) {
+                                // 守護を倒せるか確認
+                                const damageEffect = allEffects.find((e: any) =>
+                                    ['DAMAGE', 'SELECT_DAMAGE'].includes(e.type)
+                                );
+                                const damageAmount = damageEffect?.amount || damageEffect?.value || 0;
+                                const canKillWard = wardFollowers.some((w: any) => (w.currentHealth || 0) <= damageAmount);
+                                if (canKillWard) {
+                                    score += 500; // 守護除去スペル
+                                }
+                            }
+                        }
+
+                        // === v1.34: 盞華のトークンスペル最適使用順序 ===
+                        // クエイクハウリング: AOE 2ダメージ
+                        // フリッカージャブ: 単体2ダメージ
+                        // バックハンドスマッシュ: 単体6ダメージ
+                        const isSenkaSpell = ['TOKEN_BACKHAND_SMASH', 'TOKEN_FLICKER_JAB', 'TOKEN_QUAKE_HOWLING'].includes(card.id);
+
+                        if (isSenkaSpell) {
+                            const enemyCount = enemyBoard.length;
+                            const enemyHps = enemyBoard.map((c: any) => c?.currentHealth || 0).sort((a: number, b: number) => a - b);
+
+                            // 手札に他の盞華スペルがあるか確認
+                            const aiHandSpells = state.players[opponentPlayerId].hand;
+                            const hasQuakeHowling = aiHandSpells.some((c: any) => c?.id === 'TOKEN_QUAKE_HOWLING');
+                            const hasFlickerJab = aiHandSpells.some((c: any) => c?.id === 'TOKEN_FLICKER_JAB');
+                            const hasBackhandSmash = aiHandSpells.some((c: any) => c?.id === 'TOKEN_BACKHAND_SMASH');
+
+                            if (card.id === 'TOKEN_QUAKE_HOWLING') {
+                                // クエイクハウリング（AOE）の使用判断
+                                if (enemyCount >= 3) {
+                                    // 3体以上: AOEを最優先
+                                    score += 500;
+                                    console.log(`[AI v1.34] クエイクハウリング: 敵${enemyCount}体 → AOE最優先 +500`);
+                                } else if (enemyCount === 2) {
+                                    // 2体の場合: フリッカージャブ+バックハンドスマッシュで処理できるか確認
+                                    const canHandleWithSingles =
+                                        hasFlickerJab && hasBackhandSmash &&
+                                        enemyHps[0] <= 2 && enemyHps[1] <= 6;
+
+                                    if (canHandleWithSingles) {
+                                        // 単体スペルで処理可能 → AOE温存
+                                        score += 100;
+                                        console.log(`[AI v1.34] クエイクハウリング: 2体だが単体スペルで処理可能 → 温存 +100`);
+                                    } else {
+                                        // 単体スペルでは処理しきれない → AOE使用
+                                        score += 450;
+                                        console.log(`[AI v1.34] クエイクハウリング: 2体で単体スペルでは処理不可 → 使用 +450`);
+                                    }
+                                } else if (enemyCount === 1) {
+                                    // 1体: AOEは温存（単体スペルで対応）
+                                    score += 50;
+                                    console.log(`[AI v1.34] クエイクハウリング: 敵1体 → 温存 +50`);
+                                } else {
+                                    // 敵がいない場合は使わない
+                                    score -= 100;
+                                }
+                            } else if (card.id === 'TOKEN_FLICKER_JAB') {
+                                // フリッカージャブ（2ダメージ）
+                                const canKillWithJab = enemyHps.some((hp: number) => hp <= 2);
+
+                                if (enemyCount >= 3 && hasQuakeHowling) {
+                                    // 3体以上でAOEがある → AOEを先に使うべき（大幅にスコアを下げる）
+                                    score -= 200;
+                                    console.log(`[AI v1.39] フリッカージャブ: 敵${enemyCount}体でAOEあり → 後回し -200`);
+                                } else if (canKillWithJab) {
+                                    // 2ダメージで倒せる敵がいる
+                                    score += 420;
+                                    console.log(`[AI v1.39] フリッカージャブ: HP2以下の敵あり → 使用 +420`);
+                                } else {
+                                    // 倒せない場合は温存
+                                    score += 150;
+                                    console.log(`[AI v1.39] フリッカージャブ: 倒せる敵なし → 温存 +150`);
+                                }
+                            } else if (card.id === 'TOKEN_BACKHAND_SMASH') {
+                                // バックハンドスマッシュ（6ダメージ）
+                                const lowHpEnemy = enemyHps.find((hp: number) => hp <= 2);
+                                const midHpEnemy = enemyHps.find((hp: number) => hp > 2 && hp <= 6);
+
+                                if (enemyCount >= 3 && hasQuakeHowling) {
+                                    // 3体以上でAOEがある → AOEを先に使うべき（大幅にスコアを下げる）
+                                    score -= 200;
+                                    console.log(`[AI v1.39] バックハンドスマッシュ: 敵${enemyCount}体でAOEあり → 後回し -200`);
+                                } else if (midHpEnemy && hasFlickerJab && lowHpEnemy) {
+                                    // HP2以下とHP3-6の敵がいて、フリッカージャブもある
+                                    // → バックハンドスマッシュでHP3-6を倒す
+                                    score += 430;
+                                    console.log(`[AI v1.34] バックハンドスマッシュ: HP3-6の敵あり、ジャブで低HPを処理 → 使用 +430`);
+                                } else if (enemyHps.some((hp: number) => hp > 2 && hp <= 6)) {
+                                    // HP3-6の敵がいる
+                                    score += 410;
+                                    console.log(`[AI v1.34] バックハンドスマッシュ: HP3-6の敵あり → 使用 +410`);
+                                } else if (enemyHps.some((hp: number) => hp <= 2) && !hasFlickerJab) {
+                                    // HP2以下しかいないがジャブがない → 仕方なく使用
+                                    score += 350;
+                                    console.log(`[AI v1.34] バックハンドスマッシュ: HP2以下のみだがジャブなし → 使用 +350`);
+                                } else {
+                                    // 温存
+                                    score += 100;
+                                    console.log(`[AI v1.34] バックハンドスマッシュ: 温存 +100`);
+                                }
+                            }
+                        } else if (wardFollowers.length > 0) {
+                            // 守護がいる場合の他のスペル（従来のロジック）
+                            // （盞華スペル以外のダメージスペル）
+                        }
+
+                        // 疾走フォロワー
+                        if (card.type === 'FOLLOWER' && card.passiveAbilities?.includes('STORM')) {
+                            const cardDamage = card.attack || card.currentAttack || 0;
+                            const currentDamage = calculatePotentialDamage(state);
+                            if (currentDamage + cardDamage >= playerHp) {
+                                score += 500; // リーサル可能
+                            } else {
+                                score += 250;
+                            }
+                        }
+
+                        // === v1.31: バフ系カードを高評価（攻撃より先にプレイすべき）===
+                        const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                        const attackableFollowers = aiBoard.filter((c: any) => c.canAttack);
+
+                        if (attackableFollowers.length > 0) {
+                            // === v1.51修正: バフカードは他のフォロワーを出した後にプレイすべき ===
+                            // 手札にまだプレイ可能なフォロワーがあるかチェック
+                            const currentPp = state.players[opponentPlayerId].pp;
+                            const playableFollowersInHand = state.players[opponentPlayerId].hand.filter((c: any) =>
+                                c && c.type === 'FOLLOWER' && c.cost <= currentPp && c.id !== card.id
+                            );
+                            const hasBoardSpace = aiBoard.length < 5;
+                            const shouldWaitForFollowers = playableFollowersInHand.length > 0 && hasBoardSpace;
+
+                            // === v1.48修正: 侍茶のID修正 ===
+                            // 侍茶などのバフスペル
+                            if (card.id === 's_samurai_tea') {
+                                if (shouldWaitForFollowers) {
+                                    // まだフォロワーを出せる → バフは後回し
+                                    score += 50; // 低めのスコア
+                                    console.log(`[AI v1.51] Samurai Tea: フォロワー${playableFollowersInHand.length}体がまだ出せる → 後回し +50`);
+                                } else {
+                                    // フォロワーを出し切った or 盤面満杯 → バフ優先
+                                    score += 200 + aiBoard.length * 30;
+                                    console.log(`[AI v1.48] Samurai Tea buff priority: +${200 + aiBoard.length * 30}`);
+                                }
+                            }
+
+                            // === v1.48修正: BUFF_STATSを追加 ===
+                            // 汎用バフ効果の検出
+                            const effects = card.effects || [];
+                            const triggers = card.triggers || [];
+                            const fanfareEffects = triggers.find((t: any) => t.trigger === 'FANFARE')?.effects || [];
+                            const allEffects = [...effects, ...fanfareEffects];
+                            const hasBuffEffect = allEffects.some((e: any) =>
+                                ['BUFF', 'BUFF_ALL', 'BUFF_ALLY', 'BUFF_ALL_ALLY', 'BUFF_STATS'].includes(e.type)
+                            );
+                            // === v1.51修正(Codex指摘): バフ後回しルールはスペルのみに適用 ===
+                            // フォロワーにバフ効果がある場合は後回しにしない（盤面5体で出せなくなる問題）
+                            if (hasBuffEffect && card.id !== 's_samurai_tea') {
+                                if (shouldWaitForFollowers && card.type === 'SPELL') {
+                                    score += 30;
+                                    console.log(`[AI v1.51] Buff spell: フォロワー${playableFollowersInHand.length}体がまだ出せる → 後回し +30`);
+                                } else {
+                                    score += 150 + aiBoard.length * 20;
+                                    console.log(`[AI v1.48] Buff card priority: +${150 + aiBoard.length * 20}`);
+                                }
+                            }
+                        }
+
+                        // === v1.51: 遙(Haruka)が敵盤面にいる場合、除去可能なカードを優先 ===
+                        // 遙は隠密だが、RANDOM_DESTROYやAOE_DAMAGE 3+で処理可能
+                        // 遙を放置すると次ターンに17点以上のリーサル可能性がある
+                        const harukaOnEnemyBoardPlay = enemyBoard.some((c: any) => c && c.id === 'c_haruka');
+                        if (harukaOnEnemyBoardPlay) {
+                            const aiHpForHaruka = state.players[opponentPlayerId].hp;
+                            const effects = card.effects || [];
+                            const triggers = card.triggers || [];
+                            const fanfareEffects = triggers.find((t: any) => t.trigger === 'FANFARE')?.effects || [];
+                            const allEffectsForHaruka = [...effects, ...fanfareEffects];
+
+                            // RANDOM_DESTROYを持つカード（sara等）
+                            const hasRandomDestroy = allEffectsForHaruka.some((e: any) =>
+                                e.type === 'RANDOM_DESTROY' && (e.targetType === 'OPPONENT' || !e.targetType)
+                            );
+
+                            // AOE_DAMAGE 3以上を持つカード（遙のHP=3を確殺）
+                            // === v1.51修正(Codex指摘): 敵を含むtargetTypeのみ ===
+                            const hasAoeDamage3Plus = allEffectsForHaruka.some((e: any) =>
+                                e.type === 'AOE_DAMAGE' && (e.value || 0) >= 3 &&
+                                (!e.targetType || e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_ENEMY_FOLLOWERS')
+                            );
+
+                            // RANDOM_DAMAGE_BY_TURN: ターン数分のランダムダメージ（悠長・オブ・ジ・アビス等）
+                            // === v1.51修正(Codex指摘): 相手対象のみ ===
+                            const hasRandomDamageByTurn = allEffectsForHaruka.some((e: any) =>
+                                e.type === 'RANDOM_DAMAGE_BY_TURN' && (e.targetType === 'OPPONENT' || !e.targetType)
+                            );
+                            const currentTurnForHaruka = state.turnCount;
+                            // ターン3以降なら遙(HP=3)を確殺可能
+                            const canKillHarukaWithTurnDamage = hasRandomDamageByTurn && currentTurnForHaruka >= 3;
+
+                            if (hasRandomDestroy) {
+                                const destroyEffect = allEffectsForHaruka.find((e: any) => e.type === 'RANDOM_DESTROY');
+                                const destroyCount = destroyEffect?.value || 1;
+                                const enemyCount = enemyBoard.length;
+                                // 破壊数が敵数以上なら確定除去、そうでなければ確率的
+                                const baseBonus = destroyCount >= enemyCount ? 600 : 300;
+                                const hpBonus = aiHpForHaruka <= 17 ? 200 : 0;
+                                score += baseBonus + hpBonus;
+                                console.log(`[AI v1.51] 遙発見！RANDOM_DESTROY ${destroyCount}体 (敵${enemyCount}体) - ${card.name} +${baseBonus + hpBonus}`);
+                            }
+
+                            if (hasAoeDamage3Plus) {
+                                const hpBonus = aiHpForHaruka <= 17 ? 200 : 0;
+                                score += 500 + hpBonus;
+                                console.log(`[AI v1.51] 遙発見！AOE 3+ダメージ - ${card.name} +${500 + hpBonus}`);
+                            }
+
+                            // 悠長・オブ・ジ・アビス等のターン数ダメージ
+                            if (canKillHarukaWithTurnDamage) {
+                                const hpBonus = aiHpForHaruka <= 17 ? 200 : 0;
+                                score += 500 + hpBonus;
+                                console.log(`[AI v1.51] 遙発見！RANDOM_DAMAGE_BY_TURN (T${currentTurnForHaruka}) - ${card.name} +${500 + hpBonus}`);
+                            }
+                        }
+
+                        // スコアを0-700の範囲に正規化（バフカードは高スコアになりうる）
+                        // === v1.51: 遙除去ボーナスで上限を超える可能性があるため上限を緩和 ===
+                        return Math.max(0, Math.min(score, 900));
+                    }
+
+                    if (action.type === 'EVOLVE') {
+                        const follower = action.card;
+                        if (!follower) return -1000;
+
+                        // 既存のscoreEvolveTargetを使用
+                        let score = scoreEvolveTarget(follower, action.followerIndex, state, action.useSep);
+
+                        // === v1.41: リーサル計算（進化/超進化のAOE効果も考慮）===
+                        const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                        const aiPlayer = state.players[opponentPlayerId];
+                        const currentTurnForLethal = state.turnCount;
+
+                        // 守護がいるかチェック
+                        const wardFollowersForLethal = enemyBoard.filter((c: any) =>
+                            c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH')
+                        );
+                        const hasWards = wardFollowersForLethal.length > 0;
+
+                        // このフォロワーが攻撃可能か
+                        const followerCanAttack = follower.canAttack || follower.passiveAbilities?.includes('STORM');
+                        const followerAtk = follower.currentAttack || 0;
+                        const followerAtkAfterEvolve = followerAtk + 2;
+
+                        // === v1.41: 超進化のAOE/リーダーダメージ効果を計算 ===
+                        let superEvolveLeaderDamage = 0;
+                        let superEvolveAoeDamage = 0;
+                        if (action.useSep && follower.triggers) {
+                            const superEvolveTrigger = follower.triggers.find((t: any) => t.trigger === 'SUPER_EVOLVE');
+                            if (superEvolveTrigger?.effects) {
+                                for (const effect of superEvolveTrigger.effects) {
+                                    if (effect.type === 'DAMAGE_LEADER') {
+                                        superEvolveLeaderDamage += effect.value || 0;
+                                    }
+                                    if (effect.type === 'AOE_DAMAGE') {
+                                        superEvolveAoeDamage = Math.max(superEvolveAoeDamage, effect.value || 0);
+                                    }
+                                }
+                            }
+                        }
+
+                        // 現在の総ダメージ（攻撃可能なフォロワーのみ）
+                        let currentDamageForLethal = 0;
+                        for (const card of aiBoard) {
+                            if (card && (card.canAttack || card.passiveAbilities?.includes('STORM'))) {
+                                const attacks = card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1;
+                                currentDamageForLethal += (card.currentAttack || 0) * attacks;
+                            }
+                        }
+
+                        // 守護がいる場合、AOEで破壊できるか確認
+                        let canBreakWardsWithAoe = false;
+                        if (hasWards && superEvolveAoeDamage > 0) {
+                            // 全ての守護がAOEで破壊できるか
+                            canBreakWardsWithAoe = wardFollowersForLethal.every((w: any) =>
+                                (w.currentHealth || 0) <= superEvolveAoeDamage
+                            );
+                        }
+
+                        // リーサル計算（守護がいない、またはAOEで破壊可能な場合）
+                        if (!hasWards || canBreakWardsWithAoe) {
+                            // 進化後のダメージ（+2攻撃力 + 超進化リーダーダメージ）
+                            const evolveBonus = 2;
+                            const damageAfterEvolve = currentDamageForLethal + evolveBonus + superEvolveLeaderDamage;
+
+                            // このフォロワーの進化でリーサルが取れるか
+                            // フォロワーが攻撃可能な場合、進化後の攻撃力 + 他のダメージ
+                            let thisFollowerContribution = 0;
+                            if (followerCanAttack) {
+                                thisFollowerContribution = followerAtkAfterEvolve;
+                            }
+                            const totalWithThisEvolve = currentDamageForLethal - followerAtk + thisFollowerContribution + superEvolveLeaderDamage;
+
+                            // リーサル判定
+                            const canLethalWithEvolve = totalWithThisEvolve >= playerHp;
+                            const canLethalWithoutEvolve = currentDamageForLethal >= playerHp;
+
+                            if (canLethalWithEvolve && !canLethalWithoutEvolve) {
+                                // 進化しないとリーサルできないが、進化すればリーサル可能
+                                score += 900;
+                                console.log(`[AI v1.41] リーサル進化: ${follower.name} 進化で ${totalWithThisEvolve} >= ${playerHp} でリーサル！ (AOE破壊=${canBreakWardsWithAoe}) +900`);
+                            } else if (canLethalWithEvolve) {
+                                // 進化してもしなくてもリーサル可能（でも進化した方がダメージ効率良い場合）
+                                if (superEvolveLeaderDamage > 0 || canBreakWardsWithAoe) {
+                                    score += 500;
+                                    console.log(`[AI v1.41] リーサル確定(超進化効果あり): ${follower.name} +500`);
+                                } else {
+                                    score += 100;
+                                    console.log(`[AI v1.41] リーサル確定: ${follower.name} 進化は任意 +100`);
+                                }
+                            }
+                        } else if (hasWards && followerCanAttack) {
+                            // 守護がいてAOEで破壊できない場合、このフォロワーで守護を攻撃する必要があるか
+                            // この場合、進化してダメージを上げる価値がある
+                            const canKillWardWithEvolve = wardFollowersForLethal.some((w: any) =>
+                                (w.currentHealth || 0) <= followerAtkAfterEvolve
+                            );
+                            if (canKillWardWithEvolve) {
+                                score += 200;
+                                console.log(`[AI v1.41] 守護突破進化: ${follower.name} 進化で守護破壊可能 +200`);
+                            }
+                        }
+
+                        // === v1.36: 相手の次のターンのリーサル警戒 ===
+                        // 相手が8ターン目になる場合、あじゃの3点リーダーダメージを警戒
+                        const opponentClass = state.players[currentPlayerId]?.class;
+                        const opponentNextTurn = Math.floor((currentTurnForLethal + 1) / 2) + 1;
+                        const aiHpForThreat = state.players[opponentPlayerId].hp;
+                        const enemyTotalAtkForThreat = enemyBoard.reduce((sum: number, c: any) =>
+                            sum + (c?.currentAttack || 0), 0);
+
+                        // あじゃの8ターン目以降の3点リーダーダメージを警戒
+                        let expectedEnemyDamage = enemyTotalAtkForThreat;
+                        if (opponentClass === 'AJA' && opponentNextTurn >= 8) {
+                            expectedEnemyDamage += 3; // あじゃの3点
+                            console.log(`[AI v1.36] あじゃ警戒: 相手${opponentNextTurn}T、リーダー3点を加算`);
+                        }
+
+                        // 次のターンにリーサルされる危険がある場合、今ターンにリーサルを優先
+                        if (expectedEnemyDamage >= aiHpForThreat) {
+                            // 自分がリーサルの危険 → 今ターンに決めるべき
+                            // 進化によるリーサルをさらに優先
+                            if (!hasWards) {
+                                let currentDmg = 0;
+                                for (const card of aiBoard) {
+                                    if (card && (card.canAttack || card.passiveAbilities?.includes('STORM'))) {
+                                        currentDmg += (card.currentAttack || 0);
+                                    }
+                                }
+                                if (currentDmg + 2 >= playerHp && currentDmg < playerHp) {
+                                    score += 300; // 危機的状況でのリーサル進化
+                                    console.log(`[AI v1.36] 危機的リーサル: 次ターン負けの危険、進化でリーサル狙い +300`);
+                                }
+                            }
+                        }
+
+                        // === v1.42: 防御的超進化（脅威除去）===
+                        // 次のターンにリーサルされる危険がある場合、超進化で脅威を除去
+                        if (expectedEnemyDamage >= aiHpForThreat && action.useSep) {
+                            // 攻撃力の高い敵フォロワーを特定
+                            const threateningFollowers = enemyBoard
+                                .filter((c: any) => c !== null && (c.currentAttack || 0) > 0)
+                                .sort((a: any, b: any) => (b.currentAttack || 0) - (a.currentAttack || 0));
+
+                            if (threateningFollowers.length > 0) {
+                                // 超進化後のステータス（超進化は+3/+3）
+                                const evolvedAtk = (follower.currentAttack || 0) + 3;
+
+                                // 進化時AOE効果を取得
+                                let evolveAoeDamage = 0;
+                                if (follower.triggers) {
+                                    const evolveTrigger = follower.triggers.find((t: any) => t.trigger === 'EVOLVE');
+                                    if (evolveTrigger?.effects) {
+                                        for (const effect of evolveTrigger.effects) {
+                                            if (effect.type === 'AOE_DAMAGE') {
+                                                evolveAoeDamage = Math.max(evolveAoeDamage, effect.value || 0);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                for (const threat of threateningFollowers) {
+                                    const threatAtk = threat.currentAttack || 0;
+                                    const threatHp = threat.currentHealth || threat.health || 0;
+                                    // === v1.47修正: hasBarrierプロパティも参照 ===
+                                    const hasBarrier = threat.passiveAbilities?.includes('BARRIER') || threat.hasBarrier;
+                                    const hasAura = threat.passiveAbilities?.includes('AURA');
+
+                                    let totalDamage = 0;
+                                    let barrierConsumed = false;
+
+                                    // 進化時AOE（バリア持ちなら無効化）
+                                    if (evolveAoeDamage > 0) {
+                                        if (hasBarrier && !barrierConsumed) {
+                                            barrierConsumed = true;
+                                        } else {
+                                            totalDamage += evolveAoeDamage;
+                                        }
+                                    }
+
+                                    // 超進化AOE（superEvolveAoeDamageは既に計算済み）
+                                    if (superEvolveAoeDamage > 0) {
+                                        if (hasBarrier && !barrierConsumed) {
+                                            barrierConsumed = true;
+                                        } else {
+                                            totalDamage += superEvolveAoeDamage;
+                                        }
+                                    }
+
+                                    // === v1.46修正: 攻撃時もバリアを考慮 ===
+                                    // 攻撃（隠密は攻撃不可）
+                                    if (!threat.passiveAbilities?.includes('STEALTH')) {
+                                        if (hasBarrier && !barrierConsumed) {
+                                            // バリアが残っている場合、攻撃でバリアを消費（ダメージ0）
+                                            barrierConsumed = true;
+                                            console.log(`[AI v1.46] バリア消費（攻撃）: ${threat.name}`);
+                                        } else {
+                                            totalDamage += evolvedAtk;
+                                        }
+                                    }
+
+                                    // この脅威を除去できるか
+                                    if (totalDamage >= threatHp) {
+                                        const remainingEnemyDamage = expectedEnemyDamage - threatAtk;
+                                        if (remainingEnemyDamage < aiHpForThreat) {
+                                            score += 800;
+                                            console.log(`[AI v1.42] 防御的超進化: ${follower.name} で ${threat.name}(${threatAtk}/${threatHp}) を除去、リーサル回避 +800`);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // === v1.30 (v1.49強化): 盞華超進化（スペル生成）を高評価 ===
+                        // 盞華は疾走持ちなので、敵フォロワーがいなくてもリーダーを攻撃できる
+                        // 超進化で+3/+3されるため、リーサルに貢献
+                        if (action.useSep && (follower.id === 'c_senka_knuckler' || follower.id === 'SENKA')) {
+                            const wardFollowers = enemyBoard.filter((c: any) =>
+                                c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH')
+                            );
+                            if (wardFollowers.length > 0) {
+                                score += 500; // 守護がいれば最優先
+                            } else if (enemyBoard.length === 0) {
+                                // === v1.49: 敵フォロワー0でも盞華超進化は有用 ===
+                                // 疾走でリーダーを直接攻撃できる + スペル生成
+                                score += 400;
+                                console.log(`[AI v1.49] 盞華超進化: 敵フォロワー0でも疾走でリーダー攻撃可能 +400`);
+                            } else {
+                                score += 350; // 守護がいなくてもスペル生成は非常に有用
+                            }
+                        }
+
+                        // === v1.51: Y進化で遙を除去（AOE 3ダメージ） ===
+                        // 遙は隠密だが、YのAOE効果で処理可能
+                        // 遙を放置すると次ターンに17点以上のリーサル可能性があるため最優先
+                        if (follower.id === 'c_y') {
+                            const harukaOnEnemyBoardEval = enemyBoard.some((c: any) => c && c.id === 'c_haruka');
+                            if (harukaOnEnemyBoardEval) {
+                                // Y進化のAOE 3ダメージは遙(HP=3)を確殺
+                                score += 600;
+                                console.log(`[AI v1.51 evaluateAction] 遙を発見！Y進化でAOE除去 +600`);
+
+                                // AIのHPが危険域なら更にボーナス
+                                if (aiHpForThreat <= 17) {
+                                    score += 300;
+                                    console.log(`[AI v1.51 evaluateAction] AI HP ${aiHpForThreat} <= 17 - 遙リーサル警戒 +300`);
+                                }
+                            }
+                        }
+
+                        // 進化で除去効果がある場合
+                        if (enemyBoard.length > 0) {
+                            const removalResult = simulateEvolveRemoval(follower, action.useSep, state.players[currentPlayerId].board);
+                            if (removalResult.totalThreatRemoved > 0) {
+                                score += removalResult.totalThreatRemoved * 2;
+                            }
+                        }
+
+                        // shouldEvolveThisTurnでスキップすべき場合は低スコア
+                        // ただしリーサル可能な場合は除外
+                        if (!shouldEvolveThisTurn(state, action.useSep) && score < 500) {
+                            score = Math.min(score, 50);
+                        }
+
+                        return score;
+                    }
+
+                    return 0;
+                };
+
+                // === v1.30: 行動選択ループ - アクションを実行（instanceIdでインデックスを再検索）===
+                const executeAction = async (action: AIActionType): Promise<void> => {
+                    if (action.type === 'END_TURN') {
+                        return;
+                    }
+
+                    if (action.type === 'PLAY_CARD') {
+                        const state = gameStateRef.current;
+                        // === v1.30: instanceIdから現在のインデックスを再検索 ===
+                        const currentIndex = state.players[opponentPlayerId].hand.findIndex(
+                            (c: any) => c?.instanceId === action.instanceId
+                        );
+                        if (currentIndex === -1) {
+                            console.warn('[AI v1.30] PLAY_CARD: Card not found by instanceId, skipping:', action.instanceId);
+                            return;
+                        }
+                        const card = state.players[opponentPlayerId].hand[currentIndex];
+                        if (!card) return;
+
+                        // アニメーション用座標計算
+                        const startX = window.innerWidth - (20 * scale) - (80 * scale / 2);
+                        const startY = (20 * scale) + (110 * scale / 2);
+                        const targetX = window.innerWidth / 2;
+                        const targetY = window.innerHeight / 2;
+
+                        let finalX: number | undefined;
+                        let finalY: number | undefined;
+
+                        if (card.type === 'FOLLOWER') {
+                            const currentBoard = gameStateRef.current.players[opponentPlayerId].board;
+                            const validCards = currentBoard.filter((c: any) => c !== null);
+                            const newBoardSize = validCards.length + 1;
+                            const newIndex = validCards.length;
+                            const spacing = CARD_SPACING * scale;
+                            const offsetX = (newIndex - (newBoardSize - 1) / 2) * spacing;
+                            const boardAreaRect = boardRef.current?.getBoundingClientRect();
+                            const boardCenterX = boardAreaRect ? boardAreaRect.left + boardAreaRect.width / 2 : window.innerWidth / 2;
+                            finalX = boardCenterX + offsetX;
+                            finalY = (window.innerHeight / 2) - (70 * scale);
+                        }
+
+                        setPlayingCardAnim({
+                            card,
+                            sourceIndex: -1,
+                            startX, startY,
+                            targetX, targetY,
+                            finalX, finalY,
+                            playerClass: opponent?.class || 'SENKA',
+                            onComplete: () => {
+                                if (card.type !== 'SPELL') {
+                                    playSE('gan.mp3', 0.6);
+                                    triggerShake();
+                                }
+                                // === v1.30: currentIndexを使用（instanceIdで再検索した結果）===
+                                dispatch({
+                                    type: 'PLAY_CARD',
+                                    playerId: opponentPlayerId,
+                                    payload: { cardIndex: currentIndex, targetId: action.targetId, instanceId: card.instanceId }
+                                });
+                                setPlayingCardAnim(null);
+                            }
+                        });
+                        await waitForIdle(600);
+                        return;
+                    }
+
+                    if (action.type === 'EVOLVE') {
+                        const state = gameStateRef.current;
+                        // === v1.30: instanceIdから現在のインデックスを再検索 ===
+                        const currentIndex = state.players[opponentPlayerId].board.findIndex(
+                            (c: any) => c?.instanceId === action.instanceId
+                        );
+                        if (currentIndex === -1) {
+                            console.warn('[AI v1.30] EVOLVE: Follower not found by instanceId, skipping:', action.instanceId);
+                            return;
+                        }
+                        const follower = state.players[opponentPlayerId].board[currentIndex];
+                        if (!follower) return;
+
+                        const cardRect = opponentBoardRefs.current[currentIndex]?.getBoundingClientRect();
+
+                        if (cardRect) {
+                            setEvolveAnimation({
+                                card: follower,
+                                evolvedImageUrl: follower.evolvedImageUrl,
+                                startX: cardRect.left + cardRect.width / 2,
+                                startY: cardRect.top + cardRect.height / 2,
+                                useSep: action.useSep,
+                                phase: 'ZOOM_IN',
+                                followerIndex: currentIndex,
+                                sourcePlayerId: opponentPlayerId,
+                                targetId: action.targetId
+                            });
+                            await waitForIdle(800);
+                        } else {
+                            dispatchAndSend({
+                                type: 'EVOLVE',
+                                playerId: opponentPlayerId,
+                                payload: {
+                                    followerIndex: currentIndex,
+                                    useSep: action.useSep,
+                                    targetId: action.targetId
+                                }
+                            });
+                            await waitForIdle(400);
+                        }
+                        return;
+                    }
+
+                    if (action.type === 'ATTACK') {
+                        const state = gameStateRef.current;
+                        // === v1.30: attackerInstanceIdから現在のインデックスを再検索 ===
+                        const currentIndex = state.players[opponentPlayerId].board.findIndex(
+                            (c: any) => c?.instanceId === action.attackerInstanceId
+                        );
+                        if (currentIndex === -1) {
+                            console.warn('[AI v1.30] ATTACK: Attacker not found by instanceId, skipping:', action.attackerInstanceId);
+                            return;
+                        }
+                        const attacker = state.players[opponentPlayerId].board[currentIndex];
+                        if (!attacker || !attacker.canAttack) return;
+
+                        // === v1.31: 攻撃アニメーションとエフェクト再生を追加 ===
+                        const playerBoard = state.players[currentPlayerId].board;
+                        const targetIsLeader = action.targetIsLeader;
+                        const targetIndex = action.targetIndex;
+                        const targetCard = targetIsLeader ? null : playerBoard[targetIndex];
+                        const targetInstanceId = targetCard ? (targetCard as any).instanceId : undefined;
+                        const attackerInstanceId = action.attackerInstanceId;
+
+                        // 攻撃者のY軸回転アニメーション
+                        if (attackerInstanceId) {
+                            setAttackingFollowerInstanceId(attackerInstanceId);
+                            setTimeout(() => setAttackingFollowerInstanceId(null), 300);
+                        }
+
+                        // 攻撃エフェクト再生
+                        playEffect(attacker.attackEffectType || 'SLASH', currentPlayerId, targetIsLeader ? -1 : targetIndex, targetInstanceId);
+
+                        // カウンターアタックのビジュアル
+                        if (!targetIsLeader && targetIndex >= 0 && targetCard) {
+                            const defender = targetCard;
+                            if (defender && (defender.currentAttack || 0) > 0) {
+                                const defenderInstanceId = (defender as any).instanceId;
+                                setTimeout(() => {
+                                    // 反撃のY軸回転アニメーション
+                                    if (defenderInstanceId) {
+                                        setCounterAttackingFollowerInstanceId(defenderInstanceId);
+                                        setTimeout(() => setCounterAttackingFollowerInstanceId(null), 300);
+                                    }
+                                    // 反撃エフェクト再生
+                                    playEffect(defender.attackEffectType || 'SLASH', opponentPlayerId, currentIndex, attackerInstanceId);
+                                }, 200);
+                            }
+                        }
+
+                        // アニメーション待機
+                        await waitForIdle(800);
+
+                        dispatch({
+                            type: 'ATTACK',
+                            playerId: opponentPlayerId,
+                            payload: {
+                                attackerIndex: currentIndex,
+                                targetIndex: action.targetIndex,
+                                targetIsLeader: action.targetIsLeader
+                            }
+                        });
+
+                        // 処理完了待機
+                        await waitForIdle(800);
+                        return;
+                    }
+                };
+
                 // 1. Thinking time (short pause, shorter for HARD)
                 const thinkingTime = aiDifficulty === 'EASY' ? 1200 : aiDifficulty === 'HARD' ? 400 : 800;
                 await new Promise(resolve => setTimeout(resolve, thinkingTime));
                 if (!aiProcessing.current) return;
 
+                // === v1.21: CPU後攻時のエクストラPP自動使用 ===
+                {
+                    const state = gameStateRef.current;
+                    const aiPlayer = state.players[opponentPlayerId];
+                    const isAiSecondPlayer = opponentPlayerId !== state.firstPlayerId;
+                    const turn = state.turnCount;
+
+                    if (isAiSecondPlayer && !aiPlayer.extraPpActive) {
+                        const canUseEarly = turn <= 5 && !aiPlayer.extraPpUsedEarly;
+                        const canUseLate = turn >= 6 && !aiPlayer.extraPpUsedLate;
+
+                        if (canUseEarly || canUseLate) {
+                            console.log(`[AI v1.21] Activating Extra PP (turn ${turn}, early=${canUseEarly}, late=${canUseLate})`);
+                            dispatch({ type: 'TOGGLE_EXTRA_PP', playerId: opponentPlayerId });
+                            await waitForIdle(200);
+                        }
+                    }
+                }
+
+                // === v1.40: 行動選択ループ（カードプレイ → 進化 → カードプレイ → 攻撃）===
+                // HARD難易度では行動選択ループを使用、それ以外は従来の固定フェーズ
+                if (aiDifficulty === 'HARD') {
+                    let actionCount = 0;
+                    const MAX_ACTIONS = 30;
+                    // === v1.30: 無限ループ防止用 ===
+                    const executedActions = new Set<string>();
+
+                    // === v1.40: 4フェーズ制御 ===
+                    // カードプレイ(1) → 進化/超進化 → カードプレイ(2) → 攻撃
+                    // 超進化でコスト軽減やスペル追加があるため、進化後に再度カードプレイ
+                    type AIPhase = 'PLAY_CARD_1' | 'EVOLVE' | 'PLAY_CARD_2' | 'ATTACK';
+                    let currentPhase: AIPhase = 'PLAY_CARD_1';
+
+                    while (actionCount < MAX_ACTIONS && !isAiTurnTimedOut()) {
+                        // 勝敗確定チェック
+                        if (gameStateRef.current.winnerId) break;
+
+                        // 全ての可能な行動を列挙
+                        const actions = enumerateAllActions(gameStateRef.current);
+
+                        // 行動がなければ終了
+                        if (actions.length === 0) {
+                            console.log('[AI v1.40] No more actions available');
+                            break;
+                        }
+
+                        // 各行動を評価してスコアリング
+                        let scoredActions = actions.map(action => ({
+                            action,
+                            score: evaluateAction(action, gameStateRef.current)
+                        }));
+
+                        // === v1.40: フェーズ別アクション分類 ===
+                        const playCardActions = scoredActions.filter(s => s.action.type === 'PLAY_CARD' && s.score > 0);
+                        const evolveActions = scoredActions.filter(s => s.action.type === 'EVOLVE' && s.score > 0);
+                        const attackActions = scoredActions.filter(s => s.action.type === 'ATTACK');
+
+                        // 守護突破/確定リーサル攻撃（スコア350+）のみ全フェーズで最優先
+                        const priorityAttackActions = attackActions.filter(s => s.score >= 350);
+
+                        let actionsToConsider: typeof scoredActions = [];
+                        let phaseChanged = false;
+
+                        // 守護突破は全フェーズで最優先
+                        if (priorityAttackActions.length > 0) {
+                            actionsToConsider = priorityAttackActions;
+                            console.log(`[AI v1.40] 守護突破優先: スコア${priorityAttackActions[0].score}`);
+                        } else {
+                            // フェーズに応じたアクション選択
+                            switch (currentPhase) {
+                                case 'PLAY_CARD_1':
+                                    if (playCardActions.length > 0) {
+                                        actionsToConsider = playCardActions;
+                                        console.log(`[AI v1.40] フェーズ1(カードプレイ): ${playCardActions.length}件`);
+                                    } else {
+                                        currentPhase = 'EVOLVE';
+                                        phaseChanged = true;
+                                        console.log('[AI v1.40] → フェーズ2(進化)へ移行');
+                                    }
+                                    break;
+
+                                case 'EVOLVE':
+                                    if (evolveActions.length > 0) {
+                                        actionsToConsider = evolveActions;
+                                        console.log(`[AI v1.40] フェーズ2(進化): ${evolveActions.length}件`);
+                                    } else {
+                                        currentPhase = 'PLAY_CARD_2';
+                                        phaseChanged = true;
+                                        console.log('[AI v1.40] → フェーズ3(カードプレイ2)へ移行');
+                                    }
+                                    break;
+
+                                case 'PLAY_CARD_2':
+                                    if (playCardActions.length > 0) {
+                                        actionsToConsider = playCardActions;
+                                        console.log(`[AI v1.40] フェーズ3(カードプレイ2): ${playCardActions.length}件`);
+                                    } else {
+                                        currentPhase = 'ATTACK';
+                                        phaseChanged = true;
+                                        console.log('[AI v1.40] → フェーズ4(攻撃)へ移行');
+                                    }
+                                    break;
+
+                                case 'ATTACK':
+                                    if (attackActions.length > 0) {
+                                        actionsToConsider = attackActions;
+                                        console.log(`[AI v1.40] フェーズ4(攻撃): ${attackActions.length}件`);
+                                    } else {
+                                        console.log('[AI v1.40] 全フェーズ完了');
+                                    }
+                                    break;
+                            }
+
+                            // フェーズ変更時は次のループへ
+                            if (phaseChanged) {
+                                continue;
+                            }
+                        }
+
+                        // アクションがない場合は終了
+                        if (!actionsToConsider || actionsToConsider.length === 0) {
+                            console.log('[AI v1.40] No actions in current phase');
+                            break;
+                        }
+
+                        // スコア順にソート
+                        actionsToConsider.sort((a, b) => b.score - a.score);
+
+                        // === v1.30: 重複アクションをスキップ ===
+                        // === v1.45: DOUBLE_ATTACKの2回目の攻撃を許可するため、attacksMadeをキーに含める ===
+                        let bestAction = null;
+                        for (const scored of actionsToConsider) {
+                            const attacksMade = scored.action.type === 'ATTACK' ? (scored.action.attacker?.attacksMade || 0) : 0;
+                            const actionKey = `${scored.action.type}-${
+                                scored.action.type === 'ATTACK' ? `${scored.action.attackerInstanceId}-${scored.action.targetIndex}-${attacksMade}` :
+                                scored.action.type === 'PLAY_CARD' ? scored.action.instanceId :
+                                scored.action.type === 'EVOLVE' ? `${scored.action.instanceId}-${scored.action.useSep}` : ''
+                            }`;
+
+                            if (!executedActions.has(actionKey)) {
+                                bestAction = scored;
+                                executedActions.add(actionKey);
+                                // === v1.45: DOUBLE_ATTACKの場合はログ出力 ===
+                                if (scored.action.type === 'ATTACK' && scored.action.attacker?.passiveAbilities?.includes('DOUBLE_ATTACK')) {
+                                    console.log(`[AI v1.45] DOUBLE_ATTACK: ${scored.action.attacker.name} 攻撃 #${attacksMade + 1}`);
+                                }
+                                break;
+                            } else {
+                                console.warn('[AI v1.30] Duplicate action detected, skipping:', actionKey);
+                            }
+                        }
+
+                        // 有効なアクションがなければ終了
+                        if (!bestAction) {
+                            console.log('[AI v1.30] No valid actions left (all duplicates)');
+                            break;
+                        }
+
+                        // スコアが0以下なら終了（やる価値なし）
+                        if (bestAction.score <= 0) {
+                            console.log('[AI v1.30] Best action score <= 0, ending turn');
+                            break;
+                        }
+
+                        // 行動を実行
+                        console.log(`[AI v1.30] Executing action #${actionCount + 1}:`, bestAction.action.type, 'score:', bestAction.score);
+                        await executeAction(bestAction.action);
+                        await waitForIdle(300);
+
+                        actionCount++;
+                    }
+                    console.log(`[AI v1.30] Action loop completed after ${actionCount} actions`);
+                } else {
+                // === 以下、従来の固定フェーズ（EASY/NORMAL用）===
                 // 2. Play Cards (Multiple cards if PP allows - NORMAL/HARD only)
                 let cardsPlayedThisTurn = 0;
                 const maxCardsToPlay = aiDifficulty === 'EASY' ? 1 : aiDifficulty === 'HARD' ? 5 : 3;
@@ -7169,7 +8918,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     let playable = aiHand
                         .map((c, i) => ({ ...c, originalIndex: i }))
                         .filter(c => c.cost <= aiPp)
-                        .filter(c => !(c.type === 'FOLLOWER' && boardIsFull)); // Don't play followers if board is full
+                        .filter(c => !(c.type === 'FOLLOWER' && boardIsFull)) // Don't play followers if board is full
+                        .filter(c => {
+                            // === v1.22: 盤面満杯時にSUMMON系スペルを使わない ===
+                            if (c.type === 'SPELL' && boardIsFull) {
+                                const effects = c.effects || [];
+                                const hasSummonEffect = effects.some((e: any) =>
+                                    ['SUMMON_CARD', 'SUMMON_CARD_RUSH', 'SUMMON_CARD_FILL_BOARD', 'SUMMON_TOKEN'].includes(e.type)
+                                );
+                                if (hasSummonEffect) {
+                                    console.log(`[AI v1.22] Board full - skip summon spell: ${c.name}`);
+                                    return false;
+                                }
+                            }
+                            return true;
+                        });
 
                     if (playable.length === 0) break;
 
@@ -7211,18 +8974,102 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (targetableCards.length > 0) {
                         // HARD: Choose best target based on card effect
                         if (aiDifficulty === 'HARD') {
-                            // Prefer high-value targets for removal
-                            const sortedTargets = [...targetableCards].sort((a: any, b: any) => {
-                                let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
-                                let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
-                                if (a.passiveAbilities?.includes('BANE')) scoreA += 10;
-                                if (b.passiveAbilities?.includes('BANE')) scoreB += 10;
-                                return scoreB - scoreA;
-                            });
-                            targetId = sortedTargets[0]!.instanceId;
+                            // === v1.19: リーサル判定を追加 ===
+                            // WARDを効果で処理すればリーサル可能かを判定
+                            const playerHp = state.players[currentPlayerId].hp;
+
+                            // AI盤面の攻撃可能フォロワーのATK合計
+                            const aiBoardFollowers = state.players[opponentPlayerId].board.filter((c: any) => c !== null);
+                            const attackableFollowers = aiBoardFollowers.filter((c: any) => c.canAttack);
+                            let totalBoardAttack = attackableFollowers.reduce((sum: number, c: any) => sum + (c.currentAttack || 0), 0);
+
+                            // 今プレイするフォロワーがSTORMなら攻撃力に加算
+                            if (bestCard.type === 'FOLLOWER' && bestCard.passiveAbilities?.includes('STORM')) {
+                                totalBoardAttack += bestCard.attack || bestCard.currentAttack || 0;
+                            }
+
+                            // 効果のダメージ量（DAMAGEまたはSELECT_DAMAGE）
+                            const damageEffect = fanfareEffects.find((e: any) =>
+                                e.type === 'DAMAGE' || e.type === 'SELECT_DAMAGE'
+                            );
+                            const effectDamage = damageEffect?.amount || 0;
+
+                            // 敵盤面のWARDフォロワー（STEALTH除く）
+                            const wardFollowers = targetableCards.filter((c: any) =>
+                                c.passiveAbilities?.includes('WARD') && !c.passiveAbilities?.includes('STEALTH')
+                            );
+
+                            // WARDを処理すればリーサル可能か判定
+                            let lethalTarget = null;
+
+                            // WARDが1体だけで、効果で倒せる場合
+                            if (wardFollowers.length === 1 && effectDamage > 0) {
+                                const ward = wardFollowers[0];
+                                const wardHp = ward.currentHealth || 0;
+
+                                // 効果でWARDを倒せて、盤面ATKでリーサル
+                                if (effectDamage >= wardHp && totalBoardAttack >= playerHp) {
+                                    lethalTarget = ward;
+                                    console.log(`[AI v1.19] LETHAL via effect: ${bestCard.name} targets WARD ${ward.name} (${wardHp}HP), board ATK ${totalBoardAttack} >= player HP ${playerHp}`);
+                                }
+                            }
+
+                            // WARDがいない場合、効果ダメージ + 盤面ATKでリーサルか確認
+                            // この場合は誰を狙っても良いが、低HPを狙って確実に倒す
+                            if (!lethalTarget && wardFollowers.length === 0 && effectDamage > 0) {
+                                if (totalBoardAttack + effectDamage >= playerHp) {
+                                    // リーサル可能、誰を狙っても良いが最も確実に倒せるターゲットを選ぶ
+                                    const killableTargets = targetableCards.filter((c: any) =>
+                                        (c.currentHealth || 0) <= effectDamage
+                                    );
+                                    if (killableTargets.length > 0) {
+                                        // 倒せるターゲットの中で最も価値が高いものを選ぶ
+                                        killableTargets.sort((a: any, b: any) => {
+                                            let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
+                                            let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
+                                            return scoreB - scoreA;
+                                        });
+                                        lethalTarget = killableTargets[0];
+                                        console.log(`[AI v1.19] LETHAL (no WARD): ${bestCard.name} targets ${killableTargets[0].name}, effect ${effectDamage} + board ${totalBoardAttack} >= ${playerHp}`);
+                                    }
+                                }
+                            }
+
+                            if (lethalTarget) {
+                                targetId = lethalTarget.instanceId;
+                            } else {
+                                // 通常のソートロジック: 高価値ターゲットを優先
+                                const sortedTargets = [...targetableCards].sort((a: any, b: any) => {
+                                    let scoreA = (a.currentAttack || 0) + (a.currentHealth || 0);
+                                    let scoreB = (b.currentAttack || 0) + (b.currentHealth || 0);
+                                    if (a.passiveAbilities?.includes('BANE')) scoreA += 10;
+                                    if (b.passiveAbilities?.includes('BANE')) scoreB += 10;
+                                    return scoreB - scoreA;
+                                });
+                                targetId = sortedTargets[0]!.instanceId;
+                            }
                         } else {
                             targetId = targetableCards[0]!.instanceId;
                         }
+                    }
+
+                    // === 対象が必要なスペルを対象なしでプレイしない ===
+                    // SELECT_FOLLOWER 等の対象選択が必要なスペルは、対象がいなければスキップ
+                    const requiresTarget = targetType === 'SELECT_FOLLOWER' || targetType === 'SELECT_ALLY_FOLLOWER' || targetType === 'SELECT_OTHER_ALLY_FOLLOWER';
+                    if (requiresTarget && !targetId) {
+                        // 対象がいないのでこのカードをスキップして次のカードを試す
+                        playable = playable.filter((c: any) => c.instanceId !== bestCard.instanceId);
+                        if (playable.length === 0) break;
+                        continue;
+                    }
+
+                    // === AOEスペルを敵がいない時に使わない ===
+                    const isAoeSpell = fanfareEffects.some((e: any) => e.type === 'AOE_DAMAGE' && (e.targetType === 'ALL_FOLLOWERS' || e.targetType === 'ALL_ENEMY_FOLLOWERS'));
+                    const enemyBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
+                    if (isAoeSpell && enemyBoard.length === 0) {
+                        playable = playable.filter((c: any) => c.instanceId !== bestCard.instanceId);
+                        if (playable.length === 0) break;
+                        continue;
                     }
 
                     // Animation First
@@ -7351,7 +9198,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     for (const trig of triggers) {
                                         if (trig.trigger === 'SUPER_EVOLVE') {
                                             return (trig.effects || []).some((e: any) =>
-                                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(e.type)
+                                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE'].includes(e.type)
                                             );
                                         }
                                     }
@@ -7363,7 +9210,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     for (const trig of triggers) {
                                         if (trig.trigger === 'EVOLVE') {
                                             return (trig.effects || []).some((e: any) =>
-                                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE'].includes(e.type)
+                                                ['DESTROY', 'RANDOM_DESTROY', 'DAMAGE', 'SELECT_DAMAGE', 'AOE_DAMAGE', 'RANDOM_DAMAGE'].includes(e.type)
                                             );
                                         }
                                     }
@@ -7475,6 +9322,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                             // Only proceed with evolution if target was selected
                             if (target) {
+                                // === v1.18: 選ばれたカードに超進化効果がない場合は通常進化を使う ===
+                                // 超進化可能かつ通常進化も可能な場合、選ばれたカードに SUPER_EVOLVE がなければ通常進化を優先
+                                if (useSuper && canEvolveCheck) {
+                                    const targetTriggers = target.c.triggers || [];
+                                    const hasSuperEvolveEffect = targetTriggers.some((t: any) => t.trigger === 'SUPER_EVOLVE');
+                                    if (!hasSuperEvolveEffect) {
+                                        useSuper = false;
+                                        console.log(`[AI v1.18] ${target.c.name} has no SUPER_EVOLVE effect → using normal evolve`);
+                                    }
+                                }
+
                                 // Find best target for evolve effects
                                 let targetId = undefined;
 
@@ -7551,7 +9409,51 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 }
 
                 // 2.6 Post-Evolve Spell Phase (盞華超進化後のスペル使用)
+                // === v1.28: タイムアウトチェック追加 ===
                 {
+                    // AIターンタイムアウトチェック
+                    if (isAiTurnTimedOut()) {
+                        console.warn('[AI v1.28] AI turn timed out, skipping Post-Evolve Spell Phase');
+                    } else {
+                    // === v1.27: 盞華の超進化後、スペルが追加されるまで待つ ===
+                    // 盤面に超進化した盞華がいるかチェック
+                    const checkSenkaEvolved = () => {
+                        const currentState = gameStateRef.current;
+                        const aiBoard = currentState.players[opponentPlayerId].board;
+                        return aiBoard.some((c: any) => c && c.id === 'SENKA' && c.hasEvolved);
+                    };
+
+                    const senkaEvolved = checkSenkaEvolved();
+
+                    // 盞華が超進化した場合、スペルが手札に追加されるまで待つ
+                    // === v1.28: 最大待機を1.5秒に短縮、タイムアウトチェック追加 ===
+                    if (senkaEvolved) {
+                        let spellWaitCount = 0;
+                        const maxSpellWait = 15; // 15 * 100ms = 1.5秒
+
+                        while (spellWaitCount < maxSpellWait && !isAiTurnTimedOut()) {
+                            const currentHand = gameStateRef.current.players[opponentPlayerId].hand;
+                            const hasAnySpell = currentHand.some((c: any) =>
+                                c.id === 'TOKEN_QUAKE_HOWLING' ||
+                                c.id === 'TOKEN_BACKHAND_SMASH' ||
+                                c.id === 'TOKEN_FLICKER_JAB'
+                            );
+
+                            if (hasAnySpell) {
+                                console.log(`[AI v1.28] Senka spells detected after ${spellWaitCount * 100}ms`);
+                                break;
+                            }
+
+                            await new Promise(r => setTimeout(r, 100));
+                            spellWaitCount++;
+                        }
+
+                        if (spellWaitCount >= maxSpellWait) {
+                            console.warn('[AI v1.28] Timeout waiting for Senka spells');
+                        }
+                    }
+
+                    // 状態を再取得（スペル追加後の最新状態）
                     const state = gameStateRef.current;
                     const aiHand = state.players[opponentPlayerId].hand;
                     const playerBoard = state.players[currentPlayerId].board.filter((c: any) => c !== null);
@@ -7561,104 +9463,173 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const hasSmash = aiHand.some((c: any) => c.id === 'TOKEN_BACKHAND_SMASH');
                     const hasJab = aiHand.some((c: any) => c.id === 'TOKEN_FLICKER_JAB');
 
-                    // スペルがあれば使用
-                    if (hasQuake || hasSmash || hasJab) {
-                        // オーラ・隠密チェック用ヘルパー
-                        const isUntargetable = (c: any) =>
-                            c.passiveAbilities?.includes('AURA') || c.passiveAbilities?.includes('STEALTH');
+                    console.log(`[AI v1.27 SENKA] Post-evolve spell check: hasQuake=${hasQuake}, hasSmash=${hasSmash}, hasJab=${hasJab}, enemies=${playerBoard.length}`);
 
-                        // Step 1: 敵が複数体いる場合、クエイクハウリングを先に使用
-                        if (playerBoard.length >= 2 && hasQuake) {
-                            const cardIndex = aiHand.findIndex((c: any) => c.id === 'TOKEN_QUAKE_HOWLING');
-                            if (cardIndex !== -1) {
-                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex } });
-                                await waitForIdle(500);
-                            }
-                        }
+                    // === v1.26修正: returnではなく条件分岐で処理（フリーズバグ修正）===
+                    // 敵がいて、かつスペルがある場合のみ処理
+                    if (playerBoard.length > 0 && (hasQuake || hasSmash || hasJab)) {
+                        // オーラ・隠密チェック用ヘルパー（v1.25: AURAはスペル対象外だが、隠密中でない隠密フォロワーは対象可）
+                        const isUntargetable = (c: any) => {
+                            if (c.passiveAbilities?.includes('AURA')) return true;
+                            // STEALTH中（hadStealthがfalse）のみスキップ
+                            if (c.passiveAbilities?.includes('STEALTH') && !c.hadStealth) return true;
+                            return false;
+                        };
 
-                        // Step 2: フリッカージャブで倒せるもの（HP 1-2）を先に処理
+                        // === v1.25: 守護優先処理 - 守護を倒せるなら必ずスペルで倒す ===
                         let updatedState = gameStateRef.current;
                         let updatedBoard = updatedState.players[currentPlayerId].board.filter((c: any) => c !== null);
-                        const wards = updatedBoard.filter((c: any) => c.passiveAbilities?.includes('WARD'));
-                        const nonWards = updatedBoard.filter((c: any) => !c.passiveAbilities?.includes('WARD'));
-                        const targets = [...wards, ...nonWards];
+                        const wards = updatedBoard.filter((c: any) =>
+                            c.passiveAbilities?.includes('WARD') && !isUntargetable(c)
+                        );
 
-                        for (const target of targets) {
-                            if (isUntargetable(target)) continue;
-                            const hp = target.currentHealth || 0;
-                            const currentHand = gameStateRef.current.players[opponentPlayerId].hand;
-                            const jabIndex = currentHand.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
-                            if (hp <= 2 && jabIndex !== -1) {
-                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: jabIndex, targetId: target.instanceId } });
-                                await waitForIdle(500);
+                        console.log(`[AI v1.25 SENKA] Found ${wards.length} targetable WARDs`);
+
+                        for (const ward of wards) {
+                            // === v1.25修正: 各スペル使用前にターゲット生存確認（Codex指摘対応）===
+                            const currentBoard = gameStateRef.current.players[currentPlayerId].board;
+                            const targetStillExists = currentBoard.some((c: any) => c && c.instanceId === ward.instanceId);
+                            if (!targetStillExists) {
+                                console.log(`[AI v1.25 SENKA] WARD ${ward.name} already dead, skipping`);
+                                continue;
                             }
-                        }
 
-                        // Step 3: 残った守護をバックハンドスマッシュで処理
-                        updatedState = gameStateRef.current;
-                        updatedBoard = updatedState.players[currentPlayerId].board.filter((c: any) => c !== null);
-                        const remainingWards = updatedBoard.filter((c: any) => c.passiveAbilities?.includes('WARD'));
-
-                        for (const ward of remainingWards) {
-                            if (isUntargetable(ward)) continue;
                             const hp = ward.currentHealth || 0;
                             const currentHand = gameStateRef.current.players[opponentPlayerId].hand;
                             const smashIndex = currentHand.findIndex((c: any) => c.id === 'TOKEN_BACKHAND_SMASH');
                             const jabIndex = currentHand.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
                             const quakeIndex = currentHand.findIndex((c: any) => c.id === 'TOKEN_QUAKE_HOWLING');
 
+                            console.log(`[AI v1.25 SENKA] WARD ${ward.name} HP=${hp}, smash=${smashIndex !== -1}, jab=${jabIndex !== -1}, quake=${quakeIndex !== -1}`);
+
+                            // HP 2以下: フリッカージャブで処理
+                            if (hp <= 2 && jabIndex !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Flicker Jab on WARD ${ward.name} (HP=${hp})`);
+                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: jabIndex, targetId: ward.instanceId } });
+                                await waitForIdle(600);
+                                continue;
+                            }
+
+                            // HP 6以下: バックハンドスマッシュで処理
                             if (hp <= 6 && smashIndex !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Backhand Smash on WARD ${ward.name} (HP=${hp})`);
                                 dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: smashIndex, targetId: ward.instanceId } });
-                                await waitForIdle(500);
-                            } else if (hp <= 8 && smashIndex !== -1 && jabIndex !== -1) {
+                                await waitForIdle(600);
+                                continue;
+                            }
+
+                            // HP 8以下: バックハンドスマッシュ + フリッカージャブ
+                            if (hp <= 8 && smashIndex !== -1 && jabIndex !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Backhand Smash + Flicker Jab on WARD ${ward.name} (HP=${hp})`);
                                 dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: smashIndex, targetId: ward.instanceId } });
-                                await waitForIdle(500);
-                                const newHand = gameStateRef.current.players[opponentPlayerId].hand;
-                                const newJabIndex = newHand.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
-                                if (newJabIndex !== -1) {
-                                    dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: newJabIndex, targetId: ward.instanceId } });
-                                    await waitForIdle(500);
+                                await waitForIdle(600);
+                                // === v1.25修正: 2発目の前にターゲット生存確認（Codex指摘対応）===
+                                const boardAfterSmash = gameStateRef.current.players[currentPlayerId].board;
+                                const wardStillAlive = boardAfterSmash.some((c: any) => c && c.instanceId === ward.instanceId);
+                                if (!wardStillAlive) {
+                                    console.log(`[AI v1.25 SENKA] WARD ${ward.name} already dead after Smash, skipping Jab`);
+                                    continue;
                                 }
-                            } else if (hp <= 10 && quakeIndex !== -1 && smashIndex !== -1 && jabIndex !== -1) {
-                                // クエイク + バックハンド + フリッカー（計10ダメージ）
+                                const hand2 = gameStateRef.current.players[opponentPlayerId].hand;
+                                const newJabIdx = hand2.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
+                                if (newJabIdx !== -1) {
+                                    dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: newJabIdx, targetId: ward.instanceId } });
+                                    await waitForIdle(600);
+                                }
+                                continue;
+                            }
+
+                            // HP 9以上: クエイクハウリング(2) + バックハンドスマッシュ(6) = 8ダメージでは足りない
+                            // クエイク(2) + スマッシュ(6) + ジャブ(2) = 10ダメージ
+                            if (hp <= 10 && quakeIndex !== -1 && smashIndex !== -1 && jabIndex !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Quake + Smash + Jab on WARD ${ward.name} (HP=${hp})`);
                                 dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: quakeIndex } });
-                                await waitForIdle(500);
+                                await waitForIdle(600);
+                                // === v1.25修正: 2発目の前にターゲット生存確認（Codex指摘対応）===
+                                const boardAfterQuake = gameStateRef.current.players[currentPlayerId].board;
+                                const wardAliveAfterQuake = boardAfterQuake.some((c: any) => c && c.instanceId === ward.instanceId);
+                                if (!wardAliveAfterQuake) {
+                                    console.log(`[AI v1.25 SENKA] WARD ${ward.name} already dead after Quake, skipping Smash+Jab`);
+                                    continue;
+                                }
                                 const hand2 = gameStateRef.current.players[opponentPlayerId].hand;
                                 const smashIdx = hand2.findIndex((c: any) => c.id === 'TOKEN_BACKHAND_SMASH');
                                 if (smashIdx !== -1) {
                                     dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: smashIdx, targetId: ward.instanceId } });
-                                    await waitForIdle(500);
+                                    await waitForIdle(600);
+                                }
+                                // === v1.25修正: 3発目の前にターゲット生存確認（Codex指摘対応）===
+                                const boardAfterSmash = gameStateRef.current.players[currentPlayerId].board;
+                                const wardAliveAfterSmash = boardAfterSmash.some((c: any) => c && c.instanceId === ward.instanceId);
+                                if (!wardAliveAfterSmash) {
+                                    console.log(`[AI v1.25 SENKA] WARD ${ward.name} already dead after Smash, skipping Jab`);
+                                    continue;
                                 }
                                 const hand3 = gameStateRef.current.players[opponentPlayerId].hand;
                                 const jabIdx = hand3.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
                                 if (jabIdx !== -1) {
                                     dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: jabIdx, targetId: ward.instanceId } });
-                                    await waitForIdle(500);
+                                    await waitForIdle(600);
                                 }
+                                continue;
+                            }
+
+                            console.log(`[AI v1.25 SENKA] WARD ${ward.name} HP=${hp} too high or not enough spells`);
+                        }
+
+                        // === 守護以外の敵を処理 ===
+                        updatedState = gameStateRef.current;
+                        updatedBoard = updatedState.players[currentPlayerId].board.filter((c: any) => c !== null);
+                        const nonWards = updatedBoard.filter((c: any) =>
+                            !c.passiveAbilities?.includes('WARD') && !isUntargetable(c)
+                        );
+
+                        // クエイクハウリング: 複数体いる場合は使用（バリア持ちがいる場合も）
+                        const hasBarrierEnemy = updatedBoard.some((c: any) => c.hasBarrier);
+                        const shouldUseQuake = updatedBoard.length >= 2 || hasBarrierEnemy;
+                        const currentHandForQuake = gameStateRef.current.players[opponentPlayerId].hand;
+                        const quakeIdx = currentHandForQuake.findIndex((c: any) => c.id === 'TOKEN_QUAKE_HOWLING');
+
+                        if (shouldUseQuake && quakeIdx !== -1) {
+                            console.log(`[AI v1.25 SENKA] Using Quake Howling (enemies=${updatedBoard.length}, hasBarrier=${hasBarrierEnemy})`);
+                            dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: quakeIdx } });
+                            await waitForIdle(600);
+                        }
+
+                        // 残りのスペルで非守護フォロワーを処理（HP順）
+                        for (const enemy of nonWards.sort((a: any, b: any) => (a.currentHealth || 0) - (b.currentHealth || 0))) {
+                            const hp = enemy.currentHealth || 0;
+                            const finalHand = gameStateRef.current.players[opponentPlayerId].hand;
+                            const jabIdx = finalHand.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
+                            const smashIdx = finalHand.findIndex((c: any) => c.id === 'TOKEN_BACKHAND_SMASH');
+
+                            if (hp <= 2 && jabIdx !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Flicker Jab on ${enemy.name} (HP=${hp})`);
+                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: jabIdx, targetId: enemy.instanceId } });
+                                await waitForIdle(600);
+                            } else if (hp <= 6 && smashIdx !== -1) {
+                                console.log(`[AI v1.25 SENKA] Using Backhand Smash on ${enemy.name} (HP=${hp})`);
+                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: smashIdx, targetId: enemy.instanceId } });
+                                await waitForIdle(600);
                             }
                         }
 
-                        // Step 4: 残りのスペルでキレイに倒せる非守護フォロワーを処理
+                        // 最終状態をログ
                         const finalState = gameStateRef.current;
-                        const finalBoard = finalState.players[currentPlayerId].board.filter((c: any) => c !== null);
-                        for (const enemy of finalBoard) {
-                            if (isUntargetable(enemy)) continue;
-                            const hp = enemy.currentHealth || 0;
-                            const finalHand = gameStateRef.current.players[opponentPlayerId].hand;
-                            const jabIndex = finalHand.findIndex((c: any) => c.id === 'TOKEN_FLICKER_JAB');
-                            const smashIndex = finalHand.findIndex((c: any) => c.id === 'TOKEN_BACKHAND_SMASH');
-                            if (hp <= 2 && jabIndex !== -1) {
-                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: jabIndex, targetId: enemy.instanceId } });
-                                await waitForIdle(500);
-                            } else if (hp <= 6 && smashIndex !== -1) {
-                                dispatch({ type: 'PLAY_CARD', playerId: opponentPlayerId, payload: { cardIndex: smashIndex, targetId: enemy.instanceId } });
-                                await waitForIdle(500);
-                            }
-                        }
+                        const remainingSpells = finalState.players[opponentPlayerId].hand.filter((c: any) =>
+                            c.id === 'TOKEN_QUAKE_HOWLING' || c.id === 'TOKEN_BACKHAND_SMASH' || c.id === 'TOKEN_FLICKER_JAB'
+                        );
+                        const remainingEnemies = finalState.players[currentPlayerId].board.filter((c: any) => c !== null);
+                        console.log(`[AI v1.25 SENKA] Post-spell phase complete: ${remainingSpells.length} spells remaining, ${remainingEnemies.length} enemies remaining`);
                     }
+                    } // === v1.28: elseブロック終了 ===
                 }
 
                 // 3. Attack Phase (Smart targeting based on difficulty)
+                // === v1.28: タイムアウトチェック追加 ===
+                if (isAiTurnTimedOut()) {
+                    console.warn('[AI v1.28] AI turn timed out, skipping Attack Phase');
+                } else
                 {
                     let continueAttacking = true;
                     let attempts = 0;
@@ -7720,9 +9691,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         ).join(', '));
                     }
 
-                    while (continueAttacking && attempts < 15) {
+                    // === v1.28: タイムアウトチェックをwhileループに追加 ===
+                    while (continueAttacking && attempts < 15 && !isAiTurnTimedOut()) {
                         // ゲーム終了チェック
                         if (gameStateRef.current.winnerId) {
+                            continueAttacking = false;
+                            break;
+                        }
+                        // タイムアウトチェック
+                        if (isAiTurnTimedOut()) {
+                            console.warn('[AI v1.28] AI turn timed out during attack phase');
                             continueAttacking = false;
                             break;
                         }
@@ -7736,13 +9714,121 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         let actionTaken = false;
 
+                        // === v1.19: リーサル時WARD処理最適化 ===
+                        // WARDがいる場合、最小ATKフォロワーでWARDを倒し、残りでリーダー攻撃
+                        let wardKillerAssigned: number | null = null; // WARDを倒す担当フォロワーのindex
+
+                        if (isLethalMode && aiDifficulty === 'HARD') {
+                            // WARDを探す
+                            const wardTargets = playerBoard
+                                .map((c: any, idx: number) => ({ c, idx }))
+                                .filter(({ c }: any) =>
+                                    c && c.passiveAbilities?.includes('WARD') &&
+                                    !c.passiveAbilities?.includes('STEALTH') &&
+                                    !isImmuneToFollowerAttack(c, state)
+                                );
+
+                            if (wardTargets.length > 0) {
+                                const ward = wardTargets[0];
+                                const wardHp = ward.c.currentHealth || 0;
+
+                                // WARDを倒せるフォロワーの中で最小ATKを探す
+                                const canKillWard = aiBoard
+                                    .map((c: any, idx: number) => ({ c, idx }))
+                                    .filter(({ c }: any) => {
+                                        if (!c || !c.canAttack) return false;
+                                        // STEALTH/hadStealthはWARD無視可能なのでリーダー攻撃担当
+                                        if (c.passiveAbilities?.includes('STEALTH') || c.hadStealth) return false;
+                                        const atk = c.currentAttack || 0;
+                                        return atk >= wardHp; // WARDを倒せる
+                                    })
+                                    .sort((a: any, b: any) => {
+                                        // 最小ATKを先に（リーダー攻撃用に高ATKを温存）
+                                        return (a.c.currentAttack || 0) - (b.c.currentAttack || 0);
+                                    });
+
+                                if (canKillWard.length > 0) {
+                                    wardKillerAssigned = canKillWard[0].idx;
+                                    console.log(`[AI v1.19] LETHAL: Assign ATK ${canKillWard[0].c.currentAttack} follower (idx ${wardKillerAssigned}) to kill WARD (${wardHp}HP)`);
+                                }
+                            }
+                        }
+
+                        // === v1.24: BARRIER処理の攻撃順序最適化 ===
+                        // BANEがいない場合、低ATKでバリア剥がし → 高ATKで破壊
+                        let barrierStripperAssigned: number | null = null;
+                        let barrierTargetIdx: number | null = null;
+
+                        if (aiDifficulty === 'HARD') {
+                            // BARRIER持ちを探す（WARDでない、かつ脅威度あり）
+                            const barrierTargets = playerBoard
+                                .map((c: any, idx: number) => ({ c, idx }))
+                                .filter(({ c }: any) =>
+                                    c && c.passiveAbilities?.includes('BARRIER') &&
+                                    !c.passiveAbilities?.includes('STEALTH') &&
+                                    !isImmuneToFollowerAttack(c, state) &&
+                                    (c.currentAttack || 0) > 0 // 脅威度があるターゲットのみ
+                                )
+                                .sort((a: any, b: any) =>
+                                    // 攻撃力が高い（脅威度が高い）順
+                                    (b.c.currentAttack || 0) - (a.c.currentAttack || 0)
+                                );
+
+                            if (barrierTargets.length > 0) {
+                                const barrier = barrierTargets[0];
+                                barrierTargetIdx = barrier.idx;
+                                // barrierHpは将来の最適化（倒せるか判定）で使用予定
+                                const _barrierHp = barrier.c.currentHealth || 0;
+                                void _barrierHp; // 未使用警告を抑制
+
+                                // BANE持ちがいるか確認（v1.23で対応済みなのでスキップ）
+                                const hasBaneAttacker = aiBoard.some((c: any) =>
+                                    c && c.canAttack && c.passiveAbilities?.includes('BANE')
+                                );
+
+                                if (!hasBaneAttacker) {
+                                    // BANEがいない場合、2回攻撃が必要
+                                    // 1. 最小ATKでバリア剥がし
+                                    // 2. バリアHPを倒せるATKで破壊
+                                    const attackableFollowers = aiBoard
+                                        .map((c: any, idx: number) => ({ c, idx }))
+                                        .filter(({ c }: any) => c && c.canAttack)
+                                        .sort((a: any, b: any) =>
+                                            // ATK昇順（最小ATKを先に）
+                                            (a.c.currentAttack || 0) - (b.c.currentAttack || 0)
+                                        );
+
+                                    if (attackableFollowers.length >= 2) {
+                                        // 最小ATKをバリア剥がし担当に
+                                        barrierStripperAssigned = attackableFollowers[0].idx;
+                                        console.log(`[AI v1.24] BARRIER: Assign ATK ${attackableFollowers[0].c.currentAttack} follower (idx ${barrierStripperAssigned}) to strip barrier, high ATK followers will kill after`);
+                                    } else if (attackableFollowers.length === 1) {
+                                        // 1体しかいない場合はその1体がバリア剥がし
+                                        barrierStripperAssigned = attackableFollowers[0].idx;
+                                        console.log(`[AI v1.24] BARRIER: Only one attacker, will strip barrier`);
+                                    }
+                                }
+                            }
+                        }
+
                         // === v1.14: 攻撃順序最適化 ===
                         // RUSHフォロワーを先に攻撃させる（フォロワー処理担当）
                         // リーダー攻撃可能フォロワーは後（リーダー攻撃担当）
+                        // v1.19: WARD処理担当を先に攻撃させる
                         const attackerIndices = aiBoard
                             .map((c: any, idx: number) => ({ c, idx }))
                             .filter(({ c }: any) => c && c.canAttack)
                             .sort((a: any, b: any) => {
+                                // v1.19: WARD処理担当を最優先
+                                if (wardKillerAssigned !== null) {
+                                    if (a.idx === wardKillerAssigned) return -1;
+                                    if (b.idx === wardKillerAssigned) return 1;
+                                }
+                                // === v1.24: BARRIER剥がし担当を優先（WARD担当の次） ===
+                                if (barrierStripperAssigned !== null) {
+                                    if (a.idx === barrierStripperAssigned) return -1;
+                                    if (b.idx === barrierStripperAssigned) return 1;
+                                }
                                 const aCanLeader = a.c.passiveAbilities?.includes('STORM') || a.c.turnPlayed !== state.turnCount;
                                 const bCanLeader = b.c.passiveAbilities?.includes('STORM') || b.c.turnPlayed !== state.turnCount;
                                 // RUSHフォロワー（リーダー攻撃不可）を先に
@@ -7771,8 +9857,42 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 )
                                 : -1;
 
+                            // === v1.19: LETHAL MODE with WARD optimization ===
+                            // wardKillerAssignedが設定されている場合、担当だけがWARD攻撃、残りはリーダー攻撃
+                            if (isLethalMode && wardKillerAssigned !== null && wardTarget !== -1) {
+                                if (i === wardKillerAssigned) {
+                                    // このフォロワーがWARD処理担当
+                                    targetIndex = wardTarget;
+                                    targetIsLeader = false;
+                                    console.log(`[AI v1.19] LETHAL: WARD killer (idx ${i}, ATK ${attacker.currentAttack}) attacking WARD`);
+                                } else if (attackerIgnoresWard) {
+                                    // STEALTH/hadStealthでWARD無視可能 → リーダー攻撃
+                                    const hasStorm = attacker.passiveAbilities?.includes('STORM');
+                                    const canGoFace = hasStorm || attacker.turnPlayed !== state.turnCount;
+                                    if (canGoFace) {
+                                        targetIndex = -1;
+                                        targetIsLeader = true;
+                                        console.log(`[AI v1.19] LETHAL: Follower (idx ${i}) ignores WARD, attacking leader`);
+                                    } else {
+                                        // RUSHでWARD無視可能 → 適当なフォロワー攻撃
+                                        const validTargets = playerBoard
+                                            .map((c: any, idx: number) => ({ c, idx }))
+                                            .filter(({ c }: any) => c && !c.passiveAbilities?.includes('STEALTH') && !isImmuneToFollowerAttack(c, state));
+                                        if (validTargets.length > 0) {
+                                            targetIndex = validTargets[0].idx;
+                                            targetIsLeader = false;
+                                        } else {
+                                            continue;
+                                        }
+                                    }
+                                } else {
+                                    // WARDがいてWARD無視不可、担当ではない → 次のwhileループで処理
+                                    // （担当がWARDを倒した後に処理される）
+                                    continue;
+                                }
+                            }
                             // === LETHAL MODE: Skip followers, go face (unless ward blocks) ===
-                            if (isLethalMode && wardTarget === -1) {
+                            else if (isLethalMode && wardTarget === -1) {
                                 const hasStorm = attacker.passiveAbilities?.includes('STORM');
                                 const canGoFace = hasStorm || attacker.turnPlayed !== state.turnCount;
                                 if (canGoFace) {
@@ -7819,10 +9939,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 }
                                 // else attack leader (default)
                             } else {
-                                // NORMAL/HARD: Smart targeting
-                                const result = findBestAttackTarget(attacker, playerBoard, state);
-                                targetIndex = result.index;
-                                targetIsLeader = result.isLeader;
+                                // === v1.24: BARRIER剥がし担当は指定されたBARRIERを攻撃 ===
+                                if (barrierStripperAssigned !== null && i === barrierStripperAssigned && barrierTargetIdx !== null) {
+                                    const barrierTarget = playerBoard[barrierTargetIdx];
+                                    if (barrierTarget && barrierTarget.passiveAbilities?.includes('BARRIER')) {
+                                        console.log(`[AI v1.24] BARRIER stripper (idx ${i}) attacking BARRIER target at ${barrierTargetIdx}`);
+                                        targetIndex = barrierTargetIdx;
+                                        targetIsLeader = false;
+                                    } else {
+                                        // バリアが既に剥がれている場合は通常ロジック
+                                        const result = findBestAttackTarget(attacker, playerBoard, state);
+                                        targetIndex = result.index;
+                                        targetIsLeader = result.isLeader;
+                                    }
+                                } else {
+                                    // NORMAL/HARD: Smart targeting
+                                    const result = findBestAttackTarget(attacker, playerBoard, state);
+                                    targetIndex = result.index;
+                                    targetIsLeader = result.isLeader;
+                                }
 
                                 // Skip if no valid target
                                 if (targetIndex === -1 && !targetIsLeader) {
@@ -7898,6 +10033,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         if (!actionTaken) continueAttacking = false;
                     }
                 }
+                } // === v1.29: 固定フェーズ（EASY/NORMAL用）のelseブロック終了 ===
 
                 // ターン終了前にすべてのpendingEffects（ラストワード等）が処理されるまで待機
                 await waitForIdle(300);
@@ -7913,7 +10049,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
             };
             runAiTurn();
         }
-    }, [gameState.activePlayerId, gameState.turnCount, gameMode, gameState.phase, aiDifficulty, gameState.winnerId]);
+    // === v1.26: gameState.phase を依存配列から削除（フリーズバグ修正）===
+    // phase変更はAI処理内で発生するため、依存配列に含めると競合リスクがある
+    }, [gameState.activePlayerId, gameState.turnCount, gameMode, aiDifficulty, gameState.winnerId]);
 
 
 
@@ -9206,6 +11344,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         // Now dispatch END_TURN
         console.log('[handleEndTurn] Dispatching END_TURN');
         dispatchAndSend({ type: 'END_TURN', playerId: currentPlayerId });
+        
+        // CRITICAL FIX: Re-check turn state before resetting isEndingTurnRef
+        // If turn has already switched (e.g., remote END_TURN processed first),
+        // the flag will be reset by useEffect or remote END_TURN handler
+        // Use a small delay to allow dispatch to process
+        await new Promise(r => setTimeout(r, 10));
+        
+        // Always reset here, but log if turn has switched
+        if (gameStateRef.current.activePlayerId !== currentPlayerId ||
+            gameStateRef.current.turnCount !== turnCountAtStart) {
+            console.log('[handleEndTurn] Turn already switched, isEndingTurnRef will be reset by useEffect or remote handler');
+        }
         isEndingTurnRef.current = false;
         setIsEndingTurn(false);
     };
@@ -10757,46 +12907,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ?
                             </button>
 
-                            {/* Battle Log - Inline instead of absolute, fixed height to prevent layout shift */}
-                            <div
-                                style={{
-                                    width: Math.max(180, 220 * scale),
-                                    height: Math.max(200, 280 * scale), // Fixed height to prevent layout shift
-                                    overflowY: 'auto',
-                                    background: 'linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.0))',
-                                    color: '#fff',
-                                    fontSize: `${Math.max(0.65, 0.75 * scale)}rem`,
-                                    padding: `${8 * scale}px ${8 * scale}px ${8 * scale}px ${12 * scale}px`,
-                                    borderLeft: '3px solid #63b3ed',
-                                    pointerEvents: 'auto',
-                                    scrollbarWidth: 'thin',
-                                }}
-                                onMouseDown={e => e.stopPropagation()}
-                                onClick={e => e.stopPropagation()}
-                                ref={(el) => {
-                                    if (el) el.scrollTop = el.scrollHeight;
-                                }}
-                            >
-                                <div style={{
-                                    fontWeight: 'bold', marginBottom: 4 * scale, color: '#a0aec0',
-                                    borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 2,
-                                    fontSize: `${Math.max(0.55, 0.65 * scale)}rem`, textTransform: 'uppercase', letterSpacing: 1
-                                }}>
-                                    BATTLE LOG
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 * scale }}>
-                                    {(gameState.logs || []).map((log, i) => (
-                                        <div key={i} style={{
-                                            opacity: 0.9,
-                                            lineHeight: '1.4',
-                                            textShadow: '0 1px 2px black',
-                                            animation: 'fadeIn 0.3s ease-out'
-                                        }}>
-                                            {log}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Battle Log - Using BattleLog component with inline mode for clickable card names */}
+                            <BattleLog
+                                logs={gameState.logs || []}
+                                onCardNameClick={handleCardNameClickFromLog}
+                                scale={scale}
+                                isMobile={false}
+                                inline={true}
+                            />
 
                             {/* Hand Count & Graveyard Count */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none' }}>
