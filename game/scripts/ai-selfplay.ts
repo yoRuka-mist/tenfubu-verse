@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { calculateStateHash, createRNG, gameReducer, initializeGame } from '../src/core/engine.js';
+import { getOpponentAwarePolicy } from '../src/ai/opponentPolicy.js';
 import type { AbilityEffect, BoardCard, Card, ClassType, GameAction, GameState } from '../src/core/types.js';
 
 type MatchResult = {
@@ -15,6 +16,9 @@ type MatchResult = {
   senkaFirstPlayTurnP1?: number;
   senkaFirstPlayTurnP2?: number;
   whiteTsubakiTurns: number[];
+  baneBarrierAttempts: number;
+  baneBarrierFavorable: number;
+  baneBarrierSetupLethal: number;
   keyEvents: string[];
 };
 
@@ -57,6 +61,10 @@ type SummaryMetrics = {
   whiteMid: number;
   whiteLate: number;
   whiteTotal: number;
+  baneBarrierAttempts: number;
+  baneBarrierFavorable: number;
+  baneBarrierSetupLethal: number;
+  baneBarrierFavorableRate: number;
   senkaVsAjaP1Rate?: number;
 };
 
@@ -84,6 +92,11 @@ const DEFAULT_WEIGHTS: Weights = {
   faceWindowBonus: 34,
   badTradePenalty: 22,
 };
+
+
+
+const YORUKA_BANE_HIGH_PRIORITY_TARGETS = new Set(['c_valkyrie', 'c_white_tsubaki']);
+
 let ACTIVE_WEIGHTS: Weights = { ...DEFAULT_WEIGHTS };
 
 function parseWeights(raw?: string): Weights | undefined {
@@ -263,10 +276,32 @@ function estimateFutureWindowBurst(state: GameState, playerId: string): { t9: nu
   return { t9, t10, best: Math.max(t9, t10) };
 }
 
+function estimateNextTurnBoardPressure(state: GameState, playerId: string, excludeInstanceId?: string): number {
+  const player = state.players[playerId];
+  return player.board
+    .filter((c): c is BoardCard => Boolean(c))
+    .filter((c) => c.instanceId !== excludeInstanceId)
+    .reduce((sum, c) => sum + (c.currentAttack ?? 0), 0);
+}
+
+function countStealthFollowers(board: (BoardCard | null)[]): number {
+  return board.filter((c) => c?.passiveAbilities?.includes('STEALTH')).length;
+}
+
+function isYorukaEmergencyRemovalWindow(state: GameState, playerId: string): boolean {
+  const enemy = state.players[getEnemyPlayerId(playerId)];
+  const enemyFollowers = enemy.board.filter((c): c is BoardCard => Boolean(c));
+  const enemyAtk = enemyFollowers.reduce((sum, c) => sum + (c.currentAttack ?? 0), 0);
+  const ownHp = state.players[playerId].hp;
+  const hasBarrierThreat = enemyFollowers.some((c) => c.hasBarrier && (YORUKA_BANE_HIGH_PRIORITY_TARGETS.has(c.id) || (c.currentAttack ?? 0) >= 4));
+  return enemyFollowers.length >= 3 || enemyAtk >= Math.max(8, ownHp - 3) || hasBarrierThreat;
+}
+
 function scoreCardForPlaying(card: Card, state: GameState, playerId: string): number {
   const player = state.players[playerId];
   const enemy = state.players[getEnemyPlayerId(playerId)];
-  const enemyBoard = enemy.board.filter(Boolean);
+  const policy = getOpponentAwarePolicy(player.class, enemy.class);
+  const enemyBoard = enemy.board.filter((c): c is BoardCard => Boolean(c));
   const turnCount = state.turnCount;
   const currentDamage = calculatePotentialDamage(state, playerId);
   let score = card.cost * 10;
@@ -285,11 +320,11 @@ function scoreCardForPlaying(card: Card, state: GameState, playerId: string): nu
     const pressureCoef = enemy.hp <= 12 ? 1.12 : 1.0;
     const facePlanCoef = ajaAggroCoef * boardPenaltyCoef * pressureCoef;
 
-    if (card.id === 'c_senka_knuckler') score += Math.round(ACTIVE_WEIGHTS.knucklerBonus * facePlanCoef);
-    if (card.id === 's_final_cannon') score += Math.round(ACTIVE_WEIGHTS.cannonBonus * facePlanCoef);
-    if (card.passiveAbilities?.includes('STORM')) score += Math.round(ACTIVE_WEIGHTS.stormBonus * facePlanCoef);
+    if (card.id === 'c_senka_knuckler') score += Math.round(ACTIVE_WEIGHTS.knucklerBonus * facePlanCoef * policy.faceBias);
+    if (card.id === 's_final_cannon') score += Math.round(ACTIVE_WEIGHTS.cannonBonus * facePlanCoef * policy.faceBias);
+    if (card.passiveAbilities?.includes('STORM')) score += Math.round(ACTIVE_WEIGHTS.stormBonus * facePlanCoef * policy.faceBias);
     const faceDamage = (card.attack ?? 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1);
-    if (needDamage <= faceDamage) score += Math.round(170 * facePlanCoef);
+    if (needDamage <= faceDamage) score += Math.round(170 * facePlanCoef * policy.faceBias);
   }
 
   if (card.id === 'c_senka_knuckler' && turnCount === 8) {
@@ -306,8 +341,67 @@ function scoreCardForPlaying(card: Card, state: GameState, playerId: string): nu
     const classCoef = enemy.class === 'AJA' ? 1.18 : enemy.class === 'YORUKA' ? 0.95 : 0.88;
     const handCoef = Math.min(1.35, 0.85 + enemyHand * 0.06);
     const removalPressure = turnBandCoef * classCoef * handCoef;
-    score += Math.round(ACTIVE_WEIGHTS.whiteBase * removalPressure);
-    if (enemyBoard.length > 0) score += Math.round(24 * removalPressure);
+    score += Math.round(ACTIVE_WEIGHTS.whiteBase * removalPressure * policy.whiteTsubakiPriority);
+    if (enemyBoard.length > 0) score += Math.round(24 * removalPressure * policy.whiteTsubakiPriority);
+  }
+
+  if (player.class === 'YORUKA') {
+    const ownBoard = player.board.filter((c): c is BoardCard => Boolean(c));
+    const enemyStealthCount = countStealthFollowers(enemy.board);
+    const emergencyRemoval = isYorukaEmergencyRemovalWindow(state, playerId);
+    const hasHarukaOnBoard = ownBoard.some((c) => c.id === 'c_haruka');
+    const hasHarukaInHand = player.hand.some((h) => h.id === 'c_haruka');
+    const harukaPlayedThisTurn = ownBoard.some((c) => c.id === 'c_haruka' && c.turnPlayed === turnCount);
+    const harukaSurvived = ownBoard.some((c) => c.id === 'c_haruka' && c.turnPlayed < turnCount);
+
+    if (card.id === 'c_haruka') {
+      score += 72;
+      if (turnCount >= 7 && !emergencyRemoval) score += 24;
+      if (player.hand.some((h) => h.id === 's_hayakikoto')) score += 18;
+      if (player.board.some((c) => c?.id === 'c_yoruka')) score += 22; // YORUKA先置き→遙後置き
+    }
+
+    // PP5分岐: 除去は悠霞、展開はぶっちー
+    if (player.pp >= 5 && card.cost === 5 && (card.id === 'c_yuka' || card.id === 'c_bucchi')) {
+      const enemyCount = enemyBoard.length;
+      const canBucchiTradeCleanly = enemyCount === 1 && (enemyBoard[0]?.currentHealth ?? 99) <= 5;
+      const removePreferred = enemyCount >= 3 || enemyStealthCount > 0;
+      if (card.id === 'c_yuka') {
+        if (removePreferred) score += 70;
+        else score -= 12;
+      }
+      if (card.id === 'c_bucchi') {
+        if (canBucchiTradeCleanly || (!removePreferred && enemyCount <= 2)) score += 56;
+        else score -= 20;
+      }
+    }
+
+    if (card.id === 's_hayakikoto') {
+      if (harukaSurvived) score += 76; // 次T「疾きこと風の如く→遙超進化」ライン
+      if (hasHarukaOnBoard) score += 20;
+      if (player.board.filter(Boolean).length >= 4) score -= 10;
+    }
+
+    // 4-6Tの進化温存方針を補助: 中盤は安易な盤面吐きを抑える
+    if (turnCount >= 4 && turnCount <= 6 && card.id === 's_hayakikoto' && !emergencyRemoval) {
+      score -= 18;
+    }
+
+    // 遙着地ターンに悠霞進化へ寄せるため、同ターンの追加5コスト展開をやや抑制
+    if (harukaPlayedThisTurn && card.id === 'c_bucchi') {
+      score -= 14;
+    }
+
+    if (card.id === 'c_setsuna') {
+      const hasHighBarrier = enemyBoard.some((c) => c.hasBarrier && YORUKA_BANE_HIGH_PRIORITY_TARGETS.has(c.id));
+      if (!hasHighBarrier && enemyBoard.length <= 1 && enemy.hp > 8) {
+        score -= 16; // 無駄切り抑制
+      }
+    }
+
+    if (hasHarukaInHand && card.id === 'c_yoruka' && turnCount >= 7 && turnCount <= 9) {
+      score += 28; // YORUKA先置き→遙後置き代替ルート
+    }
   }
 
   if (card.type === 'FOLLOWER' && player.board.filter(Boolean).length >= 5) score -= 200;
@@ -361,7 +455,9 @@ function canKillTarget(attacker: BoardCard, target: BoardCard): boolean {
 }
 
 function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardCard): { targetIndex: number; targetIsLeader: boolean } {
+  const player = state.players[playerId];
   const enemy = state.players[getEnemyPlayerId(playerId)];
+  const policy = getOpponentAwarePolicy(player.class, enemy.class);
   const canAttackLeader = attacker.passiveAbilities?.includes('STORM') || attacker.turnPlayed !== state.turnCount;
   const faceWindow = state.turnCount >= 9 && state.turnCount <= 10;
 
@@ -380,7 +476,7 @@ function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardC
     let score = 0;
 
     if (canKillTarget(attacker, target)) {
-      score += ACTIVE_WEIGHTS.tradeBase + (target.currentAttack ?? 0) * 5;
+      score += Math.round((ACTIVE_WEIGHTS.tradeBase + (target.currentAttack ?? 0) * 5) * policy.tradeBias);
       if (!willDie) score += 26;
       if (attacker.hasBarrier && target.hasBarrier) score += 12; // バリア有利トレード維持
       if (target.passiveAbilities?.includes('BANE') && willDie) score -= 34;
@@ -391,8 +487,28 @@ function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardC
       else score -= 8;
     }
 
+    if (attacker.passiveAbilities?.includes('BANE') && target.hasBarrier) {
+      score += policy.baneBarrierStripValue;
+      if (!wouldDieAttacking(attacker, target)) score += 8;
+      const nextTurnPressure = estimateNextTurnBoardPressure(state, playerId, attacker.instanceId) + (attacker.currentAttack ?? 0);
+      if (nextTurnPressure >= (target.currentHealth ?? 0)) {
+        score += policy.baneSetupLethalValue;
+      }
+    }
+
+    if (target.id === 'c_white_tsubaki') {
+      score += Math.round(28 * policy.whiteTsubakiAnswer);
+    }
+
+    if (state.players[playerId].class === 'YORUKA' && attacker.id === 'c_setsuna') {
+      const highPriority = YORUKA_BANE_HIGH_PRIORITY_TARGETS.has(target.id);
+      if (highPriority) score += 56;
+      if (target.hasBarrier && highPriority) score += 32;
+      if (!highPriority && !target.hasBarrier && canAttackLeader && enemy.hp > 6) score -= 24;
+    }
+
     if (faceWindow && canAttackLeader) {
-      score -= ACTIVE_WEIGHTS.faceWindowBonus;
+      score -= Math.round(ACTIVE_WEIGHTS.faceWindowBonus * policy.faceBias);
       if (enemy.hp <= 8) score -= 10;
     }
 
@@ -401,6 +517,12 @@ function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardC
 
   if (canAttackLeader) {
     const lethalLike = enemy.hp <= (attacker.currentAttack ?? 0) * (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1) + 2;
+    if (state.players[playerId].class === 'YORUKA' && attacker.id === 'c_setsuna') {
+      const hasHighPriorityBarrier = enemies.some((x) => x.c.hasBarrier && YORUKA_BANE_HIGH_PRIORITY_TARGETS.has(x.c.id));
+      if (!hasHighPriorityBarrier && enemy.hp > 4) {
+        return { targetIndex: -1, targetIsLeader: true };
+      }
+    }
     if (faceWindow || lethalLike) {
       if (best.index < 0 || best.score <= ACTIVE_WEIGHTS.faceWindowBonus) {
         return { targetIndex: -1, targetIsLeader: true };
@@ -414,7 +536,69 @@ function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardC
   return { targetIndex: -1, targetIsLeader: false };
 }
 
-function performTurn(state: GameState, playerId: string): GameState {
+type BaneBarrierTelemetry = {
+  attempts: number;
+  favorable: number;
+  setupLethal: number;
+};
+
+function chooseEvolutionPlan(state: GameState, playerId: string): { followerIndex: number; useSep: boolean; targetId?: string } | null {
+  const player = state.players[playerId];
+  const enemy = state.players[getEnemyPlayerId(playerId)];
+  const evolvable = player.board
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c && !c.hasEvolved)
+    .sort((a, b) => (b.c!.currentAttack ?? 0) - (a.c!.currentAttack ?? 0));
+
+  if (evolvable.length === 0) return null;
+
+  const firstPlayer = playerId === state.firstPlayerId;
+  const canNormalEvolve = state.turnCount >= (firstPlayer ? 5 : 4) && player.evolutionsUsed < 2 && player.canEvolveThisTurn;
+  const canSuperEvolve = state.turnCount >= 6 && player.sep > 0 && player.canEvolveThisTurn;
+  if (!canNormalEvolve && !canSuperEvolve) return null;
+
+  const enemyFollowers = enemy.board.filter((c): c is BoardCard => Boolean(c));
+  const emergencyRemoval = isYorukaEmergencyRemovalWindow(state, playerId);
+
+  if (player.class === 'YORUKA') {
+    const yukaLanding = player.board
+      .map((c, i) => ({ c, i }))
+      .find((x) => x.c?.id === 'c_yuka' && x.c.turnPlayed === state.turnCount && !x.c.hasEvolved);
+    const harukaSurvived = player.board
+      .map((c, i) => ({ c, i }))
+      .find((x) => x.c?.id === 'c_haruka' && x.c.turnPlayed < state.turnCount && !x.c.hasEvolved);
+    const harukaJustPlayed = player.board
+      .map((c, i) => ({ c, i }))
+      .find((x) => x.c?.id === 'c_haruka' && x.c.turnPlayed === state.turnCount && !x.c.hasEvolved);
+    const hasHayakikotoInHand = player.hand.some((h) => h.id === 's_hayakikoto');
+
+    // 2) 遙着地T: 悠霞進化を最優先
+    if (canNormalEvolve && yukaLanding && harukaJustPlayed) {
+      return { followerIndex: yukaLanding.i, useSep: false, targetId: enemyFollowers[0]?.instanceId };
+    }
+
+    // 2) 遙生存→次T爆発: 超進化を主軸化
+    if (canSuperEvolve && harukaSurvived && (hasHayakikotoInHand || enemyFollowers.length >= 2 || enemy.hp <= 14)) {
+      return { followerIndex: harukaSurvived.i, useSep: true, targetId: enemyFollowers[0]?.instanceId };
+    }
+
+    // 1) 7T遙即超進化はサブプラン（緊急除去時のみ）
+    if (canSuperEvolve && harukaJustPlayed && state.turnCount === 7 && emergencyRemoval) {
+      return { followerIndex: harukaJustPlayed.i, useSep: true, targetId: enemyFollowers[0]?.instanceId };
+    }
+
+    // 2) 4-6Tは進化温存寄り
+    if (state.turnCount >= 4 && state.turnCount <= 6 && !emergencyRemoval) {
+      return null;
+    }
+  }
+
+  const fallback = evolvable[0];
+  if (!fallback) return null;
+  return { followerIndex: fallback.i, useSep: false, targetId: enemyFollowers[0]?.instanceId };
+}
+
+function performTurn(state: GameState, playerId: string, telemetry: BaneBarrierTelemetry): GameState {
   let next = resolvePendingEffects(state);
   if (next.winnerId) return next;
 
@@ -440,21 +624,12 @@ function performTurn(state: GameState, playerId: string): GameState {
     if (calculateStateHash(next) === before) break;
   }
 
-  const evolvable = next.players[playerId].board
-    .map((c, i) => ({ c, i }))
-    .filter(({ c }) => c && !c.hasEvolved)
-    .sort((a, b) => (b.c!.currentAttack ?? 0) - (a.c!.currentAttack ?? 0));
-
-  if (evolvable.length > 0) {
-    const targetId = evolvable[0].c?.triggers?.flatMap((t) => t.effects)
-      .some((e) => e.targetType === 'SELECT_FOLLOWER')
-      ? next.players[getEnemyPlayerId(playerId)].board.filter(Boolean)[0]?.instanceId
-      : undefined;
-
+  const evoPlan = chooseEvolutionPlan(next, playerId);
+  if (evoPlan) {
     next = dispatchSafe(next, {
       type: 'EVOLVE',
       playerId,
-      payload: { followerIndex: evolvable[0].i, targetId, useSep: false },
+      payload: { followerIndex: evoPlan.followerIndex, targetId: evoPlan.targetId, useSep: evoPlan.useSep },
     });
     next = resolvePendingEffects(next);
     if (next.winnerId) return next;
@@ -470,6 +645,15 @@ function performTurn(state: GameState, playerId: string): GameState {
       const decision = chooseAttackTarget(next, playerId, attacker);
       if (!decision.targetIsLeader && decision.targetIndex < 0) break;
 
+      const enemyId = getEnemyPlayerId(playerId);
+      const preTarget = !decision.targetIsLeader && decision.targetIndex >= 0
+        ? next.players[enemyId].board[decision.targetIndex]
+        : null;
+      const isBaneBarrierAttempt = Boolean(preTarget && attacker.passiveAbilities?.includes('BANE') && preTarget.hasBarrier);
+      if (isBaneBarrierAttempt) {
+        telemetry.attempts += 1;
+      }
+
       const before = calculateStateHash(next);
       next = dispatchSafe(next, {
         type: 'ATTACK',
@@ -481,6 +665,22 @@ function performTurn(state: GameState, playerId: string): GameState {
         },
       });
       next = resolvePendingEffects(next);
+
+      if (isBaneBarrierAttempt && preTarget) {
+        const attackerAfter = next.players[playerId].board.find((c) => c?.instanceId === attacker.instanceId);
+        const targetAfter = next.players[enemyId].board.find((c) => c?.instanceId === preTarget.instanceId);
+        const stripped = Boolean(targetAfter && !targetAfter.hasBarrier);
+        if ((attackerAfter && stripped) || (!targetAfter && attackerAfter)) {
+          telemetry.favorable += 1;
+        }
+        if (targetAfter && stripped) {
+          const nextTurnPressure = estimateNextTurnBoardPressure(next, playerId, attacker.instanceId) + (attackerAfter?.currentAttack ?? 0);
+          if (nextTurnPressure >= (targetAfter.currentHealth ?? 0)) {
+            telemetry.setupLethal += 1;
+          }
+        }
+      }
+
       if (next.winnerId) return next;
       if (calculateStateHash(next) === before) break;
     }
@@ -499,12 +699,13 @@ function runSingleGame(gameIndex: number, seed: number, p1Class: ClassType, p2Cl
   const whiteTsubakiTurns: number[] = [];
 
   let previousLogLength = 0;
+  const baneBarrierTelemetry: BaneBarrierTelemetry = { attempts: 0, favorable: 0, setupLethal: 0 };
 
   for (let turnGuard = 0; turnGuard < maxTurns * 2; turnGuard++) {
     if (state.winnerId) break;
     if (state.turnCount > maxTurns) break;
 
-    state = performTurn(state, state.activePlayerId);
+    state = performTurn(state, state.activePlayerId, baneBarrierTelemetry);
 
     const newLogs = state.logs.slice(previousLogLength);
     previousLogLength = state.logs.length;
@@ -541,6 +742,9 @@ function runSingleGame(gameIndex: number, seed: number, p1Class: ClassType, p2Cl
     senkaFirstPlayTurnP1,
     senkaFirstPlayTurnP2,
     whiteTsubakiTurns,
+    baneBarrierAttempts: baneBarrierTelemetry.attempts,
+    baneBarrierFavorable: baneBarrierTelemetry.favorable,
+    baneBarrierSetupLethal: baneBarrierTelemetry.setupLethal,
     keyEvents,
   };
 }
@@ -556,6 +760,9 @@ function computeSummaryMetrics(results: MatchResult[]): SummaryMetrics {
   let whiteTsubakiEarly = 0;
   let whiteTsubakiMid = 0;
   let whiteTsubakiLate = 0;
+  let baneBarrierAttempts = 0;
+  let baneBarrierFavorable = 0;
+  let baneBarrierSetupLethal = 0;
 
   for (const r of results) {
     const key = `${r.p1Class} vs ${r.p2Class}`;
@@ -581,6 +788,10 @@ function computeSummaryMetrics(results: MatchResult[]): SummaryMetrics {
       else if (t <= 8) whiteTsubakiMid += 1;
       else whiteTsubakiLate += 1;
     }
+
+    baneBarrierAttempts += r.baneBarrierAttempts;
+    baneBarrierFavorable += r.baneBarrierFavorable;
+    baneBarrierSetupLethal += r.baneBarrierSetupLethal;
   }
 
   const senkaVsAja = matchupWins.get('SENKA vs AJA');
@@ -598,6 +809,10 @@ function computeSummaryMetrics(results: MatchResult[]): SummaryMetrics {
     whiteMid: whiteTsubakiMid,
     whiteLate: whiteTsubakiLate,
     whiteTotal: whiteTsubakiEarly + whiteTsubakiMid + whiteTsubakiLate,
+    baneBarrierAttempts,
+    baneBarrierFavorable,
+    baneBarrierSetupLethal,
+    baneBarrierFavorableRate: baneBarrierAttempts > 0 ? (baneBarrierFavorable / baneBarrierAttempts) * 100 : 0,
     senkaVsAjaP1Rate: senkaVsAja ? (senkaVsAja.win / senkaVsAja.total) * 100 : undefined,
   };
 }
@@ -614,6 +829,7 @@ function summarize(results: MatchResult[]): string {
   lines.push(`8T盞華先切り率=${m.senkaTurn8Rate.toFixed(2)}% (${m.senkaTurn8Count}/${m.senkaPlayableCount})`);
   lines.push(`9T/10Tリーサル到達率(盞華勝利時)=${m.senkaWinAt9or10Rate.toFixed(2)}% (${m.senkaWinAt9or10}/${m.senkaWins})`);
   lines.push(`白ツバキ使用ターン帯: 1-4T=${m.whiteEarly}, 5-8T=${m.whiteMid}, 9T+=${m.whiteLate}, total=${m.whiteTotal}`);
+  lines.push(`BANE→BARRIER剥がし: favorableRate=${m.baneBarrierFavorableRate.toFixed(2)}% (${m.baneBarrierFavorable}/${m.baneBarrierAttempts}), setupLethal=${m.baneBarrierSetupLethal}`);
   return lines.join('\n');
 }
 
@@ -631,6 +847,9 @@ function toCsvRow(r: MatchResult): string {
     r.senkaFirstPlayTurnP1 ?? '',
     r.senkaFirstPlayTurnP2 ?? '',
     r.whiteTsubakiTurns.join('|'),
+    r.baneBarrierAttempts,
+    r.baneBarrierFavorable,
+    r.baneBarrierSetupLethal,
     r.keyEvents.join(' / '),
   ].map(esc).join(',');
 }
@@ -719,7 +938,7 @@ function writeOutputs(args: Args, results: MatchResult[], suffix = '') {
 
   const header = [
     'gameIndex', 'seed', 'p1Class', 'p2Class', 'firstPlayerId', 'winnerId', 'winnerClass', 'turnCount',
-    'senkaFirstPlayTurnP1', 'senkaFirstPlayTurnP2', 'whiteTsubakiTurns', 'keyEvents'
+    'senkaFirstPlayTurnP1', 'senkaFirstPlayTurnP2', 'whiteTsubakiTurns', 'baneBarrierAttempts', 'baneBarrierFavorable', 'baneBarrierSetupLethal', 'keyEvents'
   ].join(',');
   writeFileSync(csvPath, `${header}\n${results.map(toCsvRow).join('\n')}\n`, 'utf8');
 

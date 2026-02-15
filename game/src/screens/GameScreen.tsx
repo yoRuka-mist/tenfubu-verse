@@ -7,6 +7,7 @@ import { BattleOutro, OutroPhase } from '../components/BattleOutro';
 import { TurnTimer } from '../components/TurnTimer';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
+import { getOpponentAwarePolicy } from '../ai/opponentPolicy';
 import { usePerformanceMode } from '../hooks/usePerformanceMode';
 import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType, getRankFromRating, RANK_THRESHOLDS } from '../firebase/rating';
 import { getClassRating, updateRatingAfterMatch, saveMatchRecord, SaveMatchRecordParams } from '../firebase/playerData';
@@ -5709,6 +5710,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 };
 
                 // --- AI Helper Functions ---
+                const aiClass = (gameStateRef.current.players[opponentPlayerId].class || 'SENKA') as 'SENKA' | 'AJA' | 'YORUKA';
+                const enemyClass = (gameStateRef.current.players[currentPlayerId].class || 'SENKA') as 'SENKA' | 'AJA' | 'YORUKA';
+                const aiPolicy = getOpponentAwarePolicy(aiClass, enemyClass);
+
+                const estimateNextTurnBoardPressure = (state: any, excludeInstanceId?: string): number => {
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null && c.instanceId !== excludeInstanceId);
+                    return aiBoard.reduce((sum: number, c: any) => sum + (c.currentAttack || 0), 0);
+                };
 
                 // Check if target is immune to follower damage (for attack decisions)
                 const isImmuneToFollowerAttack = (target: any, _state: any): boolean => {
@@ -5822,11 +5831,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (nearLethalWindow) {
                         const needDamage = Math.max(0, playerHp - currentDamage);
                         // Cards that directly push face damage are prioritized around 9/10T
-                        if (card.id === 'c_senka_knuckler') score += 148;
-                        if (card.id === 's_final_cannon') score += 218;
-                        if (card.passiveAbilities?.includes('STORM')) score += 64;
+                        if (card.id === 'c_senka_knuckler') score += Math.round(148 * aiPolicy.faceBias);
+                        if (card.id === 's_final_cannon') score += Math.round(218 * aiPolicy.faceBias);
+                        if (card.passiveAbilities?.includes('STORM')) score += Math.round(64 * aiPolicy.faceBias);
                         if (needDamage <= (card.attack || 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1)) {
-                            score += 170;
+                            score += Math.round(170 * aiPolicy.faceBias);
                         }
                     }
 
@@ -5888,11 +5897,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // 白ツバキを序〜中盤の除去強要圧として高評価
                     if (card.id === 'c_white_tsubaki') {
                         if (turnCount <= 8) {
-                            score += 74;
+                            score += Math.round(74 * aiPolicy.whiteTsubakiPriority);
                         } else {
-                            score += 18;
+                            score += Math.round(18 * aiPolicy.whiteTsubakiPriority);
                         }
-                        if (enemyBoard.length > 0) score += 22;
+                        if (enemyBoard.length > 0) score += Math.round(22 * aiPolicy.whiteTsubakiPriority);
                     }
 
                     // === VALUE CARDS ===
@@ -6114,7 +6123,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         // Can we kill it?
                         if (canKillTarget(attacker, target)) {
-                            targetScore += 44;
+                            targetScore += Math.round(44 * aiPolicy.tradeBias);
                             // Bonus for killing high-value targets
                             targetScore += (target.currentAttack || 0) * 5;
                             // Extra bonus for killing without dying
@@ -6154,8 +6163,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
                         }
 
+                        if (attacker.passiveAbilities?.includes('BANE') && target.hasBarrier) {
+                            targetScore += aiPolicy.baneBarrierStripValue;
+                            if (!wouldDieAttacking(attacker, target)) targetScore += 8;
+                            const nextTurnPressure = estimateNextTurnBoardPressure(state, attacker.instanceId) + (attacker.currentAttack || 0);
+                            if (nextTurnPressure >= (target.currentHealth || 0)) {
+                                targetScore += aiPolicy.baneSetupLethalValue;
+                            }
+                        }
+
+                        if (target.id === 'c_white_tsubaki') {
+                            targetScore += Math.round(28 * aiPolicy.whiteTsubakiAnswer);
+                        }
+
                         if (faceWindow && canAttackLeader) {
-                            targetScore -= 34;
+                            targetScore -= Math.round(34 * aiPolicy.faceBias);
                             if (state.players[currentPlayerId].hp <= 8) targetScore -= 10;
                         }
 
@@ -6169,7 +6191,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const enemyHp = state.players[currentPlayerId].hp;
                         const lethalLike = enemyHp <= (attacker.currentAttack || 0) * (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1) + 2;
                         if (faceWindow || lethalLike) {
-                            if (bestTarget.index === -1 || bestTarget.score <= 34) {
+                            if (bestTarget.index === -1 || bestTarget.score <= Math.round(34 * aiPolicy.faceBias)) {
                                 return { index: -1, isLeader: true };
                             }
                         }
@@ -8343,82 +8365,93 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'absolute', inset: 0, zIndex: 4000,
                         background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '16px',
                     }} onClick={() => setShowMenu(false)}>
-                        <div style={{ background: '#2d3748', padding: 40, borderRadius: 16, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 300, border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 10, color: '#fff' }}>メニュー</h2>
+                        <div style={{
+                            background: '#2d3748',
+                            padding: `${Math.max(16, 24 * scale)}px`,
+                            borderRadius: 16,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: `${Math.max(10, 14 * scale)}px`,
+                            width: Math.min(320, window.innerWidth - 32),
+                            maxHeight: 'calc(100dvh - 32px)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                        }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 8, color: '#fff', fontSize: `${Math.max(1, 1.3 * scale)}rem`, flexShrink: 0 }}>メニュー</h2>
 
                             {!showSettings ? (
                                 <>
-                                    <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
-                                    <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
-                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参</button>
+                                    <button onClick={() => setShowMenu(false)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>再開</button>
+                                    <button onClick={() => setShowSettings(true)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>設定</button>
+                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>降参</button>
                                 </>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-                                    <h3 style={{ margin: 0, color: '#cbd5e0' }}>音声設定</h3>
-                                    {/* BGM Toggle */}
-                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
-                                        BGM再生
-                                        <input type="checkbox" checked={audioSettings.bgmEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgmEnabled: e.target.checked }))}
-                                            style={{ width: 20, height: 20 }}
-                                        />
-                                    </label>
+                                <>
+                                    {/* 戻るボタン（上部） */}
+                                    <button onClick={() => setShowSettings(false)} style={{
+                                        padding: `${Math.max(6, 8 * scale)}px ${Math.max(12, 16 * scale)}px`,
+                                        background: '#4a5568', border: 'none', color: 'white',
+                                        borderRadius: 6, cursor: 'pointer',
+                                        fontSize: `${Math.max(0.75, 0.85 * scale)}rem`,
+                                        alignSelf: 'flex-start', flexShrink: 0,
+                                    }}>← 戻る</button>
 
-                                    {/* SE Toggle */}
-                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
-                                        SE再生
-                                        <input type="checkbox" checked={audioSettings.seEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, seEnabled: e.target.checked }))}
-                                            style={{ width: 20, height: 20 }}
-                                        />
-                                    </label>
+                                    {/* スクロール可能な設定コンテンツ */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: `${Math.max(10, 12 * scale)}px`, overflowY: 'auto', flex: 1, minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
+                                        <h3 style={{ margin: 0, color: '#cbd5e0', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>音声設定</h3>
 
-                                    {/* BGM Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>BGM</span>
-                                            <span>{Math.round(audioSettings.bgm * 100)}%</span>
+                                        {/* BGM Toggle + Volume */}
+                                        <div>
+                                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                BGM再生
+                                                <input type="checkbox" checked={audioSettings.bgmEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgmEnabled: e.target.checked }))}
+                                                    style={{ width: 18, height: 18 }}
+                                                />
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.bgm}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.bgm * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.bgm}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
-                                    </div>
 
-                                    {/* SE Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>SE</span>
-                                            <span>{Math.round(audioSettings.se * 100)}%</span>
+                                        {/* SE Toggle + Volume */}
+                                        <div>
+                                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                SE再生
+                                                <input type="checkbox" checked={audioSettings.seEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, seEnabled: e.target.checked }))}
+                                                    style={{ width: 18, height: 18 }}
+                                                />
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.se}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.se * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.se}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
-                                    </div>
 
-                                    {/* Voice Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>ボイス</span>
-                                            <span>{Math.round(audioSettings.voice * 100)}%</span>
+                                        {/* Voice Volume */}
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                <span>ボイス</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.voice}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.voice * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.voice}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
                                     </div>
-
-                                    <button onClick={() => setShowSettings(false)} style={{ padding: 10, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', marginTop: 10 }}>戻る</button>
-                                </div>
+                                </>
                             )}
-
                         </div>
                     </div>
                 )}
@@ -8432,12 +8465,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }} onClick={() => setShowSurrenderConfirm(false)}>
                         <div style={{
                             background: '#2d3748',
-                            padding: 40,
+                            padding: `${Math.max(20, 40 * scale)}px`,
                             borderRadius: 16,
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 20,
-                            minWidth: 320,
+                            gap: `${Math.max(12, 20 * scale)}px`,
+                            minWidth: Math.min(320, window.innerWidth * 0.85),
+                            maxHeight: '85vh',
+                            overflowY: 'auto',
                             border: '2px solid #e53e3e',
                             boxShadow: '0 0 30px rgba(229, 62, 62, 0.3)'
                         }} onClick={e => e.stopPropagation()}>
