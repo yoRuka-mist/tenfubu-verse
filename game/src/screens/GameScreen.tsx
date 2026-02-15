@@ -5822,15 +5822,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (nearLethalWindow) {
                         const needDamage = Math.max(0, playerHp - currentDamage);
                         // Cards that directly push face damage are prioritized around 9/10T
-                        if (card.id === 'c_senka_knuckler') score += 120;
-                        if (card.id === 's_final_cannon') score += 180;
-                        if (card.passiveAbilities?.includes('STORM')) score += 50;
+                        if (card.id === 'c_senka_knuckler') score += 148;
+                        if (card.id === 's_final_cannon') score += 218;
+                        if (card.passiveAbilities?.includes('STORM')) score += 64;
                         if (needDamage <= (card.attack || 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1)) {
-                            score += 160;
+                            score += 170;
                         }
                     }
 
-                    // 8T盞華先切り抑制: 9/10Tリーサル期待が高い時は温存寄り
+                    // 8T盞華先切り抑制: 9/10Tリーサル期待が高い時は温存寄り（抑制しすぎない）
                     if (card.id === 'c_senka_knuckler' && turnCount === 8) {
                         const hasFollowupBurst = aiHand.some((h: any) =>
                             h.id === 's_final_cannon' ||
@@ -5839,7 +5839,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const potentialByBoard = currentDamage;
                         const likelyLethalSoon = hasFollowupBurst || playerHp <= potentialByBoard + 8;
                         if (likelyLethalSoon && currentDamage + (card.attack || 0) * 2 < playerHp) {
-                            score -= 140;
+                            score -= 118;
                         }
                     }
 
@@ -5888,11 +5888,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // 白ツバキを序〜中盤の除去強要圧として高評価
                     if (card.id === 'c_white_tsubaki') {
                         if (turnCount <= 8) {
-                            score += 90;
+                            score += 74;
                         } else {
-                            score += 25;
+                            score += 18;
                         }
-                        if (enemyBoard.length > 0) score += 25;
+                        if (enemyBoard.length > 0) score += 22;
                     }
 
                     // === VALUE CARDS ===
@@ -6100,6 +6100,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
 
                     // No ward or ignoring ward - find best target
+                    const faceWindow = state.turnCount >= 9 && state.turnCount <= 10;
                     let bestTarget = { index: -1, isLeader: canAttackLeader, score: canAttackLeader ? 0 : -1000 };
 
                     for (const { c: target, i } of targetableEnemies) {
@@ -6113,21 +6114,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         // Can we kill it?
                         if (canKillTarget(attacker, target)) {
-                            targetScore += 50;
+                            targetScore += 44;
                             // Bonus for killing high-value targets
                             targetScore += (target.currentAttack || 0) * 5;
                             // Extra bonus for killing without dying
                             if (!willDie) {
-                                targetScore += 30;
+                                targetScore += 26;
                             } else {
                                 // Dying to kill - consider if it's worth it
                                 // Heavy penalty for evolved followers dying to BANE
                                 if (targetHasBane && attackerIsEvolved) {
-                                    targetScore -= 60; // Very bad trade
+                                    targetScore -= 62; // Very bad trade
                                 } else if (targetHasBane) {
-                                    targetScore -= 30; // Still bad trade unless target is very valuable
+                                    targetScore -= 34;
                                 }
                             }
+                            // バリア有利トレードは維持
+                            if (attacker.hasBarrier && target.hasBarrier) targetScore += 12;
                             // Target has dangerous abilities (bonus only if we survive or target is worth it)
                             if (targetHasBane && !willDie) targetScore += 40; // Safe BANE kill is great
                             if (target.passiveAbilities?.includes('STORM')) targetScore += 30;
@@ -6136,17 +6139,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             // Can't kill the target
                             if (!willDie && attacker.currentAttack >= target.currentHealth / 2) {
                                 // We survive and deal significant damage - maybe worth it
-                                targetScore += 10;
+                                targetScore += 4;
                             } else if (willDie) {
                                 // We die without killing - very bad
-                                targetScore -= 50;
+                                targetScore -= 72;
                                 // Even worse if we're evolved
                                 if (attackerIsEvolved) {
-                                    targetScore -= 40;
+                                    targetScore -= 34;
                                 }
                                 // Slightly less bad if target is very valuable
                                 if ((target.currentAttack || 0) >= 5) targetScore += 10;
+                            } else {
+                                targetScore -= 8;
                             }
+                        }
+
+                        if (faceWindow && canAttackLeader) {
+                            targetScore -= 34;
+                            if (state.players[currentPlayerId].hp <= 8) targetScore -= 10;
                         }
 
                         if (targetScore > bestTarget.score) {
@@ -6155,9 +6165,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
 
                     // If no good follower target and can attack leader
-                    if (canAttackLeader && (bestTarget.index === -1 || bestTarget.score <= 0)) {
-                        // Aggro: Attack face
-                        return { index: -1, isLeader: true };
+                    if (canAttackLeader) {
+                        const enemyHp = state.players[currentPlayerId].hp;
+                        const lethalLike = enemyHp <= (attacker.currentAttack || 0) * (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1) + 2;
+                        if (faceWindow || lethalLike) {
+                            if (bestTarget.index === -1 || bestTarget.score <= 34) {
+                                return { index: -1, isLeader: true };
+                            }
+                        }
+                        if (bestTarget.index === -1 || bestTarget.score <= 8) {
+                            return { index: -1, isLeader: true };
+                        }
                     }
 
                     return bestTarget;

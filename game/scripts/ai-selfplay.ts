@@ -25,6 +25,9 @@ type Weights = {
   holdPenaltyAja: number;
   holdPenaltyOther: number;
   whiteBase: number;
+  tradeBase: number;
+  faceWindowBonus: number;
+  badTradePenalty: number;
 };
 
 type Args = {
@@ -71,12 +74,15 @@ const CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
 const MAJOR_EVENT_KEYWORDS = ['盞華', '白ツバキ', '天下布舞・ファイナルキャノン', 'Y', 'あじゃ', '勝利'];
 const BURST_SEARCH_TOP_K = 6;
 const DEFAULT_WEIGHTS: Weights = {
-  knucklerBonus: 140,
-  cannonBonus: 205,
-  stormBonus: 58,
-  holdPenaltyAja: 240,
-  holdPenaltyOther: 190,
-  whiteBase: 78,
+  knucklerBonus: 148,
+  cannonBonus: 218,
+  stormBonus: 64,
+  holdPenaltyAja: 208,
+  holdPenaltyOther: 172,
+  whiteBase: 74,
+  tradeBase: 44,
+  faceWindowBonus: 34,
+  badTradePenalty: 22,
 };
 let ACTIVE_WEIGHTS: Weights = { ...DEFAULT_WEIGHTS };
 
@@ -357,6 +363,7 @@ function canKillTarget(attacker: BoardCard, target: BoardCard): boolean {
 function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardCard): { targetIndex: number; targetIsLeader: boolean } {
   const enemy = state.players[getEnemyPlayerId(playerId)];
   const canAttackLeader = attacker.passiveAbilities?.includes('STORM') || attacker.turnPlayed !== state.turnCount;
+  const faceWindow = state.turnCount >= 9 && state.turnCount <= 10;
 
   const enemies = enemy.board
     .map((c, i) => ({ c, i }))
@@ -373,19 +380,35 @@ function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardC
     let score = 0;
 
     if (canKillTarget(attacker, target)) {
-      score += 50 + (target.currentAttack ?? 0) * 5;
-      if (!willDie) score += 30;
-      if (target.passiveAbilities?.includes('BANE') && willDie) score -= 30;
+      score += ACTIVE_WEIGHTS.tradeBase + (target.currentAttack ?? 0) * 5;
+      if (!willDie) score += 26;
+      if (attacker.hasBarrier && target.hasBarrier) score += 12; // バリア有利トレード維持
+      if (target.passiveAbilities?.includes('BANE') && willDie) score -= 34;
       if (target.passiveAbilities?.includes('BANE') && !willDie) score += 40;
     } else {
-      if (willDie) score -= 50;
-      else if ((attacker.currentAttack ?? 0) >= (target.currentHealth ?? 0) / 2) score += 10;
+      if (willDie) score -= 48 + ACTIVE_WEIGHTS.badTradePenalty;
+      else if ((attacker.currentAttack ?? 0) >= (target.currentHealth ?? 0) / 2) score += 4;
+      else score -= 8;
+    }
+
+    if (faceWindow && canAttackLeader) {
+      score -= ACTIVE_WEIGHTS.faceWindowBonus;
+      if (enemy.hp <= 8) score -= 10;
     }
 
     if (score > best.score) best = { index: i, score };
   }
 
-  if (best.index >= 0 && best.score > 0) return { targetIndex: best.index, targetIsLeader: false };
+  if (canAttackLeader) {
+    const lethalLike = enemy.hp <= (attacker.currentAttack ?? 0) * (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1) + 2;
+    if (faceWindow || lethalLike) {
+      if (best.index < 0 || best.score <= ACTIVE_WEIGHTS.faceWindowBonus) {
+        return { targetIndex: -1, targetIsLeader: true };
+      }
+    }
+  }
+
+  if (best.index >= 0 && best.score > 8) return { targetIndex: best.index, targetIsLeader: false };
   if (canAttackLeader) return { targetIndex: -1, targetIsLeader: true };
   if (best.index >= 0) return { targetIndex: best.index, targetIsLeader: false };
   return { targetIndex: -1, targetIsLeader: false };
@@ -639,12 +662,15 @@ function objectiveFromMetrics(m: SummaryMetrics): number {
 function generateCandidateWeights(rng: () => number): Weights {
   const pick = (arr: number[]) => arr[Math.floor(rng() * arr.length)];
   return {
-    knucklerBonus: pick([120, 140, 160, 180]),
-    cannonBonus: pick([185, 205, 225, 245]),
-    stormBonus: pick([46, 58, 70]),
-    holdPenaltyAja: pick([180, 220, 240, 260]),
-    holdPenaltyOther: pick([160, 190, 220]),
-    whiteBase: pick([64, 78, 92]),
+    knucklerBonus: pick([132, 148, 164, 180]),
+    cannonBonus: pick([198, 218, 238, 252]),
+    stormBonus: pick([52, 64, 76]),
+    holdPenaltyAja: pick([180, 208, 236, 260]),
+    holdPenaltyOther: pick([156, 172, 196]),
+    whiteBase: pick([66, 74, 86]),
+    tradeBase: pick([38, 44, 50]),
+    faceWindowBonus: pick([28, 34, 40]),
+    badTradePenalty: pick([16, 22, 28]),
   };
 }
 
