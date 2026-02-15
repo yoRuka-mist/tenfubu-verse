@@ -7238,10 +7238,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 const defender = !targetIsLeader && targetIndex >= 0 ? opponent.board[targetIndex] : null;
 
                                 // Capture attack parameters IMMEDIATELY before any async operations
+                                // instanceId を含めることで、オンライン対戦時のインデックスズレを防止
                                 const attackParams = {
                                     attackerIndex: actualAttackerIndex,
                                     targetIndex: targetIsLeader ? -1 : targetIndex,
-                                    targetIsLeader: targetIsLeader
+                                    targetIsLeader: targetIsLeader,
+                                    attackerInstanceId: attackerInstanceId,
+                                    targetInstanceId: targetIsLeader ? undefined : targetInstanceId
                                 };
 
                                 // CRITICAL FIX: Dispatch attack IMMEDIATELY to prevent race conditions

@@ -3140,7 +3140,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
 
         case 'ATTACK': {
             console.log(`[Engine] ATTACK received. Incoming state P1 HP: ${state.players.p1.hp}, P2 HP: ${state.players.p2.hp}`);
-            const { attackerIndex, targetIndex, targetIsLeader } = action.payload;
+            const { attackerIndex, targetIsLeader } = action.payload;
+            let targetIndex = action.payload.targetIndex;
 
             // 1. Create Fully Independent Copies for this transaction with DEEP copy of board cards
             // This ensures potential mutations don't hit the old state and references are definitely new.
@@ -3165,9 +3166,50 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             const attPlayer = isAttackerP1 ? p1 : p2;
             const defPlayer = isAttackerP1 ? p2 : p1;
 
-            // 2. Resolve Attacker
-            const attacker = attPlayer.board[attackerIndex];
+            // 2. Resolve Attacker（instanceId優先解決）
+            // ボード圧縮（filter(Boolean)）によりインデックスがズレる可能性があるため、
+            // instanceIdがある場合は常にそちらを優先して正しいカードを特定する
+            let resolvedAttackerIndex = attackerIndex;
+            let attacker = attPlayer.board[attackerIndex];
+
+            if (action.payload.attackerInstanceId) {
+                const foundIdx = attPlayer.board.findIndex(
+                    (c: any) => c && c.instanceId === action.payload.attackerInstanceId
+                );
+                if (foundIdx >= 0) {
+                    if (foundIdx !== attackerIndex) {
+                        console.log(`[Engine] Attacker resolved by instanceId at index ${foundIdx} (original: ${attackerIndex})`);
+                    }
+                    resolvedAttackerIndex = foundIdx;
+                    attacker = attPlayer.board[resolvedAttackerIndex];
+                }
+            }
             if (!attacker || !attacker.canAttack) return newState;
+
+            // 2b. Resolve Target Index（instanceId優先解決）
+            // WARD/STEALTHチェックの前にターゲットを正しく解決する
+            if (!targetIsLeader && action.payload.targetInstanceId) {
+                const foundIdx = defPlayer.board.findIndex(
+                    (c: any) => c && c.instanceId === action.payload.targetInstanceId
+                );
+                if (foundIdx >= 0) {
+                    if (foundIdx !== targetIndex) {
+                        console.log(`[Engine] Target resolved by instanceId at index ${foundIdx} (original: ${targetIndex})`);
+                    }
+                    targetIndex = foundIdx;
+                }
+            }
+
+            // PRE-VALIDATION: フォロワー攻撃時、ターゲットの存在を攻撃権消費前に確認
+            // オンライン対戦で状態の不整合（ターゲットが既に破壊済み）が起きた場合、
+            // 攻撃権利もSTEALTHも消費せずに早期リターンする
+            if (!targetIsLeader) {
+                const preCheckDefender = defPlayer.board[targetIndex];
+                if (!preCheckDefender) {
+                    console.log(`[Engine] Attack target at index ${targetIndex} no longer exists (pre-validation). Attack cancelled without consuming attack right.`);
+                    return newState;
+                }
+            }
 
             // WARD Logic: If opponent has Ward units (that are targetable), must attack one of them
             // Note: Stealthed Ward units cannot be targeted, so they don't protect
@@ -3213,6 +3255,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             }
 
             // Remove STEALTH from Attacker on attack declaration
+            // （ターゲット存在確認後に実行：攻撃が成立する場合のみSTEALTH解除）
             if (attacker.passiveAbilities?.includes('STEALTH')) {
                 attacker.passiveAbilities = attacker.passiveAbilities.filter(p => p !== 'STEALTH');
                 newState.logs.push(`　${attacker.name} の隠密が解除されました`);
@@ -3267,8 +3310,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             } else {
                 const defender = defPlayer.board[targetIndex];
                 if (!defender) {
-                    // Target no longer exists (already destroyed), skip this attack
-                    console.log(`[Engine] Attack target at index ${targetIndex} no longer exists. Skipping.`);
+                    // プレバリデーション通過後に到達した場合のフォールバック
+                    // （通常はプレバリデーションで弾かれるため到達しない）
+                    console.log(`[Engine] Attack target at index ${targetIndex} no longer exists (post-validation fallback). Skipping.`);
                     return newState;
                 }
                 // Attack log with defender's actual name
@@ -3365,7 +3409,7 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 if (attackerDied) {
                     attacker.currentHealth = Math.min(0, attacker.currentHealth);
                     attPlayer.graveyard.push(attacker);
-                    attPlayer.board[attackerIndex] = null;
+                    attPlayer.board[resolvedAttackerIndex] = null;
                     newState.logs.push(`　${attacker.name} は破壊されました`);
                 }
 

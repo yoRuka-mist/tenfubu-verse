@@ -141,7 +141,7 @@ export interface GameState {
 export type GameAction =
     | { type: 'START_GAME' }
     | { type: 'PLAY_CARD'; playerId: string; payload: { cardIndex: number; targetId?: string; instanceId?: string } }
-    | { type: 'ATTACK'; playerId: string; payload: { attackerIndex: number; targetIndex: number; targetIsLeader: boolean } }
+    | { type: 'ATTACK'; playerId: string; payload: { attackerIndex: number; targetIndex: number; targetIsLeader: boolean; attackerInstanceId?: string; targetInstanceId?: string } }
     | { type: 'EVOLVE'; playerId: string; payload: { followerIndex: number; targetId?: string; useSep?: boolean } }
     | { type: 'RESOLVE_EFFECT'; playerId: string; payload: { targetId?: string } }
     | { type: 'END_TURN'; playerId: string }
