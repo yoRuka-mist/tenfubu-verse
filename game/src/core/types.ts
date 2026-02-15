@@ -1,4 +1,4 @@
-export type ClassType = 'SENKA' | 'AJA' | 'YORUKA';
+export type ClassType = 'SENKA' | 'AJA' | 'YORUKA' | 'TSUBUMARU';
 
 export type AIDifficulty = 'EASY' | 'NORMAL' | 'HARD';
 
@@ -27,7 +27,8 @@ export type EffectType =
     | 'DAMAGE' | 'SELECT_DAMAGE' | 'RANDOM_DAMAGE' | 'AOE_DAMAGE' | 'SELECT_DAMAGE_ALL' | 'DAMAGE_LEADER' | 'RANDOM_DAMAGE_BY_TURN'
     | 'SET_MAX_HP'
     | 'HEAL_LEADER' | 'HEAL_FOLLOWER' | 'BUFF_STATS' | 'GENERATE_CARD' | 'COST_REDUCTION' | 'CUSTOM' | 'RANDOM_SET_HP'
-    | 'REDUCE_HAND_COST' | 'GRANT_LEADER_DAMAGE_SHIELD' | 'VISUAL_BUFF_ONLY'; // 追加: 手札コスト減少, リーダーダメージシールド付与, 視覚エフェクトのみ
+    | 'REDUCE_HAND_COST' | 'GRANT_LEADER_DAMAGE_SHIELD' | 'VISUAL_BUFF_ONLY'
+    | 'RETURN_TO_HAND_SELF' | 'PP_RESTORE' | 'DRAW_UNTIL' | 'REDUCE_ALL_HAND_COST' | 'TRANSFORM' | 'GRANT_LEADER_EFFECT' | 'COMBO_BUFF_SELF' | 'RANDOM_DAMAGE_BY_HAND'; // つぶまるデッキ用: バウンス(自), PP回復, N枚までドロー, 全手札コスト減, 変化, リーダー効果付与, コンボバフ, 手札枚数分ランダムダメージ
 
 export interface AbilityEffect {
     type: EffectType;
@@ -64,6 +65,13 @@ export interface Card {
     // Legacy support (to be migrated)
     effectId?: string;
     triggerAbilities?: { [key: string]: AbilityEffect };
+
+    // 手札で働く効果（条件を満たすとコスト減少等）
+    handEffect?: {
+        trigger: 'ON_EVOLVE' | 'ON_ENEMY_FOLLOWER_DESTROY' | 'ON_ALLY_LEAVE_BOARD'; // 発動条件
+        effect: 'COST_REDUCTION'; // 効果
+        value: number; // 減少値
+    };
 
     imageUrl?: string;
     evolvedImageUrl?: string; // 進化後の画像URL
@@ -115,6 +123,18 @@ export interface Player {
 
     // Leader damage shield (次にリーダーが受けるダメージを0にする)
     leaderDamageShield?: boolean;
+
+    // コンボカウンター（そのターンにプレイしたカードの枚数）
+    comboCount: number;
+
+    // リーダー効果（永続的な効果、例: ハムチャンが場に出た時疾走を得る）
+    leaderEffects?: LeaderEffect[];
+}
+
+// リーダー効果定義
+export interface LeaderEffect {
+    id: string; // 効果識別子
+    description: string; // 効果説明
 }
 
 export type GamePhase = 'INIT' | 'MULLIGAN' | 'TURN_START' | 'MAIN' | 'COMBAT' | 'TURN_END' | 'GAME_OVER';

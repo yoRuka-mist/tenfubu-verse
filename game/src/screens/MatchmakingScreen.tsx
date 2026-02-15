@@ -407,9 +407,9 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({
                     </div>
                     <div style={{
                         fontSize: `${0.9 * scale}rem`,
-                        color: playerClass === 'SENKA' ? '#e94560' : playerClass === 'AJA' ? '#45a2e9' : '#a855f7'
+                        color: playerClass === 'SENKA' ? '#e94560' : playerClass === 'AJA' ? '#45a2e9' : playerClass === 'TSUBUMARU' ? '#4ade80' : '#a855f7'
                     }}>
-                        {playerClass === 'SENKA' ? '盞華' : playerClass === 'AJA' ? 'あじゃ' : 'Y'}
+                        {playerClass === 'SENKA' ? '盞華' : playerClass === 'AJA' ? 'あじゃ' : playerClass === 'TSUBUMARU' ? 'つぶまる' : 'Y'}
                     </div>
                 </div>
                 {/* ランクマッチ時のレート表示 */}

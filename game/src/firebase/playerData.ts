@@ -227,11 +227,12 @@ export const getClassRanking = async (
 export const getAllClassRankings = async (
     limit: number = 5
 ): Promise<Record<ClassType, RankingEntry[]>> => {
-    const classes: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+    const classes: ClassType[] = ['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'];
     const result: Record<ClassType, RankingEntry[]> = {
         SENKA: [],
         AJA: [],
         YORUKA: [],
+        TSUBUMARU: [],
     };
 
     // 一度だけ全プレイヤーデータを取得

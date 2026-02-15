@@ -13,6 +13,7 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -41,9 +42,9 @@ export const GalleryClassSelectScreen: React.FC<GalleryClassSelectScreenProps> =
         return () => window.removeEventListener('resize', updateScale);
     }, []);
 
-    // Base sizes
-    const cardWidth = 200 * scale;
-    const cardHeight = 280 * scale;
+    // Base sizes - adjusted for 4 cards
+    const cardWidth = 180 * scale;
+    const cardHeight = 260 * scale;
     const titleSize = 2 * scale;
     const classNameSize = 1.4 * scale;
     const gap = 1.2 * scale;
@@ -269,6 +270,63 @@ export const GalleryClassSelectScreen: React.FC<GalleryClassSelectScreenProps> =
                             fontFamily: 'Tamanegi, sans-serif'
                         }}>
                             Y
+                        </h3>
+                    </div>
+                </div>
+
+                {/* Tsubumaru Class */}
+                <div
+                    onClick={() => onSelectClass('TSUBUMARU')}
+                    style={{
+                        width: cardWidth,
+                        height: cardHeight,
+                        border: '1px solid #444',
+                        borderRadius: 10 * scale,
+                        background: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        boxShadow: '0 4px 20px rgba(74, 222, 128, 0.2)',
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}
+                    onMouseOver={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                        e.currentTarget.style.boxShadow = '0 8px 30px rgba(74, 222, 128, 0.4)';
+                    }}
+                    onMouseOut={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = '0 4px 20px rgba(74, 222, 128, 0.2)';
+                    }}
+                >
+                    <img
+                        src={tsubumaruLeaderImg}
+                        alt="Tsubumaru"
+                        style={{
+                            width: '100%',
+                            height: '75%',
+                            objectFit: 'cover'
+                        }}
+                    />
+                    <div style={{
+                        padding: `${8 * scale}px`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        width: '100%',
+                        justifyContent: 'center',
+                        flex: 1
+                    }}>
+                        <h3 style={{
+                            fontSize: `${classNameSize}rem`,
+                            color: '#4ade80',
+                            margin: 0,
+                            fontFamily: 'Tamanegi, sans-serif'
+                        }}>
+                            つぶまる
                         </h3>
                     </div>
                 </div>

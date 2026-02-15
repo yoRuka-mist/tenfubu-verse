@@ -144,8 +144,17 @@ function App() {
 
     // Firebase Auth: 認証処理
     useEffect(() => {
+        // 認証タイムアウト: 10秒以内に認証が完了しなければLoading画面を解除
+        const authTimeout = setTimeout(() => {
+            if (authLoading) {
+                console.warn('⚠️ Auth timeout - proceeding without authentication');
+                setAuthLoading(false);
+            }
+        }, 10000);
+
         // 認証状態の監視
         const unsubscribe = onAuthStateChange(async (user) => {
+            clearTimeout(authTimeout);
             console.log('🔐 Auth state changed:', {
                 uid: user?.uid,
                 email: user?.email,
@@ -214,7 +223,10 @@ function App() {
             setAuthLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            clearTimeout(authTimeout);
+            unsubscribe();
+        };
     }, []);
 
     // Save audio settings to localStorage whenever they change
@@ -334,10 +346,11 @@ function App() {
         return () => document.removeEventListener('click', handleClick);
     }, [currentScreen, audioSettings.bgmEnabled]);
 
-    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType, aiDifficulty?: AIDifficulty) => {
+    const handleTitleConfig = useCallback((mode: GameMode, id?: string, classType?: ClassType, aiDifficulty?: AIDifficulty, opponentClassType?: ClassType) => {
         setGameMode(mode);
         if (id) setRoomId(id);
         if (aiDifficulty) setAiDifficulty(aiDifficulty);
+        if (opponentClassType) setOpponentClass(opponentClassType);
         // ホーム画面からゲームを開始したら、returnToHomeフラグをリセット
         setReturnToHome(false);
 

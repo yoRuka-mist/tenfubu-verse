@@ -143,8 +143,8 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
     const radius = (buttonSize / 2 + 12) * scale;   // ボタンより少し大きい
     const strokeWidth = 6 * scale;
     const circumference = 2 * Math.PI * radius;
-    // クロスブラウザで安定させるため、offsetは0→circumferenceへ増加（満タン→空）
-    const strokeDashoffset = circumference * (1 - progress);
+    // 負の値で時計回りに減少（12時スタート）
+    const strokeDashoffset = -circumference * (1 - progress);
 
     // 振動の強度（残り10秒〜0秒で増加: 0→1）
     const remainingSec = Math.ceil(timeRemaining);
@@ -198,7 +198,7 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
                     stroke="rgba(0,0,0,0.3)"
                     strokeWidth={strokeWidth}
                 />
-                {/* ゲージリング（時計回り） */}
+                {/* ゲージリング（時計回りに減少） */}
                 <circle
                     cx={totalSize / 2}
                     cy={totalSize / 2}

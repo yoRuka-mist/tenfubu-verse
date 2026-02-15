@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClassType } from '../core/types';
-import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE } from '../core/engine';
+import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE, TSUBUMARU_DECK_TEMPLATE } from '../core/engine';
 
 // Helper function to resolve asset paths with base URL for GitHub Pages deployment
 const getAssetUrl = (path: string): string => {
@@ -14,6 +14,7 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -40,6 +41,11 @@ const CLASS_COLORS = {
         primary: '#a855f7',
         gradient: 'linear-gradient(135deg, #1a0f2e 0%, #1a1a2e 100%)',
         shadow: 'rgba(168, 85, 247, 0.3)'
+    },
+    TSUBUMARU: {
+        primary: '#4ade80',
+        gradient: 'linear-gradient(135deg, #0b2e15 0%, #1a1a2e 100%)',
+        shadow: 'rgba(74, 222, 128, 0.3)'
     }
 };
 
@@ -47,18 +53,20 @@ const CLASS_COLORS = {
 const CLASS_NAMES = {
     SENKA: '盞華',
     AJA: 'あじゃ',
-    YORUKA: 'Y'
+    YORUKA: 'Y',
+    TSUBUMARU: 'つぶまる'
 };
 
 // リーダー画像のマッピング
 const LEADER_IMAGES: Record<ClassType, string> = {
     SENKA: senkaLeaderImg,
     AJA: azyaLeaderImg,
-    YORUKA: yorukaLeaderImg
+    YORUKA: yorukaLeaderImg,
+    TSUBUMARU: tsubumaruLeaderImg
 };
 
 // 全クラスのリスト
-const ALL_CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+const ALL_CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'];
 
 export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     classType,
@@ -86,7 +94,8 @@ export const GalleryCardListScreen: React.FC<GalleryCardListScreenProps> = ({
     // デッキテンプレートを取得
     const getDeckTemplate = (cls: ClassType) => {
         return cls === 'SENKA' ? SENKA_DECK_TEMPLATE :
-               cls === 'AJA' ? AJA_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
+               cls === 'AJA' ? AJA_DECK_TEMPLATE :
+               cls === 'TSUBUMARU' ? TSUBUMARU_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
     };
 
     // 現在のクラス

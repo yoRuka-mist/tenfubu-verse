@@ -12,6 +12,7 @@ const CLASS_DISPLAY_NAMES: Record<ClassType, string> = {
     SENKA: '戦禍',
     AJA: 'アジャ',
     YORUKA: 'ヨルカ',
+    TSUBUMARU: 'つぶまる',
 };
 
 // ランク別カラー
@@ -36,6 +37,7 @@ export const RankingScreen: React.FC<RankingScreenProps> = ({ onBack }) => {
         SENKA: [],
         AJA: [],
         YORUKA: [],
+        TSUBUMARU: [],
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -273,6 +275,7 @@ export const RankingScreen: React.FC<RankingScreenProps> = ({ onBack }) => {
                         {renderRankingTable('SENKA')}
                         {renderRankingTable('AJA')}
                         {renderRankingTable('YORUKA')}
+                        {renderRankingTable('TSUBUMARU')}
                     </div>
                 )}
 

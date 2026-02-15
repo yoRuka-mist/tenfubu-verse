@@ -24,16 +24,19 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
 
 // Sleeve Images (Card Back)
 const azyaSleeve = getAssetUrl('/sleeves/azya_sleeve.png');
 const senkaSleeve = getAssetUrl('/sleeves/senka_sleeve.png');
 const yorukaSleeve = getAssetUrl('/sleeves/yoruka_sleeve.png');
+const tsubumaruSleeve = getAssetUrl('/sleeves/senka_sleeve.png'); // TODO: つぶまる専用スリーブ画像を用意する
 
 // Helper to get leader image by class
 const getLeaderImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return yorukaLeaderImg;
     if (cls === 'AJA') return azyaLeaderImg;
+    if (cls === 'TSUBUMARU') return tsubumaruLeaderImg;
     return senkaLeaderImg;
 };
 
@@ -41,6 +44,7 @@ const getLeaderImg = (cls: ClassType): string => {
 const getSleeveImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return yorukaSleeve;
     if (cls === 'AJA') return azyaSleeve;
+    if (cls === 'TSUBUMARU') return tsubumaruSleeve;
     return senkaSleeve;
 };
 
@@ -1749,6 +1753,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
             return isVictory ? senkaWinImg : senkaLoseImg;
         } else if (playerClass === 'AJA') {
             return isVictory ? azyaWinImg : azyaLoseImg;
+        } else if (playerClass === 'TSUBUMARU') {
+            // つぶまる: 専用画像がないのでリーダー画像で代用
+            return tsubumaruLeaderImg;
         } else {
             // YORUKA
             return isVictory ? yorukaWinImg : yorukaLoseImg;
@@ -2404,6 +2411,14 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                     getStyle={getDeckButtonStyle}
                                     scale={scale}
                                 />
+                                {/* つぶまる */}
+                                <DeckSelectButton
+                                    deckType="TSUBUMARU"
+                                    label="つぶまる"
+                                    onSelect={handleClassChange}
+                                    getStyle={getDeckButtonStyle}
+                                    scale={scale}
+                                />
                             </div>
                             <button
                                 onClick={() => setShowClassChangeOverlay(false)}
@@ -2627,7 +2642,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // For online play, use propOpponentClass if provided
     // CPUは自分のクラスと重複しない3クラス（SENKA, AJA, YORUKA）からランダム選択
     const opponentClass: ClassType = propOpponentClass || (() => {
-        const allClasses: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+        const allClasses: ClassType[] = ['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'];
         const availableClasses = allClasses.filter(c => c !== playerClass);
         return availableClasses[Math.floor(Math.random() * availableClasses.length)];
     })();
@@ -5710,8 +5725,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 };
 
                 // --- AI Helper Functions ---
-                const aiClass = (gameStateRef.current.players[opponentPlayerId].class || 'SENKA') as 'SENKA' | 'AJA' | 'YORUKA';
-                const enemyClass = (gameStateRef.current.players[currentPlayerId].class || 'SENKA') as 'SENKA' | 'AJA' | 'YORUKA';
+                const aiClass = (gameStateRef.current.players[opponentPlayerId].class || 'SENKA') as ClassType;
+                const enemyClass = (gameStateRef.current.players[currentPlayerId].class || 'SENKA') as ClassType;
                 const aiPolicy = getOpponentAwarePolicy(aiClass, enemyClass);
 
                 const estimateNextTurnBoardPressure = (state: any, excludeInstanceId?: string): number => {
@@ -8896,6 +8911,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ))}
                             </div>
                         </div>
+                        {/* Combo Counter - つぶまるデッキ限定 (Opponent) */}
+                        {opponent.class === 'TSUBUMARU' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 4 }}>
+                                <div style={{ fontSize: '0.9rem', filter: 'drop-shadow(0 0 2px rgba(255, 165, 0, 0.6))' }}>🔥</div>
+                                <div style={{
+                                    background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.7), rgba(200, 100, 0, 0.8))',
+                                    padding: '3px 8px', borderRadius: 5, color: '#fef3c7', fontSize: '0.64rem',
+                                    fontWeight: 'bold', border: '1px solid rgba(255, 200, 100, 0.4)',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                                }}>
+                                    コンボ {opponent.comboCount || 0}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* ========================================== */}
@@ -9622,6 +9651,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         ))}
                                     </div>
                                 </div>
+                                {/* Combo Counter - つぶまるデッキ限定 (Player Board Info) */}
+                                {player.class === 'TSUBUMARU' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+                                        <div style={{ fontSize: '1.2rem', filter: 'drop-shadow(0 0 3px rgba(255, 165, 0, 0.8))' }}>🔥</div>
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.8), rgba(200, 100, 0, 0.9))',
+                                            padding: '4px 12px', borderRadius: 8, color: '#fef3c7', fontSize: '0.9rem',
+                                            fontWeight: 'bold', border: '1px solid rgba(255, 200, 100, 0.5)',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)'
+                                        }}>
+                                            コンボ {player.comboCount || 0}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Play Button (only shown when HAND card selected) */}
@@ -10243,6 +10286,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     ))}
                                 </div>
                             </div>
+                            {/* Combo Counter - つぶまるデッキ限定 (Player Hand Area) */}
+                            {player.class === 'TSUBUMARU' && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 * scale, marginLeft: 10 * scale }}>
+                                    <div style={{ fontSize: `${1.87 * scale}rem`, filter: 'drop-shadow(0 0 3px rgba(255, 165, 0, 0.8))' }}>🔥</div>
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.8), rgba(200, 100, 0, 0.9))',
+                                        padding: `${6 * scale}px ${16 * scale}px`, borderRadius: 10 * scale, color: '#fef3c7',
+                                        fontSize: `${1.32 * scale}rem`, fontWeight: 'bold',
+                                        border: '1px solid rgba(255, 200, 100, 0.5)',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)'
+                                    }}>
+                                        コンボ {player.comboCount || 0}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
