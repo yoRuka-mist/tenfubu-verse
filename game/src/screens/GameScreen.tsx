@@ -5724,21 +5724,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 // Check if attacker would die attacking target (including BANE)
                 const wouldDieAttacking = (attacker: any, target: any): boolean => {
                     if (!target || !attacker) return false;
-                    // BANE kills on any damage (unless attacker has BARRIER)
-                    if (target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
-                        return true; // BANE always kills attacker
+                    const targetAttack = target.currentAttack || 0;
+                    const targetDealsDamage = targetAttack > 0;
+
+                    // BANE only kills if combat damage is actually dealt.
+                    // If attacker has BARRIER, the first damage is nullified and BANE does not trigger kill.
+                    if (targetDealsDamage && target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
+                        return true;
                     }
-                    return (target.currentAttack || 0) >= attacker.currentHealth;
+
+                    // Normal combat damage is also prevented by BARRIER once.
+                    if (attacker.hasBarrier) return false;
+
+                    return targetAttack >= attacker.currentHealth;
                 };
 
                 // Check if attacker can kill target
                 const canKillTarget = (attacker: any, target: any): boolean => {
                     if (!target || !attacker) return false;
-                    // Check BANE (instant kill) but consider BARRIER
+                    const attackerAttack = attacker.currentAttack || 0;
+                    const attackerDealsDamage = attackerAttack > 0;
+                    if (!attackerDealsDamage) return false;
+
+                    // BANE only kills if damage is dealt, and BARRIER prevents that first damage.
                     if (attacker.passiveAbilities?.includes('BANE')) {
                         return !target.hasBarrier;
                     }
-                    return attacker.currentAttack >= target.currentHealth;
+
+                    // Normal combat damage cannot kill through fresh BARRIER.
+                    if (target.hasBarrier) return false;
+
+                    return attackerAttack >= target.currentHealth;
                 };
 
                 // Calculate total damage AI can deal this turn (for lethal check)
@@ -5783,6 +5799,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     const playerHp = state.players[currentPlayerId].hp;
                     const aiHp = state.players[opponentPlayerId].hp;
                     const aiPp = state.players[opponentPlayerId].pp;
+                    const turnCount = state.turnCount;
+                    const aiHand = state.players[opponentPlayerId].hand || [];
 
                     // === LETHAL CHECK: Highest priority ===
                     // If playing this STORM card could win the game, massive bonus
@@ -5795,6 +5813,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             score += 100; // Close to lethal
                         } else {
                             score += 30; // Storm is always good
+                        }
+                    }
+
+                    // === 9/10T lethal planning ===
+                    const nearLethalWindow = turnCount >= 8 && turnCount <= 10;
+                    const currentDamage = calculatePotentialDamage(state);
+                    if (nearLethalWindow) {
+                        const needDamage = Math.max(0, playerHp - currentDamage);
+                        // Cards that directly push face damage are prioritized around 9/10T
+                        if (card.id === 'c_senka_knuckler') score += 120;
+                        if (card.id === 's_final_cannon') score += 180;
+                        if (card.passiveAbilities?.includes('STORM')) score += 50;
+                        if (needDamage <= (card.attack || 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1)) {
+                            score += 160;
+                        }
+                    }
+
+                    // 8T盞華先切り抑制: 9/10Tリーサル期待が高い時は温存寄り
+                    if (card.id === 'c_senka_knuckler' && turnCount === 8) {
+                        const hasFollowupBurst = aiHand.some((h: any) =>
+                            h.id === 's_final_cannon' ||
+                            (h.id !== 'c_senka_knuckler' && h.passiveAbilities?.includes('STORM'))
+                        );
+                        const potentialByBoard = currentDamage;
+                        const likelyLethalSoon = hasFollowupBurst || playerHp <= potentialByBoard + 8;
+                        if (likelyLethalSoon && currentDamage + (card.attack || 0) * 2 < playerHp) {
+                            score -= 140;
                         }
                     }
 
@@ -5838,6 +5883,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         score += 15; // Perfect PP usage
                     } else if (aiPp - card.cost <= 1) {
                         score += 10; // Near-perfect usage
+                    }
+
+                    // 白ツバキを序〜中盤の除去強要圧として高評価
+                    if (card.id === 'c_white_tsubaki') {
+                        if (turnCount <= 8) {
+                            score += 90;
+                        } else {
+                            score += 25;
+                        }
+                        if (enemyBoard.length > 0) score += 25;
                     }
 
                     // === VALUE CARDS ===
@@ -6909,29 +6964,30 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }
                 }
 
-                // Check opponent board followers
-                const currentState = gameStateRef.current;
-                const oppBoard = currentState.players[opponentPlayerId]?.board || [];
+                // Check opponent board followers (visualBoardを使用してインデックスの一致を保証)
+                const visualOppBoard = visualOpponentBoardRef.current;
                 for (let i = 0; i < opponentBoardRefs.current.length; i++) {
                     const el = opponentBoardRefs.current[i];
-                    if (el && oppBoard[i]) {
+                    const visualCard = visualOppBoard[i];
+                    if (el && visualCard && !(visualCard as any).isDying) {
                         const rect = el.getBoundingClientRect();
                         if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-                            setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: (oppBoard[i] as any)?.instanceId });
+                            setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: opponentPlayerId, instanceId: (visualCard as any)?.instanceId });
                             return;
                         }
                     }
                 }
 
-                // Check player board followers (for evolve)
+                // Check player board followers (for evolve) (visualBoardを使用)
                 if (sourceType === 'EVOLVE') {
-                    const myBoard = currentState.players[currentPlayerId]?.board || [];
+                    const visualMyBoard = visualPlayerBoardRef.current;
                     for (let i = 0; i < playerBoardRefs.current.length; i++) {
                         const el = playerBoardRefs.current[i];
-                        if (el && myBoard[i]) {
+                        const visualCard = visualMyBoard[i];
+                        if (el && visualCard && !(visualCard as any).isDying) {
                             const rect = el.getBoundingClientRect();
                             if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-                                setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: (myBoard[i] as any)?.instanceId });
+                                setHoveredTarget({ type: 'FOLLOWER', index: i, playerId: currentPlayerId, instanceId: (visualCard as any)?.instanceId });
                                 return;
                             }
                         }
@@ -9151,7 +9207,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 isPaused={showBattleIntro || !timerStarted || !!evolveAnimation}
                                 scale={scale}
                                 buttonSize={160}
-                                timerDuration={gameState.turnCount >= (isFirstPlayer ? 5 : 4) ? 75 : 60}
+                                timerDuration={gameState.turnCount >= (isFirstPlayer ? 7 : 6) ? 90 : gameState.turnCount >= (isFirstPlayer ? 5 : 4) ? 75 : 60}
                             />
                             <button
                                 ref={endTurnButtonRef}

@@ -327,6 +327,70 @@ function choosePlayableCardIndex(state: GameState, playerId: string): number {
   return -1;
 }
 
+function wouldDieAttacking(attacker: BoardCard, target: BoardCard): boolean {
+  const targetAttack = target.currentAttack ?? 0;
+  const targetDealsDamage = targetAttack > 0;
+
+  if (targetDealsDamage && target.passiveAbilities?.includes('BANE') && !attacker.hasBarrier) {
+    return true;
+  }
+
+  if (attacker.hasBarrier) return false;
+
+  return targetAttack >= (attacker.currentHealth ?? 0);
+}
+
+function canKillTarget(attacker: BoardCard, target: BoardCard): boolean {
+  const attackerAttack = attacker.currentAttack ?? 0;
+  const attackerDealsDamage = attackerAttack > 0;
+  if (!attackerDealsDamage) return false;
+
+  if (attacker.passiveAbilities?.includes('BANE')) {
+    return !target.hasBarrier;
+  }
+
+  if (target.hasBarrier) return false;
+
+  return attackerAttack >= (target.currentHealth ?? 0);
+}
+
+function chooseAttackTarget(state: GameState, playerId: string, attacker: BoardCard): { targetIndex: number; targetIsLeader: boolean } {
+  const enemy = state.players[getEnemyPlayerId(playerId)];
+  const canAttackLeader = attacker.passiveAbilities?.includes('STORM') || attacker.turnPlayed !== state.turnCount;
+
+  const enemies = enemy.board
+    .map((c, i) => ({ c, i }))
+    .filter((x): x is { c: BoardCard; i: number } => Boolean(x.c));
+
+  const ward = enemies.find((x) => x.c.passiveAbilities?.includes('WARD'));
+  if (ward) {
+    return { targetIndex: ward.i, targetIsLeader: false };
+  }
+
+  let best: { index: number; score: number } = { index: -1, score: -9999 };
+  for (const { c: target, i } of enemies) {
+    const willDie = wouldDieAttacking(attacker, target);
+    let score = 0;
+
+    if (canKillTarget(attacker, target)) {
+      score += 50 + (target.currentAttack ?? 0) * 5;
+      if (!willDie) score += 30;
+      if (target.passiveAbilities?.includes('BANE') && willDie) score -= 30;
+      if (target.passiveAbilities?.includes('BANE') && !willDie) score += 40;
+    } else {
+      if (willDie) score -= 50;
+      else if ((attacker.currentAttack ?? 0) >= (target.currentHealth ?? 0) / 2) score += 10;
+    }
+
+    if (score > best.score) best = { index: i, score };
+  }
+
+  if (best.index >= 0 && best.score > 0) return { targetIndex: best.index, targetIsLeader: false };
+  if (canAttackLeader) return { targetIndex: -1, targetIsLeader: true };
+  if (best.index >= 0) return { targetIndex: best.index, targetIsLeader: false };
+  return { targetIndex: -1, targetIsLeader: false };
+}
+
 function performTurn(state: GameState, playerId: string): GameState {
   let next = resolvePendingEffects(state);
   if (next.winnerId) return next;
@@ -380,8 +444,8 @@ function performTurn(state: GameState, playerId: string): GameState {
       const attacker = next.players[playerId].board[i];
       if (!attacker?.canAttack) break;
 
-      const enemyBoard = next.players[getEnemyPlayerId(playerId)].board;
-      const ward = enemyBoard.findIndex((c) => c?.passiveAbilities?.includes('WARD'));
+      const decision = chooseAttackTarget(next, playerId, attacker);
+      if (!decision.targetIsLeader && decision.targetIndex < 0) break;
 
       const before = calculateStateHash(next);
       next = dispatchSafe(next, {
@@ -389,8 +453,8 @@ function performTurn(state: GameState, playerId: string): GameState {
         playerId,
         payload: {
           attackerIndex: i,
-          targetIndex: ward >= 0 ? ward : -1,
-          targetIsLeader: ward < 0,
+          targetIndex: decision.targetIndex,
+          targetIsLeader: decision.targetIsLeader,
         },
       });
       next = resolvePendingEffects(next);
