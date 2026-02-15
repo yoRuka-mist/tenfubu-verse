@@ -18,17 +18,76 @@ type MatchResult = {
   keyEvents: string[];
 };
 
+type Weights = {
+  knucklerBonus: number;
+  cannonBonus: number;
+  stormBonus: number;
+  holdPenaltyAja: number;
+  holdPenaltyOther: number;
+  whiteBase: number;
+};
+
 type Args = {
   games: number;
   seed: number;
   outDir: string;
   maxTurns: number;
   verbose: boolean;
+  mode: 'selfplay' | 'tune';
+  trials: number;
+  gamesPerTrial: number;
+  p1Class?: ClassType;
+  p2Class?: ClassType;
+  weights?: Weights;
+};
+
+type SummaryMetrics = {
+  games: number;
+  matchupWinrates: Map<string, { win: number; total: number; turns: number }>;
+  senkaTurn8Rate: number;
+  senkaTurn8Count: number;
+  senkaPlayableCount: number;
+  senkaWinAt9or10Rate: number;
+  senkaWinAt9or10: number;
+  senkaWins: number;
+  whiteEarly: number;
+  whiteMid: number;
+  whiteLate: number;
+  whiteTotal: number;
+  senkaVsAjaP1Rate?: number;
+};
+
+type TrialResult = {
+  trial: number;
+  weights: Weights;
+  seed: number;
+  objective: number;
+  senkaVsAjaP1Rate: number;
+  senkaTurn8Rate: number;
+  senkaWinAt9or10Rate: number;
 };
 
 const CLASSES: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
 const MAJOR_EVENT_KEYWORDS = ['盞華', '白ツバキ', '天下布舞・ファイナルキャノン', 'Y', 'あじゃ', '勝利'];
 const BURST_SEARCH_TOP_K = 6;
+const DEFAULT_WEIGHTS: Weights = {
+  knucklerBonus: 140,
+  cannonBonus: 205,
+  stormBonus: 58,
+  holdPenaltyAja: 240,
+  holdPenaltyOther: 190,
+  whiteBase: 78,
+};
+let ACTIVE_WEIGHTS: Weights = { ...DEFAULT_WEIGHTS };
+
+function parseWeights(raw?: string): Weights | undefined {
+  if (!raw) return undefined;
+  const parsed = JSON.parse(raw) as Partial<Weights>;
+  return {
+    ...DEFAULT_WEIGHTS,
+    ...parsed,
+  };
+}
 
 function parseArgs(): Args {
   const args = process.argv.slice(2);
@@ -37,6 +96,14 @@ function parseArgs(): Args {
     if (i >= 0 && i + 1 < args.length) return args[i + 1];
     return fallback;
   };
+  const getOpt = (name: string): string | undefined => {
+    const i = args.findIndex((a) => a === `--${name}`);
+    if (i >= 0 && i + 1 < args.length) return args[i + 1];
+    return undefined;
+  };
+
+  const p1 = getOpt('p1Class') as ClassType | undefined;
+  const p2 = getOpt('p2Class') as ClassType | undefined;
 
   return {
     games: Number(get('games', '1000')),
@@ -44,6 +111,12 @@ function parseArgs(): Args {
     outDir: get('outDir', './selfplay-results'),
     maxTurns: Number(get('maxTurns', '30')),
     verbose: args.includes('--verbose'),
+    mode: (get('mode', 'selfplay') as Args['mode']),
+    trials: Number(get('trials', '24')),
+    gamesPerTrial: Number(get('gamesPerTrial', '2000')),
+    p1Class: p1 && CLASSES.includes(p1) ? p1 : undefined,
+    p2Class: p2 && CLASSES.includes(p2) ? p2 : undefined,
+    weights: parseWeights(getOpt('weights')),
   };
 }
 
@@ -115,7 +188,6 @@ function resolvePendingEffects(state: GameState): GameState {
   return next;
 }
 
-
 function calculatePotentialDamage(state: GameState, playerId: string): number {
   const player = state.players[playerId];
   const enemy = state.players[getEnemyPlayerId(playerId)];
@@ -142,7 +214,6 @@ function estimateCardBurst(card: Card, state: GameState, playerId: string): numb
     burst += (card.attack ?? 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1);
   }
   if (card.id === 's_final_cannon') {
-    // maxHP1化（盤面打点が1以上あれば詰めに寄与）
     burst += Math.max(0, enemy.hp - 1);
   }
   if (card.id === 'c_senka_knuckler') {
@@ -208,20 +279,19 @@ function scoreCardForPlaying(card: Card, state: GameState, playerId: string): nu
     const pressureCoef = enemy.hp <= 12 ? 1.12 : 1.0;
     const facePlanCoef = ajaAggroCoef * boardPenaltyCoef * pressureCoef;
 
-    if (card.id === 'c_senka_knuckler') score += Math.round(140 * facePlanCoef);
-    if (card.id === 's_final_cannon') score += Math.round(205 * facePlanCoef);
-    if (card.passiveAbilities?.includes('STORM')) score += Math.round(58 * facePlanCoef);
+    if (card.id === 'c_senka_knuckler') score += Math.round(ACTIVE_WEIGHTS.knucklerBonus * facePlanCoef);
+    if (card.id === 's_final_cannon') score += Math.round(ACTIVE_WEIGHTS.cannonBonus * facePlanCoef);
+    if (card.passiveAbilities?.includes('STORM')) score += Math.round(ACTIVE_WEIGHTS.stormBonus * facePlanCoef);
     const faceDamage = (card.attack ?? 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1);
     if (needDamage <= faceDamage) score += Math.round(170 * facePlanCoef);
   }
 
-  // 8T盞華: 9T/10Tの2ターン先ミニ探索で保持価値を判定
   if (card.id === 'c_senka_knuckler' && turnCount === 8) {
     const nowPotential = currentDamage + (card.attack ?? 0) * 2;
     const nowLethal = nowPotential >= enemy.hp;
     const futureWindow = estimateFutureWindowBurst(state, playerId);
     const holdIsBetter = !nowLethal && futureWindow.best >= enemy.hp && (futureWindow.best - nowPotential >= 2);
-    if (holdIsBetter) score -= enemy.class === 'AJA' ? 240 : 190;
+    if (holdIsBetter) score -= enemy.class === 'AJA' ? ACTIVE_WEIGHTS.holdPenaltyAja : ACTIVE_WEIGHTS.holdPenaltyOther;
   }
 
   if (card.id === 'c_white_tsubaki') {
@@ -230,8 +300,7 @@ function scoreCardForPlaying(card: Card, state: GameState, playerId: string): nu
     const classCoef = enemy.class === 'AJA' ? 1.18 : enemy.class === 'YORUKA' ? 0.95 : 0.88;
     const handCoef = Math.min(1.35, 0.85 + enemyHand * 0.06);
     const removalPressure = turnBandCoef * classCoef * handCoef;
-    const base = 78;
-    score += Math.round(base * removalPressure);
+    score += Math.round(ACTIVE_WEIGHTS.whiteBase * removalPressure);
     if (enemyBoard.length > 0) score += Math.round(24 * removalPressure);
   }
 
@@ -284,7 +353,6 @@ function performTurn(state: GameState, playerId: string): GameState {
     if (calculateStateHash(next) === before) break;
   }
 
-  // Evolve once if possible (highest attack follower)
   const evolvable = next.players[playerId].board
     .map((c, i) => ({ c, i }))
     .filter(({ c }) => c && !c.hasEvolved)
@@ -305,7 +373,6 @@ function performTurn(state: GameState, playerId: string): GameState {
     if (next.winnerId) return next;
   }
 
-  // Attack phase: ward first, then leader
   for (let i = 0; i < next.players[playerId].board.length; i++) {
     let loop = 0;
     while (loop < 2) {
@@ -391,7 +458,7 @@ function runSingleGame(gameIndex: number, seed: number, p1Class: ClassType, p2Cl
   };
 }
 
-function summarize(results: MatchResult[]): string {
+function computeSummaryMetrics(results: MatchResult[]): SummaryMetrics {
   const total = results.length;
   const matchupWins = new Map<string, { win: number; total: number; turns: number }>();
 
@@ -429,17 +496,37 @@ function summarize(results: MatchResult[]): string {
     }
   }
 
+  const senkaVsAja = matchupWins.get('SENKA vs AJA');
+
+  return {
+    games: total,
+    matchupWinrates: matchupWins,
+    senkaTurn8Rate: senkaPlayableCount > 0 ? (senkaTurn8Count / senkaPlayableCount) * 100 : 0,
+    senkaTurn8Count,
+    senkaPlayableCount,
+    senkaWinAt9or10Rate: senkaWins > 0 ? (senkaWinAt9or10 / senkaWins) * 100 : 0,
+    senkaWinAt9or10,
+    senkaWins,
+    whiteEarly: whiteTsubakiEarly,
+    whiteMid: whiteTsubakiMid,
+    whiteLate: whiteTsubakiLate,
+    whiteTotal: whiteTsubakiEarly + whiteTsubakiMid + whiteTsubakiLate,
+    senkaVsAjaP1Rate: senkaVsAja ? (senkaVsAja.win / senkaVsAja.total) * 100 : undefined,
+  };
+}
+
+function summarize(results: MatchResult[]): string {
+  const m = computeSummaryMetrics(results);
   const lines: string[] = [];
-  lines.push(`games=${total}`);
+  lines.push(`games=${m.games}`);
   lines.push('--- winrate table (p1 perspective) ---');
-  for (const [key, v] of matchupWins.entries()) {
+  for (const [key, v] of m.matchupWinrates.entries()) {
     lines.push(`${key}: winRate=${((v.win / v.total) * 100).toFixed(1)}% avgTurn=${(v.turns / v.total).toFixed(2)} n=${v.total}`);
   }
   lines.push('--- senka metrics ---');
-  lines.push(`8T盞華先切り率=${senkaPlayableCount > 0 ? ((senkaTurn8Count / senkaPlayableCount) * 100).toFixed(2) : '0.00'}% (${senkaTurn8Count}/${senkaPlayableCount})`);
-  lines.push(`9T/10Tリーサル到達率(盞華勝利時)=${senkaWins > 0 ? ((senkaWinAt9or10 / senkaWins) * 100).toFixed(2) : '0.00'}% (${senkaWinAt9or10}/${senkaWins})`);
-  const whiteTotal = whiteTsubakiEarly + whiteTsubakiMid + whiteTsubakiLate;
-  lines.push(`白ツバキ使用ターン帯: 1-4T=${whiteTsubakiEarly}, 5-8T=${whiteTsubakiMid}, 9T+=${whiteTsubakiLate}, total=${whiteTotal}`);
+  lines.push(`8T盞華先切り率=${m.senkaTurn8Rate.toFixed(2)}% (${m.senkaTurn8Count}/${m.senkaPlayableCount})`);
+  lines.push(`9T/10Tリーサル到達率(盞華勝利時)=${m.senkaWinAt9or10Rate.toFixed(2)}% (${m.senkaWinAt9or10}/${m.senkaWins})`);
+  lines.push(`白ツバキ使用ターン帯: 1-4T=${m.whiteEarly}, 5-8T=${m.whiteMid}, 9T+=${m.whiteLate}, total=${m.whiteTotal}`);
   return lines.join('\n');
 }
 
@@ -461,26 +548,14 @@ function toCsvRow(r: MatchResult): string {
   ].map(esc).join(',');
 }
 
-function main() {
-  const args = parseArgs();
-
-  if (!args.verbose) {
-    const originalLog = console.log.bind(console);
-    console.log = (...a: unknown[]) => {
-      const msg = String(a[0] ?? '');
-      if (msg.startsWith('[Engine') || msg.startsWith('[Reducer')) return;
-      originalLog(...a);
-    };
-  }
-
-  mkdirSync(args.outDir, { recursive: true });
-
+function runSimulation(args: Args, forcedWeights?: Weights): MatchResult[] {
+  ACTIVE_WEIGHTS = { ...DEFAULT_WEIGHTS, ...(args.weights ?? {}), ...(forcedWeights ?? {}) };
   const rng = createRNG(args.seed);
   const results: MatchResult[] = [];
 
   for (let i = 0; i < args.games; i++) {
-    const p1Class = CLASSES[Math.floor(rng() * CLASSES.length)];
-    const p2Class = CLASSES[Math.floor(rng() * CLASSES.length)];
+    const p1Class = args.p1Class ?? CLASSES[Math.floor(rng() * CLASSES.length)];
+    const p2Class = args.p2Class ?? CLASSES[Math.floor(rng() * CLASSES.length)];
     const p1GoingFirst = rng() < 0.5;
     const result = runSingleGame(i + 1, args.seed + i, p1Class, p2Class, p1GoingFirst, args.maxTurns);
     results.push(result);
@@ -489,11 +564,66 @@ function main() {
       console.log(`[ai-selfplay] ${i + 1}/${args.games}`);
     }
   }
+  return results;
+}
 
+function objectiveFromMetrics(m: SummaryMetrics): number {
+  const wr = m.senkaVsAjaP1Rate ?? 0;
+  return wr + 0.35 * m.senkaWinAt9or10Rate - 0.20 * m.senkaTurn8Rate;
+}
+
+function generateCandidateWeights(rng: () => number): Weights {
+  const pick = (arr: number[]) => arr[Math.floor(rng() * arr.length)];
+  return {
+    knucklerBonus: pick([120, 140, 160, 180]),
+    cannonBonus: pick([185, 205, 225, 245]),
+    stormBonus: pick([46, 58, 70]),
+    holdPenaltyAja: pick([180, 220, 240, 260]),
+    holdPenaltyOther: pick([160, 190, 220]),
+    whiteBase: pick([64, 78, 92]),
+  };
+}
+
+function runTune(args: Args): { best: TrialResult; trials: TrialResult[] } {
+  const tuneRng = createRNG(args.seed + 99173);
+  const trials: TrialResult[] = [];
+
+  for (let i = 0; i < args.trials; i++) {
+    const weights = generateCandidateWeights(tuneRng);
+    const trialArgs: Args = {
+      ...args,
+      games: args.gamesPerTrial,
+      p1Class: 'SENKA',
+      p2Class: 'AJA',
+      // 全trialで同一seed系列を使い、重み差分のみを比較
+      seed: args.seed,
+    };
+    const results = runSimulation(trialArgs, weights);
+    const metrics = computeSummaryMetrics(results);
+
+    trials.push({
+      trial: i + 1,
+      weights,
+      seed: trialArgs.seed,
+      objective: objectiveFromMetrics(metrics),
+      senkaVsAjaP1Rate: metrics.senkaVsAjaP1Rate ?? 0,
+      senkaTurn8Rate: metrics.senkaTurn8Rate,
+      senkaWinAt9or10Rate: metrics.senkaWinAt9or10Rate,
+    });
+
+    console.log(`[tune] trial=${i + 1}/${args.trials} score=${trials[i].objective.toFixed(3)} wr=${trials[i].senkaVsAjaP1Rate.toFixed(2)} 8T=${trials[i].senkaTurn8Rate.toFixed(2)} 9/10=${trials[i].senkaWinAt9or10Rate.toFixed(2)}`);
+  }
+
+  trials.sort((a, b) => b.objective - a.objective);
+  return { best: trials[0], trials };
+}
+
+function writeOutputs(args: Args, results: MatchResult[], suffix = '') {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const jsonlPath = join(args.outDir, `selfplay-${stamp}.jsonl`);
-  const csvPath = join(args.outDir, `selfplay-${stamp}.csv`);
-  const summaryPath = join(args.outDir, `summary-${stamp}.txt`);
+  const prefix = suffix ? `${suffix}-` : '';
+  const jsonlPath = join(args.outDir, `${prefix}selfplay-${stamp}.jsonl`);
+  const csvPath = join(args.outDir, `${prefix}selfplay-${stamp}.csv`);
+  const summaryPath = join(args.outDir, `${prefix}summary-${stamp}.txt`);
 
   writeFileSync(jsonlPath, results.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
 
@@ -510,6 +640,34 @@ function main() {
   console.log(`JSONL: ${jsonlPath}`);
   console.log(`CSV:   ${csvPath}`);
   console.log(`SUMMARY: ${summaryPath}`);
+}
+
+function main() {
+  const args = parseArgs();
+
+  if (!args.verbose) {
+    const originalLog = console.log.bind(console);
+    console.log = (...a: unknown[]) => {
+      const msg = String(a[0] ?? '');
+      if (msg.startsWith('[Engine') || msg.startsWith('[Reducer')) return;
+      originalLog(...a);
+    };
+  }
+
+  mkdirSync(args.outDir, { recursive: true });
+
+  if (args.mode === 'tune') {
+    const tuned = runTune(args);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const tuneSummaryPath = join(args.outDir, `tune-summary-${stamp}.json`);
+    writeFileSync(tuneSummaryPath, JSON.stringify(tuned, null, 2), 'utf8');
+    console.log(`[tune] best trial=${tuned.best.trial} objective=${tuned.best.objective.toFixed(3)} weights=${JSON.stringify(tuned.best.weights)}`);
+    console.log(`[tune] summary=${tuneSummaryPath}`);
+    return;
+  }
+
+  const results = runSimulation(args, args.weights);
+  writeOutputs(args, results);
 }
 
 main();
