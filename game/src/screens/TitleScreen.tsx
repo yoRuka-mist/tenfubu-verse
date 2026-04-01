@@ -15,7 +15,7 @@ const getAssetUrl = (path: string): string => {
 };
 
 // App Version
-const APP_VERSION = 'Ver 1.1 Beta';
+const APP_VERSION = 'Ver 1.2';
 
 // Base dimensions for scaling
 const BASE_WIDTH = 1280;
