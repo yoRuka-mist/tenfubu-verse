@@ -143,8 +143,8 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
     const radius = (buttonSize / 2 + 12) * scale;   // ボタンより少し大きい
     const strokeWidth = 6 * scale;
     const circumference = 2 * Math.PI * radius;
-    // クロスブラウザで安定させるため、offsetは0→circumferenceへ増加（満タン→空）
-    const strokeDashoffset = circumference * (1 - progress);
+    // 負の値で時計回りに減少（12時スタート）
+    const strokeDashoffset = -circumference * (1 - progress);
 
     // 振動の強度（残り10秒〜0秒で増加: 0→1）
     const remainingSec = Math.ceil(timeRemaining);
@@ -198,7 +198,7 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
                     stroke="rgba(0,0,0,0.3)"
                     strokeWidth={strokeWidth}
                 />
-                {/* ゲージリング（時計回り） */}
+                {/* ゲージリング（時計回りに減少） */}
                 <circle
                     cx={totalSize / 2}
                     cy={totalSize / 2}
@@ -222,10 +222,10 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
                         r={radius}
                         fill="none"
                         stroke={gaugeColor}
-                        strokeWidth={strokeWidth * 3}
-                        opacity={0.4}
+                        strokeWidth={strokeWidth * 2}
+                        opacity={0.3}
                         style={{
-                            filter: `blur(${12 * scale}px)`,
+                            filter: `blur(${6 * scale}px)`,
                             animation: isUrgent ? `timerPulse${uniqueId} 0.5s ease-in-out infinite` : `timerPulse${uniqueId} 1s ease-in-out infinite`,
                         }}
                     />
@@ -235,8 +235,8 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
             {/* アニメーション用スタイル（ユニークIDで名前衝突回避） */}
             <style>{`
                 @keyframes timerPulse${uniqueId} {
-                    0%, 100% { opacity: 0.4; }
-                    50% { opacity: 0.7; }
+                    0%, 100% { opacity: 0.3; }
+                    50% { opacity: 0.5; }
                 }
                 @keyframes timerShake${uniqueId} {
                     0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }

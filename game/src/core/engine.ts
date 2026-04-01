@@ -21,7 +21,7 @@ export const STAMP_DEFINITIONS: StampDefinition[] = [
 export const getStampImagePath = (stampId: StampId, playerClass: ClassType): string => {
     const stamp = STAMP_DEFINITIONS.find(s => s.id === stampId);
     if (!stamp) return '';
-    // AJA -> azya, SENKA -> senka, YORUKA -> yoruka
+    // AJA -> azya, SENKA -> senka, YORUKA -> yoruka, TSUBUMARU -> tsubumaru
     const classFolder = playerClass === 'AJA' ? 'azya' : playerClass.toLowerCase();
     return `/stamps/${classFolder}/${stamp.filename}`;
 };
@@ -185,7 +185,7 @@ export const MOCK_CARDS: Card[] = [
     // --- Tokens ---
     { id: 'TOKEN_CHATORA', name: '茶トラ猫の日向ぼっこ', cost: 0, type: 'FOLLOWER', attack: 1, health: 1, description: '', flavorText: 'ずっと寝ていたい。', imageUrl: '/cards/chatora.png', attackEffectType: 'SLASH' },
     { id: 'TOKEN_SABATORA', name: 'サバトラ猫の散歩', cost: 1, type: 'FOLLOWER', attack: 1, health: 2, description: '[突進]', flavorText: '「ラーメン屋多くね…？」', passiveAbilities: ['RUSH'], imageUrl: '/cards/sabatora.png', attackEffectType: 'SLASH' },
-    { id: 'TOKEN_KIJITORA', name: 'キジトラ猫のごはん', cost: 3, type: 'FOLLOWER', attack: 2, health: 3, description: '[守護]', flavorText: 'うめ…うめ…', passiveAbilities: ['WARD'], imageUrl: '/cards/kijitora.png', attackEffectType: 'SLASH' },
+    { id: 'TOKEN_KIJITORA', name: 'キジトラ猫のごはん', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護]', flavorText: 'うめ…うめ…', passiveAbilities: ['WARD'], imageUrl: '/cards/kijitora.png', attackEffectType: 'SLASH' },
 
     // --- New Cards ---
     {
@@ -1000,6 +1000,247 @@ export const MOCK_CARDS: Card[] = [
                 ]
             }
         ]
+    },
+    // ===== つぶまるデッキ 新カード =====
+    // --- トークン: ハムチャン ---
+    {
+        id: 'TOKEN_HAMUCHAN', name: 'ハムチャン', cost: 1, type: 'FOLLOWER',
+        attack: 1, health: 1,
+        description: '[突進]',
+        tags: ['Token'],
+        passiveAbilities: ['RUSH'],
+        imageUrl: '/cards/hamuchan.png',
+        evolvedImageUrl: '/cards/hamuchan_2.png',
+        attackEffectType: 'SLASH'
+    },
+    // --- つぶまる(真の姿) ---
+    {
+        id: 'c_tsubumaru_truth', name: 'つぶまる(真の姿)', cost: 3, type: 'FOLLOWER',
+        attack: 0, health: 2,
+        description: '[疾走]\nファンファーレ：コンボ X：自分を+X/+0する。',
+        passiveAbilities: ['STORM'],
+        imageUrl: '/cards/tsubumaru_truth.png',
+        evolvedImageUrl: '/cards/tsubumaru_truth_2.png',
+        attackEffectType: 'SLASH',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'COMBO_BUFF_SELF', value: 1, value2: 0 } // コンボ数分ATKバフ
+            ]
+        }]
+    },
+    // --- 犬 ---
+    {
+        id: 'c_dog', name: '犬', cost: 2, type: 'FOLLOWER',
+        attack: 2, health: 2,
+        description: 'ファンファーレ：自分の他のフォロワー1体を選び、手札に戻す。\n超進化時：自分のPPを3回復。',
+        imageUrl: '/cards/dog.png',
+        evolvedImageUrl: '/cards/dog_2.png',
+        attackEffectType: 'SLASH',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'RETURN_TO_HAND_SELF', targetType: 'SELECT_OTHER_ALLY_FOLLOWER' }
+                ]
+            },
+            {
+                trigger: 'SUPER_EVOLVE',
+                effects: [
+                    { type: 'PP_RESTORE', value: 3 }
+                ]
+            }
+        ]
+    },
+    // --- エレガントエレファント ---
+    {
+        id: 'c_elephant', name: 'エレガントエレファント', cost: 4, type: 'FOLLOWER',
+        attack: 1, health: 2,
+        description: '[守護]\nファンファーレ：相手のランダムなフォロワー1体を破壊する。',
+        passiveAbilities: ['WARD'],
+        imageUrl: '/cards/elephant.png',
+        evolvedImageUrl: '/cards/elephant_2.png',
+        attackEffectType: 'IMPACT',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
+            ]
+        }]
+    },
+    // --- イキリン ---
+    {
+        id: 'c_ikirin', name: 'イキリン', cost: 3, type: 'FOLLOWER',
+        attack: 2, health: 2,
+        description: 'ファンファーレ：相手のランダムなフォロワー1体に2ダメージ。\nターン終了時、「ハムチャン」を1枚手札に加える。',
+        imageUrl: '/cards/ikirin.png',
+        evolvedImageUrl: '/cards/ikirin_2.png',
+        attackEffectType: 'SLASH',
+        relatedCards: ['TOKEN_HAMUCHAN'],
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
+                ]
+            },
+            {
+                trigger: 'END_OF_TURN',
+                effects: [
+                    { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' }
+                ]
+            }
+        ]
+    },
+    // --- パンダ ---
+    {
+        id: 'c_panda', name: 'パンダ', cost: 1, type: 'FOLLOWER',
+        attack: 1, health: 1,
+        description: 'ファンファーレ：「ハムチャン」1体を手札に加える。コンボ 3:ランダムな相手のフォロワー1体に3ダメージ。',
+        imageUrl: '/cards/panda.png',
+        evolvedImageUrl: '/cards/panda_2.png',
+        attackEffectType: 'IMPACT',
+        relatedCards: ['TOKEN_HAMUCHAN'],
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' },
+                { type: 'RANDOM_DAMAGE', value: 3, value2: 1, targetType: 'OPPONENT', conditions: { combo: 3 } }
+            ]
+        }]
+    },
+    // --- イラックマ ---
+    {
+        id: 'c_irakuma', name: 'イラックマ', cost: 6, type: 'FOLLOWER',
+        attack: 4, health: 5,
+        description: '[突進]\n手札で働く：相手のフォロワーが破壊された時、このカードのコストを-1する。',
+        passiveAbilities: ['RUSH'],
+        imageUrl: '/cards/irakuma.png',
+        evolvedImageUrl: '/cards/irakuma_2.png',
+        attackEffectType: 'IMPACT',
+        handEffect: {
+            trigger: 'ON_ENEMY_FOLLOWER_DESTROY',
+            effect: 'COST_REDUCTION',
+            value: 1
+        }
+    },
+    // --- ツライオン ---
+    {
+        id: 'c_tsulion', name: 'ツライオン', cost: 5, type: 'FOLLOWER',
+        attack: 3, health: 3,
+        description: '[突進]\nファンファーレ：山札から2枚ドローする。\n進化時：相手のランダムなフォロワー1体に1ダメージ。これを現在の自分の手札の枚数分行う。',
+        passiveAbilities: ['RUSH'],
+        imageUrl: '/cards/tsulion.png',
+        evolvedImageUrl: '/cards/tsulion_2.png',
+        attackEffectType: 'SLASH',
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'DRAW', value: 2 }
+                ]
+            },
+            {
+                trigger: 'EVOLVE',
+                effects: [
+                    { type: 'RANDOM_DAMAGE_BY_HAND', value: 1, targetType: 'OPPONENT' }
+                ]
+            }
+        ]
+    },
+    // --- ゴリラ・ゴリラ・ゴリラ ---
+    {
+        id: 'c_gorilla', name: 'ゴリラ・ゴリラ・ゴリラ', cost: 8, type: 'FOLLOWER',
+        attack: 4, health: 4,
+        description: '手札で働く：自分のフォロワーが場から離れた時、このカードのコストを-1する。\nファンファーレ：相手のフォロワー1体に4ダメージ。コンボ 3：さらに、相手のランダムなフォロワー1体に3ダメージ。',
+        imageUrl: '/cards/gorilla.png',
+        evolvedImageUrl: '/cards/gorilla_2.png',
+        attackEffectType: 'IMPACT',
+        handEffect: {
+            trigger: 'ON_ALLY_LEAVE_BOARD',
+            effect: 'COST_REDUCTION',
+            value: 1
+        },
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'DAMAGE', value: 4, targetType: 'SELECT_FOLLOWER' },
+                { type: 'RANDOM_DAMAGE', value: 3, value2: 1, targetType: 'OPPONENT', conditions: { combo: 3 } }
+            ]
+        }]
+    },
+    // --- アニマル・パラダイス ---
+    {
+        id: 's_animal_paradise', name: 'アニマル・パラダイス', cost: 10, type: 'SPELL',
+        description: '自分の手札が9枚になるまでドローする。自分の手札のすべてのカードのコストを-1する。ただし、この効果でコストは0にはならない。自分のPPを7回復。',
+        imageUrl: '/cards/animal_paradise.png',
+        attackEffectType: 'SLASH',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'DRAW_UNTIL', value: 9 },
+                { type: 'REDUCE_ALL_HAND_COST', value: 1, minCost: 1 },
+                { type: 'PP_RESTORE', value: 7 }
+            ]
+        }]
+    },
+    // --- 早退します ---
+    {
+        id: 's_leaving_early', name: '早退します', cost: 1, type: 'SPELL',
+        description: '自分のフォロワー1体を選び、手札に戻す。相手のランダムなフォロワー1体に2ダメージ。',
+        imageUrl: '/cards/leaving_early.png',
+        attackEffectType: 'SLASH',
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'RETURN_TO_HAND_SELF', targetType: 'SELECT_ALLY_FOLLOWER' },
+                { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
+            ]
+        }]
+    },
+    // --- 集まれハムチャン ---
+    {
+        id: 's_hamuchan_gather', name: '集まれハムチャン', cost: 1, type: 'SPELL',
+        description: '「ハムチャン」2体を手札に加える。',
+        imageUrl: '/cards/hamuchan_gather.png',
+        attackEffectType: 'SLASH',
+        relatedCards: ['TOKEN_HAMUCHAN'],
+        triggers: [{
+            trigger: 'FANFARE',
+            effects: [
+                { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' },
+                { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' }
+            ]
+        }]
+    },
+    // --- つぶまる（人の姿） ---
+    {
+        id: 'c_tsubumaru_human', name: 'つぶまる（人の姿）', cost: 6, type: 'FOLLOWER',
+        attack: 4, health: 4,
+        description: '[守護][オーラ]\nファンファーレ：「ハムチャン」2体を手札に加える。相手のランダムなフォロワー2体を「ハムチャン」に変化させる。\n超進化時：自分のリーダーは、「自分のハムチャンが場に出た時、それは疾走を得る」を持つ。「ハムチャン」を2体場に出す。',
+        passiveAbilities: ['WARD', 'AURA'],
+        imageUrl: '/cards/tsubumaru_human.png',
+        evolvedImageUrl: '/cards/tsubumaru_human_2.png',
+        attackEffectType: 'SLASH',
+        relatedCards: ['TOKEN_HAMUCHAN'],
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' },
+                    { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' },
+                    { type: 'TRANSFORM', value: 2, targetCardId: 'TOKEN_HAMUCHAN', targetType: 'OPPONENT' }
+                ]
+            },
+            {
+                trigger: 'SUPER_EVOLVE',
+                effects: [
+                    { type: 'GRANT_LEADER_EFFECT', conditions: { effectId: 'hamuchan_storm' } },
+                    { type: 'SUMMON_CARD', targetCardId: 'TOKEN_HAMUCHAN' },
+                    { type: 'SUMMON_CARD', targetCardId: 'TOKEN_HAMUCHAN' }
+                ]
+            }
+        ]
     }
 ];
 
@@ -1104,6 +1345,25 @@ export const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
     { cardId: 'c_alice', count: 2 },            // ありす
 ];
 
+export const TSUBUMARU_DECK_TEMPLATE: { cardId: string, count: number }[] = [
+    { cardId: 'c_tsubumaru', count: 3 },           // つぶまる
+    { cardId: 'c_ruiyu', count: 2 },               // ルイ・ユー
+    { cardId: 's_3cats', count: 3 },               // 茶トラ
+    { cardId: 'c_tsubumaru_truth', count: 3 },     // つぶまる(真の姿)
+    { cardId: 'c_y', count: 1 },                   // Y
+    { cardId: 's_animal_paradise', count: 1 },     // アニマル・パラダイス
+    { cardId: 's_leaving_early', count: 3 },       // 早退します
+    { cardId: 's_hamuchan_gather', count: 3 },     // 集まれハムチャン
+    { cardId: 'c_gorilla', count: 3 },             // ゴリラ・ゴリラ・ゴリラ
+    { cardId: 'c_tsulion', count: 3 },             // ツライオン
+    { cardId: 'c_dog', count: 3 },                 // 犬
+    { cardId: 'c_elephant', count: 2 },            // エレガントエレファント
+    { cardId: 'c_ikirin', count: 3 },              // イキリン
+    { cardId: 'c_panda', count: 3 },               // パンダ
+    { cardId: 'c_kasuga', count: 1 },              // かすが
+    { cardId: 'c_tsubumaru_human', count: 3 },     // つぶまる（人の姿）
+];
+
 // Helper to get card definition by ID or Name
 export function getCardDefinition(cardIdOrName: string): Card | undefined {
     // First try to find by ID
@@ -1162,7 +1422,8 @@ function buildDeckFromTemplate(template: { cardId: string, count: number }[], pl
 export function createPlayer(id: string, name: string, cls: ClassType, rng: () => number): Player {
     // Select deck template based on class
     const template = cls === 'SENKA' ? SENKA_DECK_TEMPLATE :
-                     cls === 'AJA' ? AJA_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
+                     cls === 'AJA' ? AJA_DECK_TEMPLATE :
+                     cls === 'TSUBUMARU' ? TSUBUMARU_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
     const rawDeck = buildDeckFromTemplate(template, id);
 
     return {
@@ -1183,7 +1444,8 @@ export function createPlayer(id: string, name: string, cls: ClassType, rng: () =
         // Extra PP (後攻救済システム)
         extraPpUsedEarly: false,  // 1~5ターン目で使用済みか
         extraPpUsedLate: false,   // 6ターン目以降で使用済みか
-        extraPpActive: false      // 現在のターンでエクストラPPを有効化しているか
+        extraPpActive: false,     // 現在のターンでエクストラPPを有効化しているか
+        comboCount: 0             // コンボカウンター（ターン中にプレイしたカード枚数）
     };
 }
 
@@ -1869,6 +2131,15 @@ function processSingleEffect(
                         }
                     }
 
+                    // リーダー効果: ハムチャンが場に出た時、疾走を得る
+                    if (template.name === 'ハムチャン' && player.leaderEffects?.find(e => e.id === 'hamuchan_storm')) {
+                        if (!newCard.passiveAbilities!.includes('STORM')) {
+                            newCard.passiveAbilities!.push('STORM');
+                            newCard.canAttack = true;
+                            newState.logs.push(`${template.name} はリーダー効果で疾走を得た！`);
+                        }
+                    }
+
                     player.board.push(newCard);
                     newState.logs.push(`${player.name} は ${template.name} を場に出した`);
                 }
@@ -2427,6 +2698,183 @@ function processSingleEffect(
             }
             break;
         }
+        // ===== つぶまるデッキ用 新エフェクト =====
+        case 'RETURN_TO_HAND_SELF': {
+            // 味方フォロワーを手札に戻す（バウンス）
+            if ((effect.targetType === 'SELECT_OTHER_ALLY_FOLLOWER' || effect.targetType === 'SELECT_ALLY_FOLLOWER') && targetId) {
+                const player = newState.players[sourcePlayerId];
+                const idx = player.board.findIndex(c => c?.instanceId === targetId);
+                if (idx !== -1 && player.board[idx]) {
+                    const card = player.board[idx]!;
+                    // BoardCard → Card として手札に戻す（元のカード定義を使用）
+                    const originalDef = MOCK_CARDS.find(c => c.name === card.name);
+                    if (originalDef) {
+                        const returnedCard: Card = {
+                            ...originalDef,
+                            instanceId: card.instanceId
+                        };
+                        if (player.hand.length < 9) {
+                            player.hand.push(returnedCard);
+                            newState.logs.push(`${card.name} は手札に戻された`);
+                        } else {
+                            player.graveyard.push(card);
+                            newState.logs.push(`${player.name}の手札が上限に達したため、${card.name}は墓地へ送られました`);
+                        }
+                    }
+                    player.board[idx] = null;
+                }
+            }
+            break;
+        }
+        case 'PP_RESTORE': {
+            // PP回復
+            const amount = effect.value || 0;
+            const player = newState.players[sourcePlayerId];
+            player.pp = Math.min(player.maxPp, player.pp + amount);
+            newState.logs.push(`${player.name} のPPが ${amount} 回復した`);
+            break;
+        }
+        case 'DRAW_UNTIL': {
+            // 手札がN枚になるまでドロー
+            const targetCount = effect.value || 9;
+            const player = newState.players[sourcePlayerId];
+            let drawn = 0;
+            while (player.hand.length < targetCount && player.deck.length > 0) {
+                const c = player.deck.pop();
+                if (c) {
+                    player.hand.push(c);
+                    drawn++;
+                }
+            }
+            if (drawn > 0) {
+                newState.logs.push(`${player.name} は手札が${targetCount}枚になるまで${drawn}枚ドローした`);
+            }
+            break;
+        }
+        case 'REDUCE_ALL_HAND_COST': {
+            // 手札のすべてのカードのコストを減少
+            const reduction = effect.value || 1;
+            const minCost = effect.minCost ?? 0;
+            const player = newState.players[sourcePlayerId];
+            player.hand.forEach((card: any) => {
+                // minCost制限は「この効果で下がった結果」に対してのみ適用
+                // 元々minCost以下のカードはコスト変更しない
+                if (minCost > 0 && card.cost <= minCost) return;
+                const newCost = Math.max(minCost, card.cost - reduction);
+                if (newCost !== card.cost) {
+                    card.cost = newCost;
+                    card.baseCost = newCost; // baseCostも更新
+                }
+            });
+            newState.logs.push(`${player.name} の手札のすべてのカードのコストを-${reduction}した`);
+            break;
+        }
+        case 'TRANSFORM': {
+            // 相手のランダムなフォロワーを別のカードに変化させる
+            const count = effect.value || 1;
+            const transformCardId = effect.targetCardId;
+            const template = MOCK_CARDS.find(c => c.id === transformCardId);
+            if (!template) break;
+
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
+
+            // ランダムな対象を選択
+            const validIndices = targetBoard.map((c, i) => c ? i : -1).filter(i => i !== -1);
+            // Shuffle
+            for (let i = validIndices.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [validIndices[i], validIndices[j]] = [validIndices[j], validIndices[i]];
+            }
+            const targets = validIndices.slice(0, count);
+
+            targets.forEach(idx => {
+                const oldCard = targetBoard[idx];
+                if (oldCard) {
+                    const transformed: BoardCard = {
+                        ...template,
+                        instanceId: `transform_${newState.rngSeed}_${Math.floor(rng() * 1000)}`,
+                        currentAttack: template.attack || 0,
+                        currentHealth: template.health || 1,
+                        maxHealth: template.health || 1,
+                        canAttack: false,
+                        attacksMade: 0,
+                        turnPlayed: newState.turnCount,
+                        hasBarrier: template.passiveAbilities?.includes('BARRIER') ?? false,
+                        passiveAbilities: template.passiveAbilities ? [...template.passiveAbilities] : [],
+                        hadStealth: false
+                    };
+                    newState.logs.push(`${oldCard.name} は ${template.name} に変化した！`);
+                    targetBoard[idx] = transformed;
+                }
+            });
+            break;
+        }
+        case 'GRANT_LEADER_EFFECT': {
+            // リーダーに永続効果を付与
+            const player = newState.players[sourcePlayerId];
+            const effectId = effect.conditions?.effectId;
+            if (effectId) {
+                if (!player.leaderEffects) player.leaderEffects = [];
+                // 重複チェック
+                if (!player.leaderEffects.find(e => e.id === effectId)) {
+                    let desc = '';
+                    if (effectId === 'hamuchan_storm') {
+                        desc = '自分のハムチャンが場に出た時、それは疾走を得る';
+                    }
+                    player.leaderEffects.push({ id: effectId, description: desc });
+                    newState.logs.push(`${player.name} のリーダーは「${desc}」を得た！`);
+                }
+            }
+            break;
+        }
+        case 'COMBO_BUFF_SELF': {
+            // コンボ数分のバフを自分に付与（つぶまる(真の姿)用）
+            const player = newState.players[sourcePlayerId];
+            const comboCount = player.comboCount; // 現在のコンボカウント（このカード含む）
+            const boardCard = player.board.find(c => c?.instanceId === (sourceCard as BoardCard).instanceId);
+            if (boardCard && comboCount > 0) {
+                boardCard.currentAttack += comboCount;
+                if (!boardCard.baseAttack && boardCard.baseAttack !== 0) boardCard.baseAttack = boardCard.attack || 0;
+                newState.logs.push(`${boardCard.name} はコンボ${comboCount}で+${comboCount}/+0された！`);
+            }
+            break;
+        }
+        case 'RANDOM_DAMAGE_BY_HAND': {
+            // 手札の枚数分、ランダムな相手フォロワー1体に1ダメージ（ツライオン進化時）
+            const damage = effect.value || 1;
+            const player = newState.players[sourcePlayerId];
+            const handCount = player.hand.length;
+            const targetPid = effect.targetType === 'SELF' ? sourcePlayerId : opponentId;
+            const targetBoard = newState.players[targetPid].board;
+
+            for (let i = 0; i < handCount; i++) {
+                const validIndices = targetBoard.map((c, idx) => c ? idx : -1).filter(idx => idx !== -1);
+                if (validIndices.length === 0) break;
+                const randomIdx = Math.floor(rng() * validIndices.length);
+                const target = targetBoard[validIndices[randomIdx]];
+                if (target) {
+                    if (target.hasBarrier) {
+                        target.hasBarrier = false;
+                        newState.logs.push(`${target.name} のバリアがダメージを無効化しました`);
+                    } else {
+                        target.currentHealth -= damage;
+                        newState.logs.push(`${sourceCard.name} は ${target.name} に ${damage} ダメージを与えました`);
+                    }
+                    if (target.currentHealth <= 0) {
+                        target.currentHealth = 0;
+                        triggerLastWord(target, targetPid);
+                        newState.players[targetPid].graveyard.push(target);
+                        targetBoard[validIndices[randomIdx]] = null;
+                        newState.logs.push(`${target.name} は破壊されました`);
+                    }
+                }
+            }
+            if (handCount > 0) {
+                newState.logs.push(`${sourceCard.name} は手札${handCount}枚分のダメージを与えた`);
+            }
+            break;
+        }
     }
 
     return newState;
@@ -2468,9 +2916,64 @@ const recalculateCosts = (state: GameState): GameState => {
     };
 };
 
+// 手札で働く効果: 状態の変化を検知して手札カードのコストを減少させる
+const applyHandEffects = (prevState: GameState, newState: GameState): GameState => {
+    for (const pid of ['p1', 'p2'] as const) {
+        const prevPlayer = prevState.players[pid];
+        const newPlayer = newState.players[pid];
+        const oppPid = pid === 'p1' ? 'p2' : 'p1';
+        const prevOpp = prevState.players[oppPid];
+        const newOpp = newState.players[oppPid];
+
+        // ON_ENEMY_FOLLOWER_DESTROY: 相手のフォロワーが破壊された数をカウント
+        const prevOppFollowerIds = new Set(prevOpp.board.filter(c => c).map(c => c!.instanceId));
+        const newOppFollowerIds = new Set(newOpp.board.filter(c => c).map(c => c!.instanceId));
+        let enemyDestroyed = 0;
+        prevOppFollowerIds.forEach(id => {
+            if (!newOppFollowerIds.has(id)) enemyDestroyed++;
+        });
+
+        // ON_ALLY_LEAVE_BOARD: 味方フォロワーが場から離れた数をカウント
+        const prevAllyFollowerIds = new Set(prevPlayer.board.filter(c => c).map(c => c!.instanceId));
+        const newAllyFollowerIds = new Set(newPlayer.board.filter(c => c).map(c => c!.instanceId));
+        let allyLeft = 0;
+        prevAllyFollowerIds.forEach(id => {
+            if (!newAllyFollowerIds.has(id)) allyLeft++;
+        });
+
+        // 手札で働く効果を適用
+        if (enemyDestroyed > 0 || allyLeft > 0) {
+            newPlayer.hand.forEach((handCard: any) => {
+                if (!handCard.handEffect) return;
+                const he = handCard.handEffect;
+                if (he.effect !== 'COST_REDUCTION') return;
+
+                let reductions = 0;
+                if (he.trigger === 'ON_ENEMY_FOLLOWER_DESTROY' && enemyDestroyed > 0) {
+                    reductions = enemyDestroyed;
+                } else if (he.trigger === 'ON_ALLY_LEAVE_BOARD' && allyLeft > 0) {
+                    reductions = allyLeft;
+                }
+
+                if (reductions > 0) {
+                    const totalReduction = he.value * reductions;
+                    const newCost = Math.max(0, handCard.cost - totalReduction);
+                    if (newCost !== handCard.cost) {
+                        newState.logs.push(`${handCard.name} のコストが${handCard.cost - newCost}下がった（手札で働く）`);
+                        handCard.cost = newCost;
+                        handCard.baseCost = newCost;
+                    }
+                }
+            });
+        }
+    }
+    return newState;
+};
+
 // Wrapper for Reducer to apply constraints (costs)
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
     let newState = internalGameReducer(state, action);
+    newState = applyHandEffects(state, newState); // 手札で働く効果
     newState = recalculateCosts(newState);
     newState.lastHash = calculateStateHash(newState);
     return newState;
@@ -2540,6 +3043,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 }
                 currentPlayer.extraPpActive = false;
             }
+
+            // コンボカウンターリセット（ターン終了時）
+            currentPlayer.comboCount = 0;
 
             // Trigger END_OF_TURN effects
             const newPendingEffects = [...(newState.pendingEffects || [])];
@@ -2779,6 +3285,9 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             }
             player.hand.splice(actualCardIndex, 1);
 
+            // コンボカウンター更新（カードをプレイした枚数）
+            player.comboCount = (player.comboCount || 0) + 1;
+
             let sourceCard: BoardCard | Card = card;
             if (card.type === 'FOLLOWER') {
                 const newFollower: BoardCard = {
@@ -2809,6 +3318,15 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                         newFollower.passiveAbilities!.push('STORM');
                         newFollower.canAttack = true;
                         newState.logs.push(`${newFollower.name} は 盞華 の効果で疾走を得た！`);
+                    }
+                }
+
+                // リーダー効果: ハムチャンが場に出た時、疾走を得る
+                if (newFollower.name === 'ハムチャン' && player.leaderEffects?.find(e => e.id === 'hamuchan_storm')) {
+                    if (!newFollower.passiveAbilities!.includes('STORM')) {
+                        newFollower.passiveAbilities!.push('STORM');
+                        newFollower.canAttack = true;
+                        newState.logs.push(`${newFollower.name} はリーダー効果で疾走を得た！`);
                     }
                 }
 
@@ -2847,6 +3365,8 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
                 // Check Conditions
                 if (e.conditions) {
                     if (e.conditions.minTurn && newState.turnCount < e.conditions.minTurn) return;
+                    // コンボ条件: プレイ枚数がN以上でないとスキップ
+                    if (e.conditions.combo && player.comboCount < e.conditions.combo) return;
                 }
 
                 // Resolution of RANDOM targets for visualization
@@ -3127,6 +3647,18 @@ const internalGameReducer = (state: GameState, action: GameAction): GameState =>
             });
 
             console.log(`[Engine] EVOLVE: Queued ${effectsToQueue.length} effects. Total pending: ${newPendingEffects.length}`);
+
+            // 手札で働く効果: ON_EVOLVE（味方フォロワーが進化/超進化した時、手札カードのコストを減少）
+            player.hand.forEach((handCard: any) => {
+                if (handCard.handEffect?.trigger === 'ON_EVOLVE' && handCard.handEffect.effect === 'COST_REDUCTION') {
+                    const newCost = Math.max(0, handCard.cost - handCard.handEffect.value);
+                    if (newCost !== handCard.cost) {
+                        handCard.cost = newCost;
+                        handCard.baseCost = newCost;
+                        newState.logs.push(`${handCard.name} のコストが${handCard.handEffect.value}下がった（手札で働く）`);
+                    }
+                }
+            });
 
             // Commit - Completely Fresh State
             const finalState = {

@@ -290,7 +290,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     opacity: 0.7,
                     fontFamily: 'Tamanegi, sans-serif'
                 }}>
-                    クラス: {playerClass === 'SENKA' ? 'せんか' : playerClass === 'AJA' ? 'あじゃ' : 'yoRuka'}
+                    クラス: {playerClass === 'SENKA' ? 'せんか' : playerClass === 'AJA' ? 'あじゃ' : playerClass === 'TSUBUMARU' ? 'つぶまる' : 'yoRuka'}
                 </div>
             </div>
 

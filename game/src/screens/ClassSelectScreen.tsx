@@ -15,6 +15,7 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;
@@ -93,9 +94,9 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
         fetchRatings();
     }, [playerId]);
 
-    // Base sizes - reduced for 3 cards fit
-    const cardWidth = 200 * scale;
-    const cardHeight = 280 * scale;
+    // Base sizes - reduced for 4 cards fit
+    const cardWidth = 180 * scale;
+    const cardHeight = 260 * scale;
     const titleSize = 2 * scale;
     const classNameSize = 1.4 * scale;
     const subtitleSize = 0.75 * scale;
@@ -296,6 +297,39 @@ export const ClassSelectScreen: React.FC<ClassSelectScreenProps> = ({
                             墓地をリソースにする変則的な戦法で<br />相手を翻弄する。
                         </p>
                         {renderRatingBadge('YORUKA')}
+                    </div>
+                </div>
+
+                {/* Tsubumaru Class */}
+                <div
+                    onClick={() => onSelectClass('TSUBUMARU')}
+                    style={{
+                        width: cardWidth,
+                        height: cardHeight,
+                        border: '1px solid #444',
+                        borderRadius: 10 * scale,
+                        background: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s',
+                        boxShadow: '0 4px 20px rgba(74, 222, 128, 0.2)',
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                    <img src={tsubumaruLeaderImg} alt="Tsubumaru" style={{ width: '100%', height: '60%', objectFit: 'cover' }} />
+                    <div style={{ padding: `${6 * scale}px`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <h3 style={{ fontSize: `${classNameSize}rem`, color: '#4ade80', margin: 0 }}>つぶまる</h3>
+                        <p style={{ color: '#aaa', margin: `${3 * scale}px 0`, fontSize: `${subtitleSize}rem`, fontFamily: 'Tamanegi, sans-serif' }}>コンボ / ラッシュ</p>
+                        <p style={{ padding: `0 ${0.5 * scale}rem`, textAlign: 'center', fontSize: `${descSize}rem`, opacity: 0.8, fontFamily: 'Tamanegi, sans-serif', lineHeight: 1.3 }}>
+                            手札を回してコンボを繋ぎ<br />ハムチャン軍団で殴り倒す。
+                        </p>
+                        {renderRatingBadge('TSUBUMARU')}
                     </div>
                 </div>
             </div>

@@ -251,8 +251,8 @@ export const BattleOutro: React.FC<BattleOutroProps> = ({
                             fontFamily: 'Tamanegi, sans-serif',
                             color: isVictory ? '#ffd700' : '#718096',
                             textShadow: isVictory
-                                ? `0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.6), 0 0 90px rgba(255,215,0,0.4), 4px 4px 8px rgba(0,0,0,0.8)`
-                                : `0 0 20px rgba(113,128,150,0.5), 4px 4px 8px rgba(0,0,0,0.8)`,
+                                ? `0 0 15px rgba(255,215,0,0.5), 0 0 30px rgba(255,215,0,0.3), 4px 4px 8px rgba(0,0,0,0.8)`
+                                : `0 0 10px rgba(113,128,150,0.4), 4px 4px 8px rgba(0,0,0,0.8)`,
                             letterSpacing: '0.15em',
                         }}
                     >

@@ -7,6 +7,7 @@ import { BattleOutro, OutroPhase } from '../components/BattleOutro';
 import { TurnTimer } from '../components/TurnTimer';
 import { useGameNetwork } from '../network/hooks';
 import { canEvolve, canSuperEvolve } from '../core/abilities';
+import { getOpponentAwarePolicy } from '../ai/opponentPolicy';
 import { usePerformanceMode } from '../hooks/usePerformanceMode';
 import { RatingCalculationResult, calculateWinRating, calculateLossRating, RANK_DISPLAY_NAMES, RankType, getRankFromRating, RANK_THRESHOLDS } from '../firebase/rating';
 import { getClassRating, updateRatingAfterMatch, saveMatchRecord, SaveMatchRecordParams } from '../firebase/playerData';
@@ -23,16 +24,19 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // Sleeve Images (Card Back)
 const azyaSleeve = getAssetUrl('/sleeves/azya_sleeve.png');
 const senkaSleeve = getAssetUrl('/sleeves/senka_sleeve.png');
 const yorukaSleeve = getAssetUrl('/sleeves/yoruka_sleeve.png');
+const tsubumaruSleeve = getAssetUrl('/sleeves/senka_sleeve.png'); // TODO: つぶまる専用スリーブ画像を用意する
 
 // Helper to get leader image by class
 const getLeaderImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return yorukaLeaderImg;
     if (cls === 'AJA') return azyaLeaderImg;
+    if (cls === 'TSUBUMARU') return tsubumaruLeaderImg;
     return senkaLeaderImg;
 };
 
@@ -40,6 +44,7 @@ const getLeaderImg = (cls: ClassType): string => {
 const getSleeveImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return yorukaSleeve;
     if (cls === 'AJA') return azyaSleeve;
+    if (cls === 'TSUBUMARU') return tsubumaruSleeve;
     return senkaSleeve;
 };
 
@@ -1748,6 +1753,9 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
             return isVictory ? senkaWinImg : senkaLoseImg;
         } else if (playerClass === 'AJA') {
             return isVictory ? azyaWinImg : azyaLoseImg;
+        } else if (playerClass === 'TSUBUMARU') {
+            // つぶまる: 専用画像がないのでリーダー画像で代用
+            return tsubumaruLeaderImg;
         } else {
             // YORUKA
             return isVictory ? yorukaWinImg : yorukaLoseImg;
@@ -2002,8 +2010,8 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                     fontSize: `${Math.max(5 * scale, 1.8)}rem`,
                     color: isVictory ? '#f6e05e' : '#a0aec0',
                     textShadow: isVictory
-                        ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
-                        : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
+                        ? '0 0 15px rgba(246, 224, 94, 0.5), 4px 4px 8px rgba(0,0,0,0.6)'
+                        : '0 0 10px rgba(160, 174, 192, 0.4), 4px 4px 8px rgba(0,0,0,0.6)',
                     marginBottom: Math.max(20 * scale, 8),
                     opacity: phaseIndex >= 2 ? 1 : 0,
                     transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(30px)',
@@ -2403,6 +2411,14 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                     getStyle={getDeckButtonStyle}
                                     scale={scale}
                                 />
+                                {/* つぶまる */}
+                                <DeckSelectButton
+                                    deckType="TSUBUMARU"
+                                    label="つぶまる"
+                                    onSelect={handleClassChange}
+                                    getStyle={getDeckButtonStyle}
+                                    scale={scale}
+                                />
                             </div>
                             <button
                                 onClick={() => setShowClassChangeOverlay(false)}
@@ -2626,7 +2642,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // For online play, use propOpponentClass if provided
     // CPUは自分のクラスと重複しない3クラス（SENKA, AJA, YORUKA）からランダム選択
     const opponentClass: ClassType = propOpponentClass || (() => {
-        const allClasses: ClassType[] = ['SENKA', 'AJA', 'YORUKA'];
+        const allClasses: ClassType[] = ['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'];
         const availableClasses = allClasses.filter(c => c !== playerClass);
         return availableClasses[Math.floor(Math.random() * availableClasses.length)];
     })();
@@ -2652,10 +2668,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [gameSynced, setGameSynced] = useState(!isJoinSide);
 
     // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
-    // For CASUAL_MATCH/RANKED_MATCH: Both sides wait for sync before showing BattleIntro
     const isCasualOrRanked = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+    const isOnlineMode = gameMode === 'HOST' || gameMode === 'JOIN' || isCasualOrRanked;
+    // All online modes: wait for sync before showing BattleIntro
     const [showBattleIntro, setShowBattleIntro] = React.useState(
-        isCasualOrRanked ? false : !isJoinSide // CASUAL_MATCH: wait for sync, otherwise: show immediately (except JOIN)
+        isOnlineMode ? false : true // Online: wait for sync, CPU: show immediately
     );
     const [boardFadeIn, setBoardFadeIn] = React.useState(false); // 盤面フェードイン制御（BattleIntro終了前に開始）
     const [leaderUiFadeIn, setLeaderUiFadeIn] = React.useState(false); // リーダーUIのフェードイン制御
@@ -2663,10 +2680,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [timerStarted, setTimerStarted] = React.useState(false); // タイマー開始フラグ
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
 
-    // CASUAL_MATCH/RANKED_MATCH: Sync state for coordinated BattleIntro start
-    const [waitingForIntroSync, setWaitingForIntroSync] = React.useState(isCasualOrRanked);
+    // Online modes: Sync state for coordinated BattleIntro start
+    const [waitingForIntroSync, setWaitingForIntroSync] = React.useState(isOnlineMode);
     const [opponentReadyForIntro, setOpponentReadyForIntro] = React.useState(false);
-    const introSyncSentRef = React.useRef(false); // Prevent multiple READY_FOR_INTRO sends
+    const introSyncSentRef = React.useRef(false); // Prevent multiple READY_FOR_INTRO sends (ref for closure access)
 
     // DEBUG: Log sync state for troubleshooting
     console.log('[GameScreen SYNC STATE]', {
@@ -2959,6 +2976,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const initialStateSentRef = useRef(false);
     // Prevent multiple HANDSHAKE sends (caused by useEffect re-running on gameState changes)
     const handshakeSentRef = useRef(false);
+    // Track if HANDSHAKE has been received from opponent
+    const [handshakeReceived, setHandshakeReceived] = useState(false);
+    // Track if INIT_GAME + READY_FOR_INTRO has been sent (state instead of ref for useEffect reactivity)
+    const [introSyncSent, setIntroSyncSent] = useState(false);
     // Store opponent's name received via HANDSHAKE to re-apply after INIT_GAME sync
     // Initialize with propOpponentName if available (from MatchmakingScreen)
     const opponentNameRef = useRef<string | null>(propOpponentName ?? null);
@@ -2966,11 +2987,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const isHostSide = gameMode === 'HOST' ||
                            ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && isHost);
 
-        // For CASUAL_MATCH/RANKED_MATCH: Send INIT_GAME immediately on connection
-        // For HOST mode: Wait for coinTossPhase === 'DONE'
-        const canSendInitGame = isCasualOrRanked
-            ? (connected && adapter)
-            : (connected && adapter && coinTossPhase === 'DONE');
+        // All online modes: Send INIT_GAME after connection and HANDSHAKE received
+        // CASUAL/RANKED may already have propOpponentName, HOST/JOIN needs HANDSHAKE first
+        const hasOpponentName = !!propOpponentName || handshakeReceived;
+        const canSendInitGame = connected && adapter && hasOpponentName;
 
         // DEBUG: Log INIT_GAME send conditions
         console.log('[GameScreen INIT_GAME useEffect]', {
@@ -2998,69 +3018,75 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     isCasualOrRanked
                 });
 
-                // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
+                // All online modes: Include correct firstPlayerId in INIT_GAME
                 // isFirstPlayer indicates if HOST (p1) goes first
                 // If HOST goes second (isFirstPlayer=false), then p2 is first player
-                // Note: We update both the local state and the sent state
-                const stateToSend = isCasualOrRanked
-                    ? {
-                        ...gameState,
-                        firstPlayerId,
-                        activePlayerId: firstPlayerId  // Also set activePlayerId for correct turn
+                // Also include opponent's name from HANDSHAKE if available
+                const opponentId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                const stateToSend = {
+                    ...gameState,
+                    firstPlayerId,
+                    activePlayerId: firstPlayerId,
+                    players: {
+                        ...gameState.players,
+                        [currentPlayerId]: {
+                            ...gameState.players[currentPlayerId],
+                            name: playerName
+                        },
+                        [opponentId]: {
+                            ...gameState.players[opponentId],
+                            name: opponentNameRef.current || gameState.players[opponentId].name
+                        }
                     }
-                    : gameState;
+                };
 
                 // Update HOST's local gameState to match what we're sending
-                if (isCasualOrRanked) {
-                    dispatch({ type: 'SYNC_STATE', payload: stateToSend });
-                }
+                dispatch({ type: 'SYNC_STATE', payload: stateToSend });
 
                 adapter.send({ type: 'INIT_GAME', payload: stateToSend });
 
-                // For CASUAL_MATCH/RANKED_MATCH: Send READY_FOR_INTRO after INIT_GAME
-                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                    console.log('[GameScreen] HOST side: Sending READY_FOR_INTRO');
-                    adapter.send({ type: 'READY_FOR_INTRO' });
-                    introSyncSentRef.current = true;
-                }
+                // All online modes: Send READY_FOR_INTRO after INIT_GAME
+                console.log('[GameScreen] HOST side: Sending READY_FOR_INTRO');
+                adapter.send({ type: 'READY_FOR_INTRO' });
+                introSyncSentRef.current = true;
+                setIntroSyncSent(true);
             };
 
-            // Initial send after 500ms
+            // Initial send after 500ms (HANDSHAKE already received at this point)
             setTimeout(sendInitAndReady, 500);
 
             // Retry after 2 seconds if opponent hasn't responded with READY_FOR_INTRO
             // This handles cases where JOIN's message handler wasn't ready
-            if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                setTimeout(() => {
-                    if (!opponentReadyForIntro) {
-                        console.log('[GameScreen] HOST side: Retrying INIT_GAME (no response yet)');
-                        sendInitAndReady();
-                    }
-                }, 2500);
-            }
+            setTimeout(() => {
+                if (!opponentReadyForIntro) {
+                    console.log('[GameScreen] HOST side: Retrying INIT_GAME (no response yet)');
+                    sendInitAndReady();
+                }
+            }, 2500);
         }
-    }, [gameMode, connected, adapter, gameState, coinTossPhase, isHost, isCasualOrRanked, opponentReadyForIntro]);
+    }, [gameMode, connected, adapter, gameState, isHost, isOnlineMode, opponentReadyForIntro, handshakeReceived]);
 
-    // CASUAL_MATCH/RANKED_MATCH: JOIN side sends READY_FOR_INTRO after receiving INIT_GAME
+    // Online modes: JOIN side sends READY_FOR_INTRO after receiving INIT_GAME
     useEffect(() => {
-        if (!isCasualOrRanked || !adapter || !gameSynced || introSyncSentRef.current) return;
+        if (!isOnlineMode || !adapter || !gameSynced || introSyncSent) return;
         if (isJoinSide) {
             console.log('[GameScreen] JOIN side: Sending READY_FOR_INTRO after game sync');
             adapter.send({ type: 'READY_FOR_INTRO' });
             introSyncSentRef.current = true;
+            setIntroSyncSent(true);
         }
-    }, [isCasualOrRanked, adapter, gameSynced, isJoinSide]);
+    }, [isOnlineMode, adapter, gameSynced, isJoinSide, introSyncSent]);
 
-    // CASUAL_MATCH/RANKED_MATCH: HOST sends START_INTRO when both sides are ready
+    // Online modes: HOST sends START_INTRO when both sides are ready
     useEffect(() => {
-        if (!isCasualOrRanked || !adapter || !waitingForIntroSync) return;
-        if (isHost && opponentReadyForIntro && introSyncSentRef.current) {
+        if (!isOnlineMode || !adapter || !waitingForIntroSync) return;
+        if (isHost && opponentReadyForIntro && introSyncSent) {
             console.log('[GameScreen] HOST side: Both ready, sending START_INTRO');
             adapter.send({ type: 'START_INTRO' });
             setWaitingForIntroSync(false);
             setShowBattleIntro(true);
         }
-    }, [isCasualOrRanked, adapter, isHost, opponentReadyForIntro, waitingForIntroSync]);
+    }, [isOnlineMode, adapter, isHost, opponentReadyForIntro, waitingForIntroSync, introSyncSent]);
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
@@ -4506,18 +4532,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setBgmLoadedForClass(null);
 
         // 9. Reset battle intro and coin toss for new game
-        setShowBattleIntro(gameMode !== 'JOIN'); // JOIN時はホストからの同期を待つ
-        // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
         const isCasualOrRankedMode = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+        const isOnline = gameMode === 'HOST' || gameMode === 'JOIN' || isCasualOrRankedMode;
+        setShowBattleIntro(!isOnline); // Online: wait for sync, CPU: show immediately
+        // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
         const isJoinSide = gameMode === 'JOIN' || (isCasualOrRankedMode && !isHost);
         setIsFirstPlayer(isJoinSide ? false : Math.random() > 0.5);
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
-        // 10. For online rematch, HOST needs to send new game state after coin toss completes
-        if (gameMode === 'HOST' || isCasualOrRankedMode) {
+        // 10. For online rematch, HOST needs to send new game state
+        if (isOnline && !isJoinSide) {
             initialStateSentRef.current = false;
+            introSyncSentRef.current = false;
+            setIntroSyncSent(false);
+            setWaitingForIntroSync(true);
+            setOpponentReadyForIntro(false);
         }
 
         // 11. Update Game State
@@ -4747,6 +4778,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 // Store opponent's name in ref for later use (in case INIT_GAME overwrites it)
                 opponentNameRef.current = sanitizedName;
+                setHandshakeReceived(true);
 
                 const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                 dispatch({
@@ -4797,13 +4829,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 });
                 setIsFirstPlayer(isJoinSideFirst);
 
-                // For CASUAL_MATCH/RANKED_MATCH: Don't show BattleIntro immediately, wait for sync
-                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                    console.log('[GameScreen] CASUAL_MATCH JOIN side: Waiting for intro sync');
-                    // Intro sync will be handled by READY_FOR_INTRO/START_INTRO messages
-                } else {
-                    setShowBattleIntro(true); // For HOST/JOIN mode: show immediately
-                }
+                // All online modes: Don't show BattleIntro immediately, wait for READY_FOR_INTRO/START_INTRO sync
+                console.log('[GameScreen] JOIN side: Waiting for intro sync');
                 return;
             }
 
@@ -5709,6 +5736,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 };
 
                 // --- AI Helper Functions ---
+                const aiClass = (gameStateRef.current.players[opponentPlayerId].class || 'SENKA') as ClassType;
+                const enemyClass = (gameStateRef.current.players[currentPlayerId].class || 'SENKA') as ClassType;
+                const aiPolicy = getOpponentAwarePolicy(aiClass, enemyClass);
+
+                const estimateNextTurnBoardPressure = (state: any, excludeInstanceId?: string): number => {
+                    const aiBoard = state.players[opponentPlayerId].board.filter((c: any) => c !== null && c.instanceId !== excludeInstanceId);
+                    return aiBoard.reduce((sum: number, c: any) => sum + (c.currentAttack || 0), 0);
+                };
 
                 // Check if target is immune to follower damage (for attack decisions)
                 const isImmuneToFollowerAttack = (target: any, _state: any): boolean => {
@@ -5822,11 +5857,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     if (nearLethalWindow) {
                         const needDamage = Math.max(0, playerHp - currentDamage);
                         // Cards that directly push face damage are prioritized around 9/10T
-                        if (card.id === 'c_senka_knuckler') score += 148;
-                        if (card.id === 's_final_cannon') score += 218;
-                        if (card.passiveAbilities?.includes('STORM')) score += 64;
+                        if (card.id === 'c_senka_knuckler') score += Math.round(148 * aiPolicy.faceBias);
+                        if (card.id === 's_final_cannon') score += Math.round(218 * aiPolicy.faceBias);
+                        if (card.passiveAbilities?.includes('STORM')) score += Math.round(64 * aiPolicy.faceBias);
                         if (needDamage <= (card.attack || 0) * (card.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1)) {
-                            score += 170;
+                            score += Math.round(170 * aiPolicy.faceBias);
                         }
                     }
 
@@ -5888,11 +5923,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     // 白ツバキを序〜中盤の除去強要圧として高評価
                     if (card.id === 'c_white_tsubaki') {
                         if (turnCount <= 8) {
-                            score += 74;
+                            score += Math.round(74 * aiPolicy.whiteTsubakiPriority);
                         } else {
-                            score += 18;
+                            score += Math.round(18 * aiPolicy.whiteTsubakiPriority);
                         }
-                        if (enemyBoard.length > 0) score += 22;
+                        if (enemyBoard.length > 0) score += Math.round(22 * aiPolicy.whiteTsubakiPriority);
                     }
 
                     // === VALUE CARDS ===
@@ -6114,7 +6149,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                         // Can we kill it?
                         if (canKillTarget(attacker, target)) {
-                            targetScore += 44;
+                            targetScore += Math.round(44 * aiPolicy.tradeBias);
                             // Bonus for killing high-value targets
                             targetScore += (target.currentAttack || 0) * 5;
                             // Extra bonus for killing without dying
@@ -6154,8 +6189,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             }
                         }
 
+                        if (attacker.passiveAbilities?.includes('BANE') && target.hasBarrier) {
+                            targetScore += aiPolicy.baneBarrierStripValue;
+                            if (!wouldDieAttacking(attacker, target)) targetScore += 8;
+                            const nextTurnPressure = estimateNextTurnBoardPressure(state, attacker.instanceId) + (attacker.currentAttack || 0);
+                            if (nextTurnPressure >= (target.currentHealth || 0)) {
+                                targetScore += aiPolicy.baneSetupLethalValue;
+                            }
+                        }
+
+                        if (target.id === 'c_white_tsubaki') {
+                            targetScore += Math.round(28 * aiPolicy.whiteTsubakiAnswer);
+                        }
+
                         if (faceWindow && canAttackLeader) {
-                            targetScore -= 34;
+                            targetScore -= Math.round(34 * aiPolicy.faceBias);
                             if (state.players[currentPlayerId].hp <= 8) targetScore -= 10;
                         }
 
@@ -6169,7 +6217,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         const enemyHp = state.players[currentPlayerId].hp;
                         const lethalLike = enemyHp <= (attacker.currentAttack || 0) * (attacker.passiveAbilities?.includes('DOUBLE_ATTACK') ? 2 : 1) + 2;
                         if (faceWindow || lethalLike) {
-                            if (bestTarget.index === -1 || bestTarget.score <= 34) {
+                            if (bestTarget.index === -1 || bestTarget.score <= Math.round(34 * aiPolicy.faceBias)) {
                                 return { index: -1, isLeader: true };
                             }
                         }
@@ -8021,6 +8069,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Combined condition for cyan effect (either LEADER_DAMAGE_CAP or leaderDamageShield)
     const playerHasCyanEffect = playerHasLeaderDamageCap || playerHasLeaderShield;
     const opponentHasCyanEffect = opponentHasLeaderDamageCap || opponentHasLeaderShield;
+    // Check if hamuchan_storm leader effect is active (つぶまる人の姿 超進化時)
+    const playerHasHamuchanStorm = player?.leaderEffects?.some(e => e.id === 'hamuchan_storm') ?? false;
+    const opponentHasHamuchanStorm = opponent?.leaderEffects?.some(e => e.id === 'hamuchan_storm') ?? false;
 
     // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
@@ -8089,9 +8140,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         );
     }
 
-    // CASUAL_MATCH/RANKED_MATCH: Wait for intro sync (both sides ready)
+    // Online modes: Wait for intro sync (both sides ready)
     // Show "マッチング完了！" while waiting for BattleIntro to start
-    if (isCasualOrRanked && waitingForIntroSync && gameSynced) {
+    if (isOnlineMode && waitingForIntroSync && gameSynced) {
         return (
             <div style={{
                 height: '100dvh',
@@ -8305,6 +8356,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                         0%, 100% { opacity: 0.15; }
                         50% { opacity: 0.45; }
                     }
+                    @keyframes leaderHamuchanStormPulse {
+                        0%, 100% {
+                            box-shadow: 0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2);
+                            border-color: #48bb78;
+                        }
+                        50% {
+                            box-shadow: 0 0 35px rgba(72, 187, 120, 0.7), 0 0 55px rgba(72, 187, 120, 0.4);
+                            border-color: #68d391;
+                        }
+                    }
+                    @keyframes leaderHamuchanStormOverlay {
+                        0%, 100% { opacity: 0.15; }
+                        50% { opacity: 0.4; }
+                    }
                     /* EP/SEP pulse animations for usable state - box-shadow only, no transform override */
                     @keyframes epPulse {
                         0%, 100% {
@@ -8346,82 +8411,93 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     <div style={{
                         position: 'absolute', inset: 0, zIndex: 4000,
                         background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '16px',
                     }} onClick={() => setShowMenu(false)}>
-                        <div style={{ background: '#2d3748', padding: 40, borderRadius: 16, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 300, border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 10, color: '#fff' }}>メニュー</h2>
+                        <div style={{
+                            background: '#2d3748',
+                            padding: `${Math.max(16, 24 * scale)}px`,
+                            borderRadius: 16,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: `${Math.max(10, 14 * scale)}px`,
+                            width: Math.min(320, window.innerWidth - 32),
+                            maxHeight: 'calc(100dvh - 32px)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                        }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, textAlign: 'center', borderBottom: '1px solid #4a5568', paddingBottom: 8, color: '#fff', fontSize: `${Math.max(1, 1.3 * scale)}rem`, flexShrink: 0 }}>メニュー</h2>
 
                             {!showSettings ? (
                                 <>
-                                    <button onClick={() => setShowMenu(false)} style={{ padding: 15, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>再開</button>
-                                    <button onClick={() => setShowSettings(true)} style={{ padding: 15, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>設定</button>
-                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: 15, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: '1.2rem' }}>降参</button>
+                                    <button onClick={() => setShowMenu(false)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>再開</button>
+                                    <button onClick={() => setShowSettings(true)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#2b6cb0', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>設定</button>
+                                    <button onClick={() => setShowSurrenderConfirm(true)} style={{ padding: `${Math.max(10, 12 * scale)}px`, background: '#e53e3e', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>降参</button>
                                 </>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-                                    <h3 style={{ margin: 0, color: '#cbd5e0' }}>音声設定</h3>
-                                    {/* BGM Toggle */}
-                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
-                                        BGM再生
-                                        <input type="checkbox" checked={audioSettings.bgmEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgmEnabled: e.target.checked }))}
-                                            style={{ width: 20, height: 20 }}
-                                        />
-                                    </label>
+                                <>
+                                    {/* 戻るボタン（上部） */}
+                                    <button onClick={() => setShowSettings(false)} style={{
+                                        padding: `${Math.max(6, 8 * scale)}px ${Math.max(12, 16 * scale)}px`,
+                                        background: '#4a5568', border: 'none', color: 'white',
+                                        borderRadius: 6, cursor: 'pointer',
+                                        fontSize: `${Math.max(0.75, 0.85 * scale)}rem`,
+                                        alignSelf: 'flex-start', flexShrink: 0,
+                                    }}>← 戻る</button>
 
-                                    {/* SE Toggle */}
-                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
-                                        SE再生
-                                        <input type="checkbox" checked={audioSettings.seEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, seEnabled: e.target.checked }))}
-                                            style={{ width: 20, height: 20 }}
-                                        />
-                                    </label>
+                                    {/* スクロール可能な設定コンテンツ */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: `${Math.max(10, 12 * scale)}px`, overflowY: 'auto', flex: 1, minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
+                                        <h3 style={{ margin: 0, color: '#cbd5e0', fontSize: `${Math.max(0.85, 1 * scale)}rem` }}>音声設定</h3>
 
-                                    {/* BGM Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>BGM</span>
-                                            <span>{Math.round(audioSettings.bgm * 100)}%</span>
+                                        {/* BGM Toggle + Volume */}
+                                        <div>
+                                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                BGM再生
+                                                <input type="checkbox" checked={audioSettings.bgmEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgmEnabled: e.target.checked }))}
+                                                    style={{ width: 18, height: 18 }}
+                                                />
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.bgm}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.bgm * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.bgm}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, bgm: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
-                                    </div>
 
-                                    {/* SE Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>SE</span>
-                                            <span>{Math.round(audioSettings.se * 100)}%</span>
+                                        {/* SE Toggle + Volume */}
+                                        <div>
+                                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                SE再生
+                                                <input type="checkbox" checked={audioSettings.seEnabled} onChange={e => setAudioSettings((prev: any) => ({ ...prev, seEnabled: e.target.checked }))}
+                                                    style={{ width: 18, height: 18 }}
+                                                />
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.se}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.se * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.se}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, se: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
-                                    </div>
 
-                                    {/* Voice Volume */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0aec0', marginBottom: 5 }}>
-                                            <span>ボイス</span>
-                                            <span>{Math.round(audioSettings.voice * 100)}%</span>
+                                        {/* Voice Volume */}
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'white', marginBottom: 4, fontSize: `${Math.max(0.8, 0.9 * scale)}rem` }}>
+                                                <span>ボイス</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input type="range" min="0" max="1" step="0.01" value={audioSettings.voice}
+                                                    onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                                <span style={{ color: '#a0aec0', fontSize: `${Math.max(0.7, 0.8 * scale)}rem`, minWidth: 32, textAlign: 'right' }}>{Math.round(audioSettings.voice * 100)}%</span>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="range" min="0" max="1" step="0.01"
-                                            value={audioSettings.voice}
-                                            onChange={e => setAudioSettings((prev: any) => ({ ...prev, voice: parseFloat(e.target.value) }))}
-                                            style={{ width: '100%' }}
-                                        />
                                     </div>
-
-                                    <button onClick={() => setShowSettings(false)} style={{ padding: 10, background: '#4a5568', border: 'none', color: 'white', borderRadius: 8, cursor: 'pointer', marginTop: 10 }}>戻る</button>
-                                </div>
+                                </>
                             )}
-
                         </div>
                     </div>
                 )}
@@ -8435,12 +8511,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     }} onClick={() => setShowSurrenderConfirm(false)}>
                         <div style={{
                             background: '#2d3748',
-                            padding: 40,
+                            padding: `${Math.max(20, 40 * scale)}px`,
                             borderRadius: 16,
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 20,
-                            minWidth: 320,
+                            gap: `${Math.max(12, 20 * scale)}px`,
+                            minWidth: Math.min(320, window.innerWidth * 0.85),
+                            maxHeight: '85vh',
+                            overflowY: 'auto',
                             border: '2px solid #e53e3e',
                             boxShadow: '0 0 30px rgba(229, 62, 62, 0.3)'
                         }} onClick={e => e.stopPropagation()}>
@@ -8634,12 +8712,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 : `url(${getLeaderImg(opponent.class)}) center/cover`,
                             border: opponentHasLeaderDamageCap
                                 ? '4px solid #67e8f9'
+                                : opponentHasHamuchanStorm
+                                ? '4px solid #48bb78'
                                 : (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: opponentHasLeaderDamageCap
                                 ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
+                                : opponentHasHamuchanStorm
+                                ? '0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2)'
                                 : '0 0 20px rgba(0,0,0,0.5)',
                             transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
-                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite'
+                                : opponentHasHamuchanStorm ? 'leaderHamuchanStormPulse 2s ease-in-out infinite' : 'none',
                             // 終了演出: 自分の勝利時（相手が敗者）にフェーズに応じてスタイル変更
                             // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
                             ...(gameState.winnerId === currentPlayerId && (outroPhase || outroCompleted) ? {
@@ -8658,6 +8741,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                     pointerEvents: 'none',
                                     animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
+                            {/* Green overlay for hamuchan_storm leader effect */}
+                            {opponentHasHamuchanStorm && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(72, 187, 120, 0.4) 0%, rgba(72, 187, 120, 0.15) 70%, rgba(72, 187, 120, 0.05) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderHamuchanStormOverlay 2s ease-in-out infinite',
                                     zIndex: 1
                                 }} />
                             )}
@@ -8864,6 +8959,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 ))}
                             </div>
                         </div>
+                        {/* Combo Counter - つぶまるデッキ限定 (Opponent) */}
+                        {opponent.class === 'TSUBUMARU' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 4 }}>
+                                <div style={{ fontSize: '0.9rem', filter: 'drop-shadow(0 0 2px rgba(255, 165, 0, 0.6))' }}>🔥</div>
+                                <div style={{
+                                    background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.7), rgba(200, 100, 0, 0.8))',
+                                    padding: '3px 8px', borderRadius: 5, color: '#fef3c7', fontSize: '0.64rem',
+                                    fontWeight: 'bold', border: '1px solid rgba(255, 200, 100, 0.4)',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                                }}>
+                                    コンボ {opponent.comboCount || 0}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* ========================================== */}
@@ -9590,6 +9699,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                         ))}
                                     </div>
                                 </div>
+                                {/* Combo Counter - つぶまるデッキ限定 (Player Board Info) */}
+                                {player.class === 'TSUBUMARU' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+                                        <div style={{ fontSize: '1.2rem', filter: 'drop-shadow(0 0 3px rgba(255, 165, 0, 0.8))' }}>🔥</div>
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.8), rgba(200, 100, 0, 0.9))',
+                                            padding: '4px 12px', borderRadius: 8, color: '#fef3c7', fontSize: '0.9rem',
+                                            fontWeight: 'bold', border: '1px solid rgba(255, 200, 100, 0.5)',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)'
+                                        }}>
+                                            コンボ {player.comboCount || 0}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Play Button (only shown when HAND card selected) */}
@@ -9876,14 +9999,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             onMouseDown={handleLeaderMouseDown}
                             style={{
                                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                                border: playerHasLeaderDamageCap ? '4px solid #67e8f9' : '4px solid #3182ce',
+                                border: playerHasLeaderDamageCap ? '4px solid #67e8f9'
+                                    : playerHasHamuchanStorm ? '4px solid #48bb78'
+                                    : '4px solid #3182ce',
                                 boxShadow: playerHasLeaderDamageCap
                                     ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
+                                    : playerHasHamuchanStorm
+                                    ? '0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2)'
                                     : '0 0 20px rgba(49, 130, 206, 0.4)',
                                 background: '#1a202c',
                                 cursor: 'grab',
                                 transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
-                                animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                                animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite'
+                                    : playerHasHamuchanStorm ? 'leaderHamuchanStormPulse 2s ease-in-out infinite' : 'none',
                                 position: 'relative',
                                 // 終了演出: 相手の勝利時（自分が敗者）にフェーズに応じてスタイル変更
                                 // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
@@ -9908,6 +10036,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                     pointerEvents: 'none',
                                     animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
+                            {/* Green overlay for hamuchan_storm leader effect */}
+                            {playerHasHamuchanStorm && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(72, 187, 120, 0.4) 0%, rgba(72, 187, 120, 0.15) 70%, rgba(72, 187, 120, 0.05) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderHamuchanStormOverlay 2s ease-in-out infinite',
                                     zIndex: 1
                                 }} />
                             )}
@@ -10211,6 +10351,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     ))}
                                 </div>
                             </div>
+                            {/* Combo Counter - つぶまるデッキ限定 (Player Hand Area) */}
+                            {player.class === 'TSUBUMARU' && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 * scale, marginLeft: 10 * scale }}>
+                                    <div style={{ fontSize: `${1.87 * scale}rem`, filter: 'drop-shadow(0 0 3px rgba(255, 165, 0, 0.8))' }}>🔥</div>
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, rgba(255, 165, 0, 0.8), rgba(200, 100, 0, 0.9))',
+                                        padding: `${6 * scale}px ${16 * scale}px`, borderRadius: 10 * scale, color: '#fef3c7',
+                                        fontSize: `${1.32 * scale}rem`, fontWeight: 'bold',
+                                        border: '1px solid rgba(255, 200, 100, 0.5)',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.5), inset 0 1px rgba(255,255,255,0.1)'
+                                    }}>
+                                        コンボ {player.comboCount || 0}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -3,7 +3,7 @@ import { AudioSettings, ClassType, AIDifficulty } from '../core/types';
 import { GalleryCardListScreen } from './GalleryCardListScreen';
 import { GalleryCardDetailScreen } from './GalleryCardDetailScreen';
 import { GalleryRelatedCardScreen } from './GalleryRelatedCardScreen';
-import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE } from '../core/engine';
+import { MOCK_CARDS, SENKA_DECK_TEMPLATE, AJA_DECK_TEMPLATE, YORUKA_DECK_TEMPLATE, TSUBUMARU_DECK_TEMPLATE } from '../core/engine';
 import { getAllClassRatings, updatePlayerName, getAllClassRankings, RankingEntry } from '../firebase/playerData';
 import { getRankFromRating, RANK_DISPLAY_NAMES, ClassRating, RankType } from '../firebase/rating';
 
@@ -25,6 +25,7 @@ const BASE_HEIGHT = 720;
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // ランクの色
 const RANK_COLORS: Record<RankType, string> = {
@@ -43,7 +44,7 @@ type MenuTab = 'solo' | 'room' | 'random' | 'home' | 'ranking' | 'gallery' | 'se
 type GalleryView = 'class' | 'card-list' | 'card-detail' | 'related-card';
 
 interface TitleScreenProps {
-    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', roomId?: string, classType?: ClassType, aiDifficulty?: AIDifficulty) => void;
+    onStartConfig: (mode: 'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH' | 'RANDOM_MATCH', roomId?: string, classType?: ClassType, aiDifficulty?: AIDifficulty, opponentClass?: ClassType) => void;
     audioSettings: AudioSettings;
     onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
     playerId?: string | null; // 将来的にレート表示等で使用予定
@@ -118,6 +119,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     const [classSelectMode, setClassSelectMode] = useState<'CPU' | 'HOST' | 'JOIN' | 'CASUAL_MATCH' | 'RANKED_MATCH'>('CPU');
     const [classSelectDifficulty, setClassSelectDifficulty] = useState<AIDifficulty>('NORMAL');
     const [classRatings, setClassRatings] = useState<Partial<Record<ClassType, ClassRating>>>({});
+
+    // CPU戦用：プレイヤーとCPUのクラス選択状態
+    const [selectedPlayerClass, setSelectedPlayerClass] = useState<ClassType | null>(null);
+    const [selectedOpponentClass, setSelectedOpponentClass] = useState<ClassType | 'RANDOM' | null>('RANDOM');
     const [loadingRatings, setLoadingRatings] = useState(false);
 
     // カード回転の状態
@@ -144,6 +149,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         SENKA: [],
         AJA: [],
         YORUKA: [],
+        TSUBUMARU: [],
     });
     const [rankingLoading, setRankingLoading] = useState(false);
     const [rankingError, setRankingError] = useState('');
@@ -436,7 +442,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
         // デッキテンプレートを取得してコスト順でソート
         const template = classType === 'SENKA' ? SENKA_DECK_TEMPLATE :
-                        classType === 'AJA' ? AJA_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
+                        classType === 'AJA' ? AJA_DECK_TEMPLATE :
+                        classType === 'TSUBUMARU' ? TSUBUMARU_DECK_TEMPLATE : YORUKA_DECK_TEMPLATE;
 
         // トークンを除外してカードデータを取得
         const cardIds = template
@@ -501,17 +508,40 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         if (aiDifficulty) {
             setClassSelectDifficulty(aiDifficulty);
         }
+        // CPU戦の場合、選択状態をリセット
+        if (mode === 'CPU') {
+            setSelectedPlayerClass(null);
+            setSelectedOpponentClass('RANDOM');
+        }
         setShowingClassSelect(true);
     };
 
-    // クラス選択完了ハンドラー
+    // クラス選択完了ハンドラー（非CPU戦用：1クラス選択で即開始）
     const handleClassSelected = (classType: ClassType) => {
         setShowingClassSelect(false);
-        // クラスを選択してゲーム開始
         const roomIdToPass = classSelectMode === 'JOIN' ? joinId : undefined;
         const difficultyToPass = classSelectMode === 'CPU' ? classSelectDifficulty : undefined;
         onStartConfig(classSelectMode, roomIdToPass, classType, difficultyToPass);
-        // ルームID入力状態をリセット
+        setShowJoinInput(false);
+    };
+
+    // CPU戦用：ゲームスタートハンドラー
+    const handleCpuGameStart = () => {
+        if (!selectedPlayerClass) return;
+
+        // CPUのクラスを決定（ランダムの場合はランダムに選択）
+        let opponentClassResult: ClassType;
+        if (selectedOpponentClass === 'RANDOM') {
+            const classes: ClassType[] = ['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'];
+            opponentClassResult = classes[Math.floor(Math.random() * classes.length)];
+        } else if (selectedOpponentClass) {
+            opponentClassResult = selectedOpponentClass;
+        } else {
+            return;
+        }
+
+        setShowingClassSelect(false);
+        onStartConfig('CPU', undefined, selectedPlayerClass, classSelectDifficulty, opponentClassResult);
         setShowJoinInput(false);
     };
 
@@ -686,7 +716,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                paddingBottom: 80 * scale, // メニューバーの高さ分
+                paddingBottom: Math.max(80 * scale, 54), // メニューバーの高さ(最小44px) + 余白
                 position: 'relative',
                 zIndex: 2,
             }}>
@@ -834,7 +864,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             ) : (
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gridTemplateColumns: 'repeat(4, 1fr)',
                                     gap: `${10 * scale}px`,
                                 }}>
                                     {/* 盞華 */}
@@ -908,6 +938,33 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                             }}>
                                                 <div style={{ fontSize: `${0.85 * scale}rem`, color: '#a855f7', fontWeight: 'bold', marginBottom: `${5 * scale}px` }}>
                                                     Y
+                                                </div>
+                                                <div style={{ fontSize: `${0.75 * scale}rem`, color: rankColor, marginBottom: `${3 * scale}px` }}>
+                                                    {rankName}
+                                                </div>
+                                                <div style={{ fontSize: `${1 * scale}rem`, color: '#4ade80', fontWeight: 'bold' }}>
+                                                    {ratingValue}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                    {/* つぶまる */}
+                                    {(() => {
+                                        const rating = classRatings['TSUBUMARU'];
+                                        const ratingValue = rating?.rating ?? 0;
+                                        const rank = getRankFromRating(ratingValue);
+                                        const rankColor = RANK_COLORS[rank];
+                                        const rankName = RANK_DISPLAY_NAMES[rank];
+                                        return (
+                                            <div style={{
+                                                background: 'rgba(74, 222, 128, 0.1)',
+                                                border: '1px solid rgba(74, 222, 128, 0.3)',
+                                                borderRadius: `${8 * scale}px`,
+                                                padding: `${10 * scale}px`,
+                                                textAlign: 'center'
+                                            }}>
+                                                <div style={{ fontSize: `${0.85 * scale}rem`, color: '#4ade80', fontWeight: 'bold', marginBottom: `${5 * scale}px` }}>
+                                                    つぶまる
                                                 </div>
                                                 <div style={{ fontSize: `${0.75 * scale}rem`, color: rankColor, marginBottom: `${3 * scale}px` }}>
                                                     {rankName}
@@ -1446,11 +1503,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                     justifyContent: 'center',
                                     width: '100%',
                                 }}>
-                                    {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((playerClass) => {
+                                    {(['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'] as ClassType[]).map((playerClass) => {
                                         const classConfig: Record<ClassType, { name: string; color: string; bgColor: string }> = {
                                             SENKA: { name: '盞華', color: '#e94560', bgColor: 'rgba(233, 69, 96, 0.15)' },
                                             AJA: { name: 'あじゃ', color: '#45a2e9', bgColor: 'rgba(69, 162, 233, 0.15)' },
                                             YORUKA: { name: 'Y', color: '#a855f7', bgColor: 'rgba(168, 85, 247, 0.15)' },
+                                            TSUBUMARU: { name: 'つぶまる', color: '#4ade80', bgColor: 'rgba(74, 222, 128, 0.15)' },
                                         };
                                         const config = classConfig[playerClass];
                                         const entries = rankingData[playerClass];
@@ -1857,6 +1915,63 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                                         </h3>
                                     </div>
                                 </div>
+
+                                {/* Tsubumaru Class */}
+                                <div
+                                    onClick={() => handleGalleryClassSelect('TSUBUMARU')}
+                                    style={{
+                                        width: 200 * scale,
+                                        height: 280 * scale,
+                                        border: '1px solid #444',
+                                        borderRadius: 10 * scale,
+                                        background: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'flex-start',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        boxShadow: '0 4px 20px rgba(74, 222, 128, 0.2)',
+                                        overflow: 'hidden',
+                                        position: 'relative'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.boxShadow = '0 8px 30px rgba(74, 222, 128, 0.4)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.boxShadow = '0 4px 20px rgba(74, 222, 128, 0.2)';
+                                    }}
+                                >
+                                    <img
+                                        src={tsubumaruLeaderImg}
+                                        alt="Tsubumaru"
+                                        style={{
+                                            width: '100%',
+                                            height: '75%',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                    <div style={{
+                                        padding: `${8 * scale}px`,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        width: '100%',
+                                        justifyContent: 'center',
+                                        flex: 1
+                                    }}>
+                                        <h3 style={{
+                                            fontSize: `${1.4 * scale}rem`,
+                                            color: '#4ade80',
+                                            margin: 0,
+                                            fontFamily: 'sans-serif'
+                                        }}>
+                                            つぶまる
+                                        </h3>
+                                    </div>
+                                </div>
                             </div>
                                 </div>
                             )}
@@ -1921,12 +2036,16 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         <div style={{
                             background: 'rgba(0, 0, 0, 0.3)',
                             borderRadius: 12 * scale,
-                            padding: `${2 * scale}rem`,
-                            minWidth: 400 * scale,
+                            padding: `${Math.max(1, 1.5 * scale)}rem`,
+                            width: Math.min(400 * scale, window.innerWidth * 0.9),
+                            maxHeight: `calc(100dvh - ${Math.max(90 * scale, 60)}px)`,
+                            overflowY: 'auto',
+                            WebkitOverflowScrolling: 'touch',
                         }}>
                             <h2 style={{
-                                fontSize: `${1.8 * scale}rem`,
-                                marginBottom: `${1.5 * scale}rem`,
+                                fontSize: `${Math.max(1.2, 1.5 * scale)}rem`,
+                                marginBottom: `${Math.max(0.5, 0.8 * scale)}rem`,
+                                marginTop: 0,
                                 color: '#6b7280',
                                 textAlign: 'center',
                                 fontFamily: 'var(--font-tamanegi)',
@@ -1935,7 +2054,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             </h2>
 
                             {/* BGM */}
-                            <div style={{ marginBottom: `${1.5 * scale}rem` }}>
+                            <div style={{ marginBottom: `${Math.max(0.5, 0.8 * scale)}rem` }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: `${0.5 * scale}rem` }}>
                                     <span style={{ fontSize: `${1 * scale}rem` }}>BGM</span>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8 * scale, cursor: 'pointer' }}>
@@ -1963,7 +2082,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             </div>
 
                             {/* SE */}
-                            <div style={{ marginBottom: `${1.5 * scale}rem` }}>
+                            <div style={{ marginBottom: `${Math.max(0.5, 0.8 * scale)}rem` }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: `${0.5 * scale}rem` }}>
                                     <span style={{ fontSize: `${1 * scale}rem` }}>効果音</span>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8 * scale, cursor: 'pointer' }}>
@@ -1993,9 +2112,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             {/* プロフィール設定 */}
                             <div style={{
                                 borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                                paddingTop: `${1.5 * scale}rem`,
-                                marginTop: `${1 * scale}rem`,
-                                marginBottom: `${1.5 * scale}rem`
+                                paddingTop: `${Math.max(0.5, 0.8 * scale)}rem`,
+                                marginTop: `${Math.max(0.3, 0.5 * scale)}rem`,
+                                marginBottom: `${Math.max(0.5, 0.8 * scale)}rem`
                             }}>
                                 <h3 style={{
                                     fontSize: `${1.2 * scale}rem`,
@@ -2143,8 +2262,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             {/* アカウント */}
                             <div style={{
                                 borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                                paddingTop: `${1.5 * scale}rem`,
-                                marginTop: `${1 * scale}rem`
+                                paddingTop: `${Math.max(0.5, 0.8 * scale)}rem`,
+                                marginTop: `${Math.max(0.3, 0.5 * scale)}rem`
                             }}>
                                 <h3 style={{
                                     fontSize: `${1.2 * scale}rem`,
@@ -2412,183 +2531,368 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     zIndex: 200,
                     padding: `${2 * scale}rem`,
                 }}>
-                    {/* タイトル */}
-                    <h2 style={{
-                        fontSize: `${2 * scale}rem`,
-                        marginBottom: `${2 * scale}rem`,
-                        color: '#fff',
-                        fontFamily: 'var(--font-tamanegi)',
-                    }}>
-                        クラスを選択
-                    </h2>
+                    {/* CPU戦モード：左右分割レイアウト */}
+                    {classSelectMode === 'CPU' ? (
+                        <>
+                            <h2 style={{
+                                fontSize: `${1.6 * scale}rem`,
+                                marginBottom: `${1 * scale}rem`,
+                                color: '#fff',
+                                fontFamily: 'var(--font-tamanegi)',
+                            }}>
+                                デッキを選択
+                            </h2>
 
-                    {/* クラスカード */}
-                    <div style={{
-                        display: 'flex',
-                        gap: `${1.5 * scale}rem`,
-                        marginBottom: `${1 * scale}rem`,
-                    }}>
-                        {/* 盞華 */}
-                        <div
-                            onClick={() => handleClassSelected('SENKA')}
-                            style={{
-                                width: 200 * scale,
-                                borderRadius: 12 * scale,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                border: '3px solid rgba(255, 255, 255, 0.3)',
-                                transition: 'transform 0.2s, box-shadow 0.2s',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
-                                background: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)',
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(255, 100, 100, 0.5)';
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
-                            }}
-                        >
-                            <img src={senkaLeaderImg} alt="盞華" style={{ width: '100%', height: 168 * scale, objectFit: 'cover' }} />
-                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
-                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#e94560', margin: 0 }}>盞華</h3>
-                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>アグロ / ラッシュ</p>
-                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
-                                    突進フォロワーと多面展開で<br />相手を圧倒する。
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* あじゃ */}
-                        <div
-                            onClick={() => handleClassSelected('AJA')}
-                            style={{
-                                width: 200 * scale,
-                                borderRadius: 12 * scale,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                border: '3px solid rgba(255, 255, 255, 0.3)',
-                                transition: 'transform 0.2s, box-shadow 0.2s',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
-                                background: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)',
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(100, 200, 255, 0.5)';
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
-                            }}
-                        >
-                            <img src={azyaLeaderImg} alt="あじゃ" style={{ width: '100%', height: 168 * scale, objectFit: 'cover', objectPosition: 'center top' }} />
-                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
-                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#45a2e9', margin: 0 }}>あじゃ</h3>
-                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>コントロール / テクニカル</p>
-                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
-                                    強力な除去と堅牢な守護で<br />盤面を支配する。
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Y */}
-                        <div
-                            onClick={() => handleClassSelected('YORUKA')}
-                            style={{
-                                width: 200 * scale,
-                                borderRadius: 12 * scale,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                border: '3px solid rgba(255, 255, 255, 0.3)',
-                                transition: 'transform 0.2s, box-shadow 0.2s',
-                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
-                                background: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)',
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(200, 100, 255, 0.5)';
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
-                            }}
-                        >
-                            <img src={yorukaLeaderImg} alt="Y" style={{ width: '100%', height: 168 * scale, objectFit: 'cover' }} />
-                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
-                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: '#a855f7', margin: 0 }}>Y</h3>
-                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>ミッドレンジ / トリッキー</p>
-                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0 }}>
-                                    墓地をリソースにする変則的な戦法で<br />相手を翻弄する。
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ランクマッチの場合、レート表示 */}
-                    {classSelectMode === 'RANKED_MATCH' && !loadingRatings && (
-                        <div style={{
-                            display: 'flex',
-                            gap: `${1.5 * scale}rem`,
-                            marginBottom: `${2 * scale}rem`,
-                        }}>
-                            {(['SENKA', 'AJA', 'YORUKA'] as ClassType[]).map((classType) => {
-                                const rating = classRatings[classType];
-                                const ratingValue = rating?.rating ?? 0;
-                                const rank = getRankFromRating(ratingValue);
-                                const rankColor = RANK_COLORS[rank];
-                                const rankName = RANK_DISPLAY_NAMES[rank];
-
-                                return (
-                                    <div key={classType} style={{
-                                        width: 200 * scale,
-                                        textAlign: 'center',
-                                        color: '#fff',
+                            {/* 左右分割: プレイヤー | VS | CPU */}
+                            <div style={{
+                                display: 'flex',
+                                gap: `${1.5 * scale}rem`,
+                                alignItems: 'flex-start',
+                                marginBottom: `${1 * scale}rem`,
+                            }}>
+                                {/* 左: プレイヤー側 */}
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: `${0.5 * scale}rem`,
+                                }}>
+                                    <h3 style={{
+                                        fontSize: `${1.2 * scale}rem`,
+                                        margin: 0,
+                                        color: '#63b3ed',
+                                        fontFamily: 'var(--font-tamanegi)',
                                     }}>
-                                        <div style={{
-                                            fontSize: `${1 * scale}rem`,
-                                            color: rankColor,
-                                            fontWeight: 'bold',
-                                        }}>
-                                            {rankName}
-                                        </div>
-                                        <div style={{
-                                            fontSize: `${1.2 * scale}rem`,
-                                            color: '#4ade80',
-                                            fontWeight: 'bold',
-                                        }}>
-                                            {ratingValue}
-                                        </div>
+                                        あなた
+                                    </h3>
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: `${0.5 * scale}rem`,
+                                    }}>
+                                        {(['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'] as ClassType[]).map((cls) => {
+                                            const config = {
+                                                SENKA: { img: senkaLeaderImg, name: '盞華', color: '#e94560', gradient: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)', shadow: 'rgba(233, 69, 96, 0.2)', subtitle: 'アグロ / ラッシュ' },
+                                                AJA: { img: azyaLeaderImg, name: 'あじゃ', color: '#45a2e9', gradient: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)', shadow: 'rgba(69, 162, 233, 0.2)', subtitle: 'コントロール / テクニカル' },
+                                                YORUKA: { img: yorukaLeaderImg, name: 'Y', color: '#a855f7', gradient: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)', shadow: 'rgba(168, 85, 247, 0.2)', subtitle: 'ミッドレンジ / トリッキー' },
+                                                TSUBUMARU: { img: tsubumaruLeaderImg, name: 'つぶまる', color: '#4ade80', gradient: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)', shadow: 'rgba(74, 222, 128, 0.2)', subtitle: 'コンボ / ラッシュ' },
+                                            }[cls];
+                                            const isSelected = selectedPlayerClass === cls;
+                                            return (
+                                                <div
+                                                    key={cls}
+                                                    onClick={() => setSelectedPlayerClass(cls)}
+                                                    style={{
+                                                        width: 140 * scale,
+                                                        borderRadius: 10 * scale,
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer',
+                                                        border: isSelected ? `3px solid ${config.color}` : '2px solid rgba(255, 255, 255, 0.2)',
+                                                        transition: 'transform 0.2s, box-shadow 0.2s, border 0.2s',
+                                                        boxShadow: isSelected
+                                                            ? `0 8px 25px ${config.shadow}, 0 0 15px ${config.color}40`
+                                                            : `0 4px 15px rgba(0, 0, 0, 0.5)`,
+                                                        background: config.gradient,
+                                                        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                                                    }}
+                                                >
+                                                    <img src={config.img} alt={config.name} style={{
+                                                        width: '100%',
+                                                        height: 110 * scale,
+                                                        objectFit: 'cover',
+                                                        objectPosition: cls === 'AJA' ? 'center top' : 'center',
+                                                    }} />
+                                                    <div style={{ padding: `${6 * scale}px`, textAlign: 'center' }}>
+                                                        <h3 style={{ fontSize: `${1 * scale}rem`, color: config.color, margin: 0 }}>{config.name}</h3>
+                                                        <p style={{ color: '#aaa', margin: `${2 * scale}px 0 0`, fontSize: `${0.6 * scale}rem`, fontFamily: 'var(--font-tamanegi)' }}>{config.subtitle}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                </div>
 
-                    {/* 戻るボタン */}
-                    <button
-                        onClick={handleCancelClassSelect}
-                        style={{
-                            padding: `${0.8 * scale}rem ${2 * scale}rem`,
-                            fontSize: `${1 * scale}rem`,
-                            background: 'transparent',
-                            border: '2px solid rgba(255, 255, 255, 0.3)',
-                            borderRadius: 8 * scale,
-                            color: 'white',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                        }}
-                        onMouseOver={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-                        }}
-                        onMouseOut={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-                        }}
-                    >
-                        戻る
-                    </button>
+                                {/* VS */}
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingTop: `${3 * scale}rem`,
+                                }}>
+                                    <div style={{
+                                        fontSize: `${2 * scale}rem`,
+                                        fontWeight: 'bold',
+                                        color: '#e94560',
+                                        textShadow: '0 0 20px rgba(233, 69, 96, 0.5)',
+                                        fontFamily: 'var(--font-tamanegi)',
+                                    }}>
+                                        VS
+                                    </div>
+                                </div>
+
+                                {/* 右: CPU側 */}
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: `${0.5 * scale}rem`,
+                                }}>
+                                    <h3 style={{
+                                        fontSize: `${1.2 * scale}rem`,
+                                        margin: 0,
+                                        color: '#e94560',
+                                        fontFamily: 'var(--font-tamanegi)',
+                                    }}>
+                                        CPU
+                                    </h3>
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: `${0.5 * scale}rem`,
+                                    }}>
+                                        {(['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'] as ClassType[]).map((cls) => {
+                                            const config = {
+                                                SENKA: { img: senkaLeaderImg, name: '盞華', color: '#e94560', gradient: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)', shadow: 'rgba(233, 69, 96, 0.2)', subtitle: 'アグロ / ラッシュ' },
+                                                AJA: { img: azyaLeaderImg, name: 'あじゃ', color: '#45a2e9', gradient: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)', shadow: 'rgba(69, 162, 233, 0.2)', subtitle: 'コントロール / テクニカル' },
+                                                YORUKA: { img: yorukaLeaderImg, name: 'Y', color: '#a855f7', gradient: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)', shadow: 'rgba(168, 85, 247, 0.2)', subtitle: 'ミッドレンジ / トリッキー' },
+                                                TSUBUMARU: { img: tsubumaruLeaderImg, name: 'つぶまる', color: '#4ade80', gradient: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)', shadow: 'rgba(74, 222, 128, 0.2)', subtitle: 'コンボ / ラッシュ' },
+                                            }[cls];
+                                            const isSelected = selectedOpponentClass === cls;
+                                            return (
+                                                <div
+                                                    key={cls}
+                                                    onClick={() => setSelectedOpponentClass(cls)}
+                                                    style={{
+                                                        width: 140 * scale,
+                                                        borderRadius: 10 * scale,
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer',
+                                                        border: isSelected ? `3px solid ${config.color}` : '2px solid rgba(255, 255, 255, 0.2)',
+                                                        transition: 'transform 0.2s, box-shadow 0.2s, border 0.2s',
+                                                        boxShadow: isSelected
+                                                            ? `0 8px 25px ${config.shadow}, 0 0 15px ${config.color}40`
+                                                            : `0 4px 15px rgba(0, 0, 0, 0.5)`,
+                                                        background: config.gradient,
+                                                        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                                                    }}
+                                                >
+                                                    <img src={config.img} alt={config.name} style={{
+                                                        width: '100%',
+                                                        height: 110 * scale,
+                                                        objectFit: 'cover',
+                                                        objectPosition: cls === 'AJA' ? 'center top' : 'center',
+                                                    }} />
+                                                    <div style={{ padding: `${6 * scale}px`, textAlign: 'center' }}>
+                                                        <h3 style={{ fontSize: `${1 * scale}rem`, color: config.color, margin: 0 }}>{config.name}</h3>
+                                                        <p style={{ color: '#aaa', margin: `${2 * scale}px 0 0`, fontSize: `${0.6 * scale}rem`, fontFamily: 'var(--font-tamanegi)' }}>{config.subtitle}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {/* ランダムパネル */}
+                                    <div
+                                        onClick={() => setSelectedOpponentClass('RANDOM')}
+                                        style={{
+                                            width: `calc(${140 * 3 * scale}px + ${0.5 * 2 * scale}rem)`,
+                                            height: 50 * scale,
+                                            border: selectedOpponentClass === 'RANDOM' ? '3px solid #ffd700' : '2px solid rgba(255, 255, 255, 0.2)',
+                                            borderRadius: 10 * scale,
+                                            background: 'linear-gradient(180deg, #2d2d0a 0%, #1a1a2e 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: `${0.5 * scale}rem`,
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.2s, border 0.2s, box-shadow 0.2s',
+                                            boxShadow: selectedOpponentClass === 'RANDOM'
+                                                ? '0 8px 25px rgba(255, 215, 0, 0.3), 0 0 15px rgba(255, 215, 0, 0.4)'
+                                                : '0 4px 15px rgba(0, 0, 0, 0.3)',
+                                            transform: selectedOpponentClass === 'RANDOM' ? 'scale(1.03)' : 'scale(1)',
+                                        }}
+                                    >
+                                        <span style={{ fontSize: `${1.2 * scale}rem` }}>🎲</span>
+                                        <h3 style={{ fontSize: `${0.9 * scale}rem`, color: '#ffd700', margin: 0, fontFamily: 'var(--font-tamanegi)' }}>ランダム</h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ゲームスタートボタン */}
+                            <button
+                                onClick={handleCpuGameStart}
+                                disabled={!selectedPlayerClass}
+                                style={{
+                                    padding: `${0.8 * scale}rem ${3 * scale}rem`,
+                                    fontSize: `${1.2 * scale}rem`,
+                                    background: selectedPlayerClass
+                                        ? 'linear-gradient(135deg, #48bb78, #38a169)'
+                                        : '#4a5568',
+                                    border: 'none',
+                                    borderRadius: 8 * scale,
+                                    color: 'white',
+                                    cursor: selectedPlayerClass ? 'pointer' : 'not-allowed',
+                                    fontFamily: 'var(--font-tamanegi)',
+                                    fontWeight: 'bold',
+                                    marginBottom: `${0.5 * scale}rem`,
+                                    boxShadow: selectedPlayerClass
+                                        ? '0 4px 20px rgba(72, 187, 120, 0.4)'
+                                        : 'none',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                ゲームスタート
+                            </button>
+
+                            {/* 戻るボタン */}
+                            <button
+                                onClick={handleCancelClassSelect}
+                                style={{
+                                    padding: `${0.6 * scale}rem ${1.5 * scale}rem`,
+                                    fontSize: `${0.85 * scale}rem`,
+                                    background: 'transparent',
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: 8 * scale,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                }}
+                            >
+                                戻る
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            {/* 非CPU戦：従来の1クラス選択UI */}
+                            <h2 style={{
+                                fontSize: `${2 * scale}rem`,
+                                marginBottom: `${2 * scale}rem`,
+                                color: '#fff',
+                                fontFamily: 'var(--font-tamanegi)',
+                            }}>
+                                クラスを選択
+                            </h2>
+
+                            <div style={{
+                                display: 'flex',
+                                gap: `${1.5 * scale}rem`,
+                                marginBottom: `${1 * scale}rem`,
+                            }}>
+                                {(['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'] as ClassType[]).map((cls) => {
+                                    const config = {
+                                        SENKA: { img: senkaLeaderImg, name: '盞華', color: '#e94560', gradient: 'linear-gradient(180deg, #2c0b0e 0%, #1a1a2e 100%)', hoverShadow: 'rgba(255, 100, 100, 0.5)' },
+                                        AJA: { img: azyaLeaderImg, name: 'あじゃ', color: '#45a2e9', gradient: 'linear-gradient(180deg, #0f1c2e 0%, #1a1a2e 100%)', hoverShadow: 'rgba(100, 200, 255, 0.5)' },
+                                        YORUKA: { img: yorukaLeaderImg, name: 'Y', color: '#a855f7', gradient: 'linear-gradient(180deg, #1a0f2e 0%, #1a1a2e 100%)', hoverShadow: 'rgba(200, 100, 255, 0.5)' },
+                                        TSUBUMARU: { img: tsubumaruLeaderImg, name: 'つぶまる', color: '#4ade80', gradient: 'linear-gradient(180deg, #0b2e15 0%, #1a1a2e 100%)', hoverShadow: 'rgba(74, 222, 128, 0.5)' },
+                                    }[cls];
+                                    const subtitles: Record<ClassType, string> = { SENKA: 'アグロ / ラッシュ', AJA: 'コントロール / テクニカル', YORUKA: 'ミッドレンジ / トリッキー', TSUBUMARU: 'コンボ / ラッシュ' };
+                                    const descs: Record<ClassType, string> = { SENKA: '突進フォロワーと多面展開で\n相手を圧倒する。', AJA: '強力な除去と堅牢な守護で\n盤面を支配する。', YORUKA: '墓地をリソースにする変則的な戦法で\n相手を翻弄する。', TSUBUMARU: '手札を回してコンボを繋ぎ\nハムチャン軍団で殴り倒す。' };
+                                    return (
+                                        <div
+                                            key={cls}
+                                            onClick={() => handleClassSelected(cls)}
+                                            style={{
+                                                width: 200 * scale,
+                                                borderRadius: 12 * scale,
+                                                overflow: 'hidden',
+                                                cursor: 'pointer',
+                                                border: '3px solid rgba(255, 255, 255, 0.3)',
+                                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                                                background: config.gradient,
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
+                                                e.currentTarget.style.boxShadow = `0 8px 25px ${config.hoverShadow}`;
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.5)';
+                                            }}
+                                        >
+                                            <img src={config.img} alt={config.name} style={{ width: '100%', height: 168 * scale, objectFit: 'cover', objectPosition: cls === 'AJA' ? 'center top' : 'center' }} />
+                                            <div style={{ padding: `${8 * scale}px`, textAlign: 'center' }}>
+                                                <h3 style={{ fontSize: `${1.4 * scale}rem`, color: config.color, margin: 0 }}>{config.name}</h3>
+                                                <p style={{ color: '#aaa', margin: `${4 * scale}px 0`, fontSize: `${0.75 * scale}rem` }}>{subtitles[cls]}</p>
+                                                <p style={{ fontSize: `${0.65 * scale}rem`, opacity: 0.8, lineHeight: 1.3, margin: 0, whiteSpace: 'pre-line' }}>
+                                                    {descs[cls]}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* ランクマッチの場合、レート表示 */}
+                            {classSelectMode === 'RANKED_MATCH' && !loadingRatings && (
+                                <div style={{
+                                    display: 'flex',
+                                    gap: `${1.5 * scale}rem`,
+                                    marginBottom: `${2 * scale}rem`,
+                                }}>
+                                    {(['SENKA', 'AJA', 'YORUKA', 'TSUBUMARU'] as ClassType[]).map((classType) => {
+                                        const rating = classRatings[classType];
+                                        const ratingValue = rating?.rating ?? 0;
+                                        const rank = getRankFromRating(ratingValue);
+                                        const rankColor = RANK_COLORS[rank];
+                                        const rankName = RANK_DISPLAY_NAMES[rank];
+
+                                        return (
+                                            <div key={classType} style={{
+                                                width: 200 * scale,
+                                                textAlign: 'center',
+                                                color: '#fff',
+                                            }}>
+                                                <div style={{
+                                                    fontSize: `${1 * scale}rem`,
+                                                    color: rankColor,
+                                                    fontWeight: 'bold',
+                                                }}>
+                                                    {rankName}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: `${1.2 * scale}rem`,
+                                                    color: '#4ade80',
+                                                    fontWeight: 'bold',
+                                                }}>
+                                                    {ratingValue}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* 戻るボタン */}
+                            <button
+                                onClick={handleCancelClassSelect}
+                                style={{
+                                    padding: `${0.8 * scale}rem ${2 * scale}rem`,
+                                    fontSize: `${1 * scale}rem`,
+                                    background: 'transparent',
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: 8 * scale,
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                                }}
+                            >
+                                戻る
+                            </button>
+                        </>
+                    )}
                 </div>
             )}
         </div>
