@@ -25,7 +25,7 @@ const BASE_HEIGHT = 720;
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
-const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // ランクの色
 const RANK_COLORS: Record<RankType, string> = {

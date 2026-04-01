@@ -14,7 +14,7 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
-const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // Base dimensions for scaling (same as GameScreen)
 const BASE_WIDTH = 1280;

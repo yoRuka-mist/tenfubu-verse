@@ -222,10 +222,10 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
                         r={radius}
                         fill="none"
                         stroke={gaugeColor}
-                        strokeWidth={strokeWidth * 3}
-                        opacity={0.4}
+                        strokeWidth={strokeWidth * 2}
+                        opacity={0.3}
                         style={{
-                            filter: `blur(${12 * scale}px)`,
+                            filter: `blur(${6 * scale}px)`,
                             animation: isUrgent ? `timerPulse${uniqueId} 0.5s ease-in-out infinite` : `timerPulse${uniqueId} 1s ease-in-out infinite`,
                         }}
                     />
@@ -235,8 +235,8 @@ export const TurnTimer: React.FC<TurnTimerProps> = ({
             {/* アニメーション用スタイル（ユニークIDで名前衝突回避） */}
             <style>{`
                 @keyframes timerPulse${uniqueId} {
-                    0%, 100% { opacity: 0.4; }
-                    50% { opacity: 0.7; }
+                    0%, 100% { opacity: 0.3; }
+                    50% { opacity: 0.5; }
                 }
                 @keyframes timerShake${uniqueId} {
                     0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }

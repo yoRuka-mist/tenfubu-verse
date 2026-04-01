@@ -14,7 +14,7 @@ const getAssetUrl = (path: string): string => {
 const getLeaderImg = (cls: ClassType): string => {
     if (cls === 'YORUKA') return getAssetUrl('/leaders/yoRuka_leader.png');
     if (cls === 'AJA') return getAssetUrl('/leaders/azya_leader.png');
-    if (cls === 'TSUBUMARU') return getAssetUrl('/cards/tsubumaru_human.png');
+    if (cls === 'TSUBUMARU') return getAssetUrl('/leaders/tsubumaru_leader.png');
     return getAssetUrl('/leaders/senka_leader.png');
 };
 

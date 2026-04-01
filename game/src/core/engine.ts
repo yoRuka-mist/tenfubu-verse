@@ -185,7 +185,7 @@ export const MOCK_CARDS: Card[] = [
     // --- Tokens ---
     { id: 'TOKEN_CHATORA', name: '茶トラ猫の日向ぼっこ', cost: 0, type: 'FOLLOWER', attack: 1, health: 1, description: '', flavorText: 'ずっと寝ていたい。', imageUrl: '/cards/chatora.png', attackEffectType: 'SLASH' },
     { id: 'TOKEN_SABATORA', name: 'サバトラ猫の散歩', cost: 1, type: 'FOLLOWER', attack: 1, health: 2, description: '[突進]', flavorText: '「ラーメン屋多くね…？」', passiveAbilities: ['RUSH'], imageUrl: '/cards/sabatora.png', attackEffectType: 'SLASH' },
-    { id: 'TOKEN_KIJITORA', name: 'キジトラ猫のごはん', cost: 3, type: 'FOLLOWER', attack: 2, health: 3, description: '[守護]', flavorText: 'うめ…うめ…', passiveAbilities: ['WARD'], imageUrl: '/cards/kijitora.png', attackEffectType: 'SLASH' },
+    { id: 'TOKEN_KIJITORA', name: 'キジトラ猫のごはん', cost: 2, type: 'FOLLOWER', attack: 2, health: 2, description: '[守護]', flavorText: 'うめ…うめ…', passiveAbilities: ['WARD'], imageUrl: '/cards/kijitora.png', attackEffectType: 'SLASH' },
 
     // --- New Cards ---
     {
@@ -1015,7 +1015,7 @@ export const MOCK_CARDS: Card[] = [
     },
     // --- つぶまる(真の姿) ---
     {
-        id: 'c_tsubumaru_truth', name: 'つぶまる(真の姿)', cost: 2, type: 'FOLLOWER',
+        id: 'c_tsubumaru_truth', name: 'つぶまる(真の姿)', cost: 3, type: 'FOLLOWER',
         attack: 0, health: 2,
         description: '[疾走]\nファンファーレ：コンボ X：自分を+X/+0する。',
         passiveAbilities: ['STORM'],
@@ -1054,9 +1054,9 @@ export const MOCK_CARDS: Card[] = [
     },
     // --- エレガントエレファント ---
     {
-        id: 'c_elephant', name: 'エレガントエレファント', cost: 7, type: 'FOLLOWER',
-        attack: 3, health: 7,
-        description: '[守護]\nファンファーレ：相手のランダムなフォロワー2体を破壊する。山札から1枚ドローする。',
+        id: 'c_elephant', name: 'エレガントエレファント', cost: 4, type: 'FOLLOWER',
+        attack: 1, health: 2,
+        description: '[守護]\nファンファーレ：相手のランダムなフォロワー1体を破壊する。',
         passiveAbilities: ['WARD'],
         imageUrl: '/cards/elephant.png',
         evolvedImageUrl: '/cards/elephant_2.png',
@@ -1064,30 +1064,33 @@ export const MOCK_CARDS: Card[] = [
         triggers: [{
             trigger: 'FANFARE',
             effects: [
-                { type: 'RANDOM_DESTROY', value: 2, targetType: 'OPPONENT' },
-                { type: 'DRAW', value: 1 }
+                { type: 'RANDOM_DESTROY', value: 1, targetType: 'OPPONENT' }
             ]
         }]
     },
     // --- イキリン ---
     {
         id: 'c_ikirin', name: 'イキリン', cost: 3, type: 'FOLLOWER',
-        attack: 2, health: 1,
-        description: '手札で働く：自分のフォロワーが進化あるいは超進化したとき、このカードのコストを-1する。\nファンファーレ：相手のランダムなフォロワー1体に2ダメージ。',
+        attack: 2, health: 2,
+        description: 'ファンファーレ：相手のランダムなフォロワー1体に2ダメージ。\nターン終了時、「ハムチャン」を1枚手札に加える。',
         imageUrl: '/cards/ikirin.png',
         evolvedImageUrl: '/cards/ikirin_2.png',
         attackEffectType: 'SLASH',
-        handEffect: {
-            trigger: 'ON_EVOLVE',
-            effect: 'COST_REDUCTION',
-            value: 1
-        },
-        triggers: [{
-            trigger: 'FANFARE',
-            effects: [
-                { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
-            ]
-        }]
+        relatedCards: ['TOKEN_HAMUCHAN'],
+        triggers: [
+            {
+                trigger: 'FANFARE',
+                effects: [
+                    { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
+                ]
+            },
+            {
+                trigger: 'END_OF_TURN',
+                effects: [
+                    { type: 'GENERATE_CARD', targetCardId: 'TOKEN_HAMUCHAN' }
+                ]
+            }
+        ]
     },
     // --- パンダ ---
     {
@@ -1169,29 +1172,29 @@ export const MOCK_CARDS: Card[] = [
     // --- アニマル・パラダイス ---
     {
         id: 's_animal_paradise', name: 'アニマル・パラダイス', cost: 10, type: 'SPELL',
-        description: '自分の手札が9枚になるまでドローする。自分の手札のすべてのカードのコストを-1する。自分のPPを8回復。',
+        description: '自分の手札が9枚になるまでドローする。自分の手札のすべてのカードのコストを-1する。ただし、この効果でコストは0にはならない。自分のPPを7回復。',
         imageUrl: '/cards/animal_paradise.png',
         attackEffectType: 'SLASH',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
                 { type: 'DRAW_UNTIL', value: 9 },
-                { type: 'REDUCE_ALL_HAND_COST', value: 1 },
-                { type: 'PP_RESTORE', value: 8 }
+                { type: 'REDUCE_ALL_HAND_COST', value: 1, minCost: 1 },
+                { type: 'PP_RESTORE', value: 7 }
             ]
         }]
     },
     // --- 早退します ---
     {
         id: 's_leaving_early', name: '早退します', cost: 1, type: 'SPELL',
-        description: '自分のフォロワー1体を選び、手札に戻す。相手のランダムなフォロワー2体に1ダメージ。',
+        description: '自分のフォロワー1体を選び、手札に戻す。相手のランダムなフォロワー1体に2ダメージ。',
         imageUrl: '/cards/leaving_early.png',
         attackEffectType: 'SLASH',
         triggers: [{
             trigger: 'FANFARE',
             effects: [
                 { type: 'RETURN_TO_HAND_SELF', targetType: 'SELECT_ALLY_FOLLOWER' },
-                { type: 'RANDOM_DAMAGE', value: 1, value2: 2, targetType: 'OPPONENT' }
+                { type: 'RANDOM_DAMAGE', value: 2, value2: 1, targetType: 'OPPONENT' }
             ]
         }]
     },
@@ -1343,23 +1346,22 @@ export const YORUKA_DECK_TEMPLATE: { cardId: string, count: number }[] = [
 ];
 
 export const TSUBUMARU_DECK_TEMPLATE: { cardId: string, count: number }[] = [
-    { cardId: 'c_tsubumaru_truth', count: 3 },    // つぶまる(真の姿)
-    { cardId: 'c_tsubumaru_human', count: 3 },     // つぶまる（人の姿）
-    { cardId: 'c_panda', count: 3 },               // パンダ
-    { cardId: 'c_dog', count: 3 },                 // 犬
-    { cardId: 'c_ikirin', count: 3 },              // イキリン
-    { cardId: 'c_tsulion', count: 3 },             // ツライオン
-    { cardId: 'c_irakuma', count: 2 },             // イラックマ
-    { cardId: 'c_gorilla', count: 2 },             // ゴリラ・ゴリラ・ゴリラ
-    { cardId: 'c_elephant', count: 2 },            // エレガントエレファント
+    { cardId: 'c_tsubumaru', count: 3 },           // つぶまる
+    { cardId: 'c_ruiyu', count: 2 },               // ルイ・ユー
+    { cardId: 's_3cats', count: 3 },               // 茶トラ
+    { cardId: 'c_tsubumaru_truth', count: 3 },     // つぶまる(真の姿)
+    { cardId: 'c_y', count: 1 },                   // Y
+    { cardId: 's_animal_paradise', count: 1 },     // アニマル・パラダイス
     { cardId: 's_leaving_early', count: 3 },       // 早退します
     { cardId: 's_hamuchan_gather', count: 3 },     // 集まれハムチャン
-    { cardId: 's_animal_paradise', count: 1 },     // アニマル・パラダイス
-    { cardId: 'c_blue_tsubaki', count: 3 },        // 青ツバキ（汎用ドロー）
-    { cardId: 'c_mono', count: 2 },                // Mono（汎用除去）
-    { cardId: 'c_kasuga', count: 1 },              // かすが（全除去）
-    { cardId: 'c_sara', count: 1 },                // sara（除去）
-    { cardId: 'c_y', count: 2 },                   // Y（除去）
+    { cardId: 'c_gorilla', count: 3 },             // ゴリラ・ゴリラ・ゴリラ
+    { cardId: 'c_tsulion', count: 3 },             // ツライオン
+    { cardId: 'c_dog', count: 3 },                 // 犬
+    { cardId: 'c_elephant', count: 2 },            // エレガントエレファント
+    { cardId: 'c_ikirin', count: 3 },              // イキリン
+    { cardId: 'c_panda', count: 3 },               // パンダ
+    { cardId: 'c_kasuga', count: 1 },              // かすが
+    { cardId: 'c_tsubumaru_human', count: 3 },     // つぶまる（人の姿）
 ];
 
 // Helper to get card definition by ID or Name
@@ -2752,9 +2754,13 @@ function processSingleEffect(
         case 'REDUCE_ALL_HAND_COST': {
             // 手札のすべてのカードのコストを減少
             const reduction = effect.value || 1;
+            const minCost = effect.minCost ?? 0;
             const player = newState.players[sourcePlayerId];
             player.hand.forEach((card: any) => {
-                const newCost = Math.max(0, card.cost - reduction);
+                // minCost制限は「この効果で下がった結果」に対してのみ適用
+                // 元々minCost以下のカードはコスト変更しない
+                if (minCost > 0 && card.cost <= minCost) return;
+                const newCost = Math.max(minCost, card.cost - reduction);
                 if (newCost !== card.cost) {
                     card.cost = newCost;
                     card.baseCost = newCost; // baseCostも更新

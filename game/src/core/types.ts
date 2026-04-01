@@ -39,6 +39,7 @@ export interface AbilityEffect {
     targetCardId?: string; // For SUMMON
     conditions?: { [key: string]: any }; // Flexible conditions
     necromance?: number; // ネクロマンス: 墓地のカードを消費して発動（指定数以上必要）
+    minCost?: number; // REDUCE_ALL_HAND_COST用: コスト減少の下限
 }
 
 export interface TriggerDefinition {

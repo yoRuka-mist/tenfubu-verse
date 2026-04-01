@@ -24,7 +24,7 @@ const getAssetUrl = (path: string): string => {
 const azyaLeaderImg = getAssetUrl('/leaders/azya_leader.png');
 const senkaLeaderImg = getAssetUrl('/leaders/senka_leader.png');
 const yorukaLeaderImg = getAssetUrl('/leaders/yoRuka_leader.png');
-const tsubumaruLeaderImg = getAssetUrl('/cards/tsubumaru_human.png');
+const tsubumaruLeaderImg = getAssetUrl('/leaders/tsubumaru_leader.png');
 
 // Sleeve Images (Card Back)
 const azyaSleeve = getAssetUrl('/sleeves/azya_sleeve.png');
@@ -2010,8 +2010,8 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                     fontSize: `${Math.max(5 * scale, 1.8)}rem`,
                     color: isVictory ? '#f6e05e' : '#a0aec0',
                     textShadow: isVictory
-                        ? '0 0 40px rgba(246, 224, 94, 0.7), 4px 4px 8px rgba(0,0,0,0.6)'
-                        : '0 0 20px rgba(160, 174, 192, 0.5), 4px 4px 8px rgba(0,0,0,0.6)',
+                        ? '0 0 15px rgba(246, 224, 94, 0.5), 4px 4px 8px rgba(0,0,0,0.6)'
+                        : '0 0 10px rgba(160, 174, 192, 0.4), 4px 4px 8px rgba(0,0,0,0.6)',
                     marginBottom: Math.max(20 * scale, 8),
                     opacity: phaseIndex >= 2 ? 1 : 0,
                     transform: phaseIndex >= 2 ? 'translateY(0)' : 'translateY(30px)',
@@ -2668,10 +2668,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [gameSynced, setGameSynced] = useState(!isJoinSide);
 
     // Battle intro and coin toss animation states - declared early for use in INIT_GAME effect
-    // For CASUAL_MATCH/RANKED_MATCH: Both sides wait for sync before showing BattleIntro
     const isCasualOrRanked = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+    const isOnlineMode = gameMode === 'HOST' || gameMode === 'JOIN' || isCasualOrRanked;
+    // All online modes: wait for sync before showing BattleIntro
     const [showBattleIntro, setShowBattleIntro] = React.useState(
-        isCasualOrRanked ? false : !isJoinSide // CASUAL_MATCH: wait for sync, otherwise: show immediately (except JOIN)
+        isOnlineMode ? false : true // Online: wait for sync, CPU: show immediately
     );
     const [boardFadeIn, setBoardFadeIn] = React.useState(false); // 盤面フェードイン制御（BattleIntro終了前に開始）
     const [leaderUiFadeIn, setLeaderUiFadeIn] = React.useState(false); // リーダーUIのフェードイン制御
@@ -2679,10 +2680,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const [timerStarted, setTimerStarted] = React.useState(false); // タイマー開始フラグ
     const [showBattleOutro, setShowBattleOutro] = React.useState(false); // Show battle outro on game end
 
-    // CASUAL_MATCH/RANKED_MATCH: Sync state for coordinated BattleIntro start
-    const [waitingForIntroSync, setWaitingForIntroSync] = React.useState(isCasualOrRanked);
+    // Online modes: Sync state for coordinated BattleIntro start
+    const [waitingForIntroSync, setWaitingForIntroSync] = React.useState(isOnlineMode);
     const [opponentReadyForIntro, setOpponentReadyForIntro] = React.useState(false);
-    const introSyncSentRef = React.useRef(false); // Prevent multiple READY_FOR_INTRO sends
+    const introSyncSentRef = React.useRef(false); // Prevent multiple READY_FOR_INTRO sends (ref for closure access)
 
     // DEBUG: Log sync state for troubleshooting
     console.log('[GameScreen SYNC STATE]', {
@@ -2975,6 +2976,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     const initialStateSentRef = useRef(false);
     // Prevent multiple HANDSHAKE sends (caused by useEffect re-running on gameState changes)
     const handshakeSentRef = useRef(false);
+    // Track if HANDSHAKE has been received from opponent
+    const [handshakeReceived, setHandshakeReceived] = useState(false);
+    // Track if INIT_GAME + READY_FOR_INTRO has been sent (state instead of ref for useEffect reactivity)
+    const [introSyncSent, setIntroSyncSent] = useState(false);
     // Store opponent's name received via HANDSHAKE to re-apply after INIT_GAME sync
     // Initialize with propOpponentName if available (from MatchmakingScreen)
     const opponentNameRef = useRef<string | null>(propOpponentName ?? null);
@@ -2982,11 +2987,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         const isHostSide = gameMode === 'HOST' ||
                            ((gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') && isHost);
 
-        // For CASUAL_MATCH/RANKED_MATCH: Send INIT_GAME immediately on connection
-        // For HOST mode: Wait for coinTossPhase === 'DONE'
-        const canSendInitGame = isCasualOrRanked
-            ? (connected && adapter)
-            : (connected && adapter && coinTossPhase === 'DONE');
+        // All online modes: Send INIT_GAME after connection and HANDSHAKE received
+        // CASUAL/RANKED may already have propOpponentName, HOST/JOIN needs HANDSHAKE first
+        const hasOpponentName = !!propOpponentName || handshakeReceived;
+        const canSendInitGame = connected && adapter && hasOpponentName;
 
         // DEBUG: Log INIT_GAME send conditions
         console.log('[GameScreen INIT_GAME useEffect]', {
@@ -3014,69 +3018,75 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     isCasualOrRanked
                 });
 
-                // For CASUAL_MATCH/RANKED_MATCH: Include correct firstPlayerId in INIT_GAME
+                // All online modes: Include correct firstPlayerId in INIT_GAME
                 // isFirstPlayer indicates if HOST (p1) goes first
                 // If HOST goes second (isFirstPlayer=false), then p2 is first player
-                // Note: We update both the local state and the sent state
-                const stateToSend = isCasualOrRanked
-                    ? {
-                        ...gameState,
-                        firstPlayerId,
-                        activePlayerId: firstPlayerId  // Also set activePlayerId for correct turn
+                // Also include opponent's name from HANDSHAKE if available
+                const opponentId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                const stateToSend = {
+                    ...gameState,
+                    firstPlayerId,
+                    activePlayerId: firstPlayerId,
+                    players: {
+                        ...gameState.players,
+                        [currentPlayerId]: {
+                            ...gameState.players[currentPlayerId],
+                            name: playerName
+                        },
+                        [opponentId]: {
+                            ...gameState.players[opponentId],
+                            name: opponentNameRef.current || gameState.players[opponentId].name
+                        }
                     }
-                    : gameState;
+                };
 
                 // Update HOST's local gameState to match what we're sending
-                if (isCasualOrRanked) {
-                    dispatch({ type: 'SYNC_STATE', payload: stateToSend });
-                }
+                dispatch({ type: 'SYNC_STATE', payload: stateToSend });
 
                 adapter.send({ type: 'INIT_GAME', payload: stateToSend });
 
-                // For CASUAL_MATCH/RANKED_MATCH: Send READY_FOR_INTRO after INIT_GAME
-                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                    console.log('[GameScreen] HOST side: Sending READY_FOR_INTRO');
-                    adapter.send({ type: 'READY_FOR_INTRO' });
-                    introSyncSentRef.current = true;
-                }
+                // All online modes: Send READY_FOR_INTRO after INIT_GAME
+                console.log('[GameScreen] HOST side: Sending READY_FOR_INTRO');
+                adapter.send({ type: 'READY_FOR_INTRO' });
+                introSyncSentRef.current = true;
+                setIntroSyncSent(true);
             };
 
-            // Initial send after 500ms
+            // Initial send after 500ms (HANDSHAKE already received at this point)
             setTimeout(sendInitAndReady, 500);
 
             // Retry after 2 seconds if opponent hasn't responded with READY_FOR_INTRO
             // This handles cases where JOIN's message handler wasn't ready
-            if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                setTimeout(() => {
-                    if (!opponentReadyForIntro) {
-                        console.log('[GameScreen] HOST side: Retrying INIT_GAME (no response yet)');
-                        sendInitAndReady();
-                    }
-                }, 2500);
-            }
+            setTimeout(() => {
+                if (!opponentReadyForIntro) {
+                    console.log('[GameScreen] HOST side: Retrying INIT_GAME (no response yet)');
+                    sendInitAndReady();
+                }
+            }, 2500);
         }
-    }, [gameMode, connected, adapter, gameState, coinTossPhase, isHost, isCasualOrRanked, opponentReadyForIntro]);
+    }, [gameMode, connected, adapter, gameState, isHost, isOnlineMode, opponentReadyForIntro, handshakeReceived]);
 
-    // CASUAL_MATCH/RANKED_MATCH: JOIN side sends READY_FOR_INTRO after receiving INIT_GAME
+    // Online modes: JOIN side sends READY_FOR_INTRO after receiving INIT_GAME
     useEffect(() => {
-        if (!isCasualOrRanked || !adapter || !gameSynced || introSyncSentRef.current) return;
+        if (!isOnlineMode || !adapter || !gameSynced || introSyncSent) return;
         if (isJoinSide) {
             console.log('[GameScreen] JOIN side: Sending READY_FOR_INTRO after game sync');
             adapter.send({ type: 'READY_FOR_INTRO' });
             introSyncSentRef.current = true;
+            setIntroSyncSent(true);
         }
-    }, [isCasualOrRanked, adapter, gameSynced, isJoinSide]);
+    }, [isOnlineMode, adapter, gameSynced, isJoinSide, introSyncSent]);
 
-    // CASUAL_MATCH/RANKED_MATCH: HOST sends START_INTRO when both sides are ready
+    // Online modes: HOST sends START_INTRO when both sides are ready
     useEffect(() => {
-        if (!isCasualOrRanked || !adapter || !waitingForIntroSync) return;
-        if (isHost && opponentReadyForIntro && introSyncSentRef.current) {
+        if (!isOnlineMode || !adapter || !waitingForIntroSync) return;
+        if (isHost && opponentReadyForIntro && introSyncSent) {
             console.log('[GameScreen] HOST side: Both ready, sending START_INTRO');
             adapter.send({ type: 'START_INTRO' });
             setWaitingForIntroSync(false);
             setShowBattleIntro(true);
         }
-    }, [isCasualOrRanked, adapter, isHost, opponentReadyForIntro, waitingForIntroSync]);
+    }, [isOnlineMode, adapter, isHost, opponentReadyForIntro, waitingForIntroSync, introSyncSent]);
 
     const player = gameState.players[currentPlayerId];
     const opponent = gameState.players[opponentPlayerId];
@@ -4522,18 +4532,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setBgmLoadedForClass(null);
 
         // 9. Reset battle intro and coin toss for new game
-        setShowBattleIntro(gameMode !== 'JOIN'); // JOIN時はホストからの同期を待つ
-        // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
         const isCasualOrRankedMode = gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH';
+        const isOnline = gameMode === 'HOST' || gameMode === 'JOIN' || isCasualOrRankedMode;
+        setShowBattleIntro(!isOnline); // Online: wait for sync, CPU: show immediately
+        // JOIN側はINIT_GAME受信まで待つ、HOST側のみランダム決定
         const isJoinSide = gameMode === 'JOIN' || (isCasualOrRankedMode && !isHost);
         setIsFirstPlayer(isJoinSide ? false : Math.random() > 0.5);
         setCoinTossPhase('IDLE');
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
-        // 10. For online rematch, HOST needs to send new game state after coin toss completes
-        if (gameMode === 'HOST' || isCasualOrRankedMode) {
+        // 10. For online rematch, HOST needs to send new game state
+        if (isOnline && !isJoinSide) {
             initialStateSentRef.current = false;
+            introSyncSentRef.current = false;
+            setIntroSyncSent(false);
+            setWaitingForIntroSync(true);
+            setOpponentReadyForIntro(false);
         }
 
         // 11. Update Game State
@@ -4763,6 +4778,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
 
                 // Store opponent's name in ref for later use (in case INIT_GAME overwrites it)
                 opponentNameRef.current = sanitizedName;
+                setHandshakeReceived(true);
 
                 const targetPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                 dispatch({
@@ -4813,13 +4829,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                 });
                 setIsFirstPlayer(isJoinSideFirst);
 
-                // For CASUAL_MATCH/RANKED_MATCH: Don't show BattleIntro immediately, wait for sync
-                if (gameMode === 'CASUAL_MATCH' || gameMode === 'RANKED_MATCH') {
-                    console.log('[GameScreen] CASUAL_MATCH JOIN side: Waiting for intro sync');
-                    // Intro sync will be handled by READY_FOR_INTRO/START_INTRO messages
-                } else {
-                    setShowBattleIntro(true); // For HOST/JOIN mode: show immediately
-                }
+                // All online modes: Don't show BattleIntro immediately, wait for READY_FOR_INTRO/START_INTRO sync
+                console.log('[GameScreen] JOIN side: Waiting for intro sync');
                 return;
             }
 
@@ -8055,6 +8066,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
     // Combined condition for cyan effect (either LEADER_DAMAGE_CAP or leaderDamageShield)
     const playerHasCyanEffect = playerHasLeaderDamageCap || playerHasLeaderShield;
     const opponentHasCyanEffect = opponentHasLeaderDamageCap || opponentHasLeaderShield;
+    // Check if hamuchan_storm leader effect is active (つぶまる人の姿 超進化時)
+    const playerHasHamuchanStorm = player?.leaderEffects?.some(e => e.id === 'hamuchan_storm') ?? false;
+    const opponentHasHamuchanStorm = opponent?.leaderEffects?.some(e => e.id === 'hamuchan_storm') ?? false;
 
     // Force scroll prevention - runs once on mount and sets up scroll listener
     useLayoutEffect(() => {
@@ -8123,9 +8137,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         );
     }
 
-    // CASUAL_MATCH/RANKED_MATCH: Wait for intro sync (both sides ready)
+    // Online modes: Wait for intro sync (both sides ready)
     // Show "マッチング完了！" while waiting for BattleIntro to start
-    if (isCasualOrRanked && waitingForIntroSync && gameSynced) {
+    if (isOnlineMode && waitingForIntroSync && gameSynced) {
         return (
             <div style={{
                 height: '100dvh',
@@ -8338,6 +8352,20 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                     @keyframes leaderDamageCapOverlay {
                         0%, 100% { opacity: 0.15; }
                         50% { opacity: 0.45; }
+                    }
+                    @keyframes leaderHamuchanStormPulse {
+                        0%, 100% {
+                            box-shadow: 0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2);
+                            border-color: #48bb78;
+                        }
+                        50% {
+                            box-shadow: 0 0 35px rgba(72, 187, 120, 0.7), 0 0 55px rgba(72, 187, 120, 0.4);
+                            border-color: #68d391;
+                        }
+                    }
+                    @keyframes leaderHamuchanStormOverlay {
+                        0%, 100% { opacity: 0.15; }
+                        50% { opacity: 0.4; }
                     }
                     /* EP/SEP pulse animations for usable state - box-shadow only, no transform override */
                     @keyframes epPulse {
@@ -8681,12 +8709,17 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                 : `url(${getLeaderImg(opponent.class)}) center/cover`,
                             border: opponentHasLeaderDamageCap
                                 ? '4px solid #67e8f9'
+                                : opponentHasHamuchanStorm
+                                ? '4px solid #48bb78'
                                 : (hoveredTarget?.type === 'LEADER' && hoveredTarget.playerId === opponentPlayerId && !targetingState) ? '4px solid #f56565' : '4px solid #4a5568',
                             boxShadow: opponentHasLeaderDamageCap
                                 ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
+                                : opponentHasHamuchanStorm
+                                ? '0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2)'
                                 : '0 0 20px rgba(0,0,0,0.5)',
                             transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
-                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                            animation: opponentHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite'
+                                : opponentHasHamuchanStorm ? 'leaderHamuchanStormPulse 2s ease-in-out infinite' : 'none',
                             // 終了演出: 自分の勝利時（相手が敗者）にフェーズに応じてスタイル変更
                             // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
                             ...(gameState.winnerId === currentPlayerId && (outroPhase || outroCompleted) ? {
@@ -8705,6 +8738,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                     pointerEvents: 'none',
                                     animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
+                            {/* Green overlay for hamuchan_storm leader effect */}
+                            {opponentHasHamuchanStorm && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(72, 187, 120, 0.4) 0%, rgba(72, 187, 120, 0.15) 70%, rgba(72, 187, 120, 0.05) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderHamuchanStormOverlay 2s ease-in-out infinite',
                                     zIndex: 1
                                 }} />
                             )}
@@ -9951,14 +9996,19 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                             onMouseDown={handleLeaderMouseDown}
                             style={{
                                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                                border: playerHasLeaderDamageCap ? '4px solid #67e8f9' : '4px solid #3182ce',
+                                border: playerHasLeaderDamageCap ? '4px solid #67e8f9'
+                                    : playerHasHamuchanStorm ? '4px solid #48bb78'
+                                    : '4px solid #3182ce',
                                 boxShadow: playerHasLeaderDamageCap
                                     ? '0 0 20px rgba(103, 232, 249, 0.4), 0 0 40px rgba(103, 232, 249, 0.2)'
+                                    : playerHasHamuchanStorm
+                                    ? '0 0 20px rgba(72, 187, 120, 0.4), 0 0 40px rgba(72, 187, 120, 0.2)'
                                     : '0 0 20px rgba(49, 130, 206, 0.4)',
                                 background: '#1a202c',
                                 cursor: 'grab',
                                 transition: 'border-color 0.3s, box-shadow 0.3s, filter 0.5s, opacity 0.5s',
-                                animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite' : 'none',
+                                animation: playerHasCyanEffect ? 'leaderDamageCapPulse 2s ease-in-out infinite'
+                                    : playerHasHamuchanStorm ? 'leaderHamuchanStormPulse 2s ease-in-out infinite' : 'none',
                                 position: 'relative',
                                 // 終了演出: 相手の勝利時（自分が敗者）にフェーズに応じてスタイル変更
                                 // outroCompletedがtrueの場合も敗者リーダーは非表示を維持（復活防止）
@@ -9983,6 +10033,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
                                     background: 'radial-gradient(circle, rgba(103, 232, 249, 0.5) 0%, rgba(103, 232, 249, 0.2) 70%, rgba(103, 232, 249, 0.1) 100%)',
                                     pointerEvents: 'none',
                                     animation: 'leaderDamageCapOverlay 2s ease-in-out infinite',
+                                    zIndex: 1
+                                }} />
+                            )}
+                            {/* Green overlay for hamuchan_storm leader effect */}
+                            {playerHasHamuchanStorm && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(72, 187, 120, 0.4) 0%, rgba(72, 187, 120, 0.15) 70%, rgba(72, 187, 120, 0.05) 100%)',
+                                    pointerEvents: 'none',
+                                    animation: 'leaderHamuchanStormOverlay 2s ease-in-out infinite',
                                     zIndex: 1
                                 }} />
                             )}
