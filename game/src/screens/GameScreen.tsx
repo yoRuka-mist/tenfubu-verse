@@ -4542,13 +4542,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({ playerClass, opponentTyp
         setCoinTossResult(null);
         setIsGameStartAnim(false);
 
-        // 10. For online rematch, HOST needs to send new game state
-        if (isOnline && !isJoinSide) {
-            initialStateSentRef.current = false;
+        // 10. For online rematch, reset sync states for both sides
+        if (isOnline) {
             introSyncSentRef.current = false;
             setIntroSyncSent(false);
             setWaitingForIntroSync(true);
             setOpponentReadyForIntro(false);
+            setLeaderUiFadeIn(false);
+            setTimerStarted(false);
+            setShowDuelStart(false);
+            if (!isJoinSide) {
+                // HOST: needs to send new INIT_GAME
+                initialStateSentRef.current = false;
+            } else {
+                // JOIN: needs to wait for new INIT_GAME
+                setGameSynced(false);
+            }
         }
 
         // 11. Update Game State
