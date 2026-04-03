@@ -2287,10 +2287,12 @@ const GameOverScreen = ({ winnerId, playerId, playerClass, onRematch, onRematchi
                                 fontWeight: 'bold',
                                 color: selectedRematchClass === 'SENKA' ? '#e74c3c'
                                     : selectedRematchClass === 'AJA' ? '#3498db'
+                                    : selectedRematchClass === 'TSUBUMARU' ? '#48bb78'
                                     : '#9b59b6'
                             }}>
                                 {selectedRematchClass === 'SENKA' ? 'せんか'
                                     : selectedRematchClass === 'AJA' ? 'あじゃ'
+                                    : selectedRematchClass === 'TSUBUMARU' ? 'つぶまる'
                                     : 'Y'}
                             </span>
                             <button
