@@ -2824,6 +2824,17 @@ function processSingleEffect(
                     }
                     player.leaderEffects.push({ id: effectId, description: desc });
                     newState.logs.push(`${player.name} のリーダーは「${desc}」を得た！`);
+
+                    // hamuchan_storm: 場に既にいるハムチャンにも疾走を付与
+                    if (effectId === 'hamuchan_storm') {
+                        player.board.forEach(c => {
+                            if (c && c.name === 'ハムチャン' && !c.passiveAbilities?.includes('STORM')) {
+                                if (!c.passiveAbilities) c.passiveAbilities = [];
+                                c.passiveAbilities.push('STORM');
+                                newState.logs.push(`${c.name} は[疾走]を得た！`);
+                            }
+                        });
+                    }
                 }
             }
             break;
